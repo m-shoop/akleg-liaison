@@ -1,0 +1,5 @@
+.main {
+  flex: 1;
+  /* Push content below the fixed navbar */
+  padding-top: 64px;
+}

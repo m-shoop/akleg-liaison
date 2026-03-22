@@ -1,0 +1,140 @@
+.wrapper {
+  position: relative;
+}
+
+.triggerBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  border-radius: 4px;
+  border: 1.5px solid var(--color-rainy-sky);
+  background: transparent;
+  color: var(--color-rainy-sky);
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.triggerBtn:hover,
+.triggerBtn.active {
+  background-color: var(--color-rainy-sky);
+  color: var(--color-text-on-dark);
+}
+
+.triggerBtn.active .badge {
+  background-color: var(--color-glacial-water);
+  color: var(--color-rainforest);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background-color: var(--color-lichen);
+  color: var(--color-text-primary);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+/* ── Dropdown panel ────────────────────────────────────────────────────────── */
+
+.panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 200;
+  width: 240px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+}
+
+.panelTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
+}
+
+.bulkActions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.bulkBtn {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  transition: background-color 0.12s;
+}
+
+.bulkBtn:hover {
+  background-color: var(--color-border);
+}
+
+.groups {
+  padding: 0.5rem 0.9rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.groupLabel {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-glacial-water);
+  margin-bottom: 0.1rem;
+}
+
+.checkLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  padding: 0.15rem 0;
+}
+
+.checkLabel:hover {
+  color: var(--color-rainforest);
+}
+
+.checkbox {
+  accent-color: var(--color-rainforest);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}

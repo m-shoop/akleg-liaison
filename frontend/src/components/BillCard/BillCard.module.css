@@ -1,0 +1,128 @@
+.card {
+  background-color: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-glacial-water);
+  border-radius: 6px;
+  padding: 1.1rem 1.25rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.billNumber {
+  font-family: "Lora", Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-rainforest);
+  text-decoration: none;
+}
+
+.billNumber:hover {
+  text-decoration: underline;
+}
+
+.status {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background-color: var(--color-lichen);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.shortTitle {
+  font-size: 0.925rem;
+  color: var(--color-text-primary);
+  line-height: 1.45;
+}
+
+.introduced {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.cardUntracked {
+  opacity: 0.55;
+  border-left-color: var(--color-border);
+}
+
+.trackBtn {
+  padding: 0.25rem 0.65rem;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.trackBtn:hover:not(:disabled) {
+  border-color: var(--color-lichen);
+  color: var(--color-text-primary);
+}
+
+.trackBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.refreshBtn {
+  padding: 0.25rem 0.65rem;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.refreshBtn:hover:not(:disabled) {
+  border-color: var(--color-glacial-water);
+  color: var(--color-rainforest);
+}
+
+.refreshBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error {
+  font-size: 0.8rem;
+  color: #b33a3a;
+}
+
+@media print {
+  .card {
+    break-inside: avoid;
+    border: 1px solid #ccc;
+    border-left: 4px solid #a8c8c0;
+    box-shadow: none;
+    opacity: 1;
+  }
+
+  .trackBtn,
+  .refreshBtn {
+    display: none;
+  }
+
+  .billNumber {
+    color: black;
+  }
+}

@@ -1,0 +1,57 @@
+/* ─── Palette ─────────────────────────────────────────────────────────────── */
+:root {
+  --color-rainy-sky:        #5A6E7F;
+  --color-glacial-water:    #A8C8C0;
+  --color-rainforest:       #2E4A35;
+  --color-lichen:           #C8B89A;
+
+  --color-surface:          #F7F4F0;   /* warm off-white page background      */
+  --color-surface-raised:   #FFFFFF;   /* cards, modals                        */
+  --color-border:           #E2DDD6;   /* subtle dividers                      */
+  --color-text-primary:     #1C2B22;   /* near-black with a green undertone    */
+  --color-text-secondary:   #5A6E7F;   /* rainy sky doubles as muted text      */
+  --color-text-on-dark:     #F7F4F0;   /* text on dark nav/footer backgrounds  */
+}
+
+/* ─── Reset & Base ────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: "Inter", system-ui, sans-serif;
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  line-height: 1.6;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+h1, h2, h3 {
+  font-family: "Lora", Georgia, serif;
+  line-height: 1.25;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}

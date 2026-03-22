@@ -1,0 +1,83 @@
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.55rem;
+  margin-top: 0.5rem;
+}
+
+.table th {
+  text-align: left;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.48rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+}
+
+.table td {
+  padding: 0.3rem 0.5rem;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.rowAlt td {
+  background-color: var(--color-surface);
+}
+
+.colDate {
+  white-space: nowrap;
+  width: 72px;
+  color: var(--color-text-secondary);
+}
+
+.colChamber {
+  width: 21px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.52rem;
+  color: var(--color-rainy-sky);
+}
+
+.colOutcome {
+  width: 117px;
+  font-weight: 500;
+  color: var(--color-rainforest);
+}
+
+.colCommittee {
+  width: 117px;
+}
+
+.colDescription {
+  /* takes remaining width */
+}
+
+.dateLink {
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+.dateLink:hover {
+  color: var(--color-rainforest);
+  text-decoration-style: solid;
+}
+
+.empty {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  padding: 0.5rem 0;
+}
+
+@media print {
+  .dateLink {
+    color: black;
+    text-decoration: underline;
+    text-decoration-style: solid;
+  }
+}

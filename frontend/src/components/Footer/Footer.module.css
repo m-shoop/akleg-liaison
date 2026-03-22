@@ -1,0 +1,20 @@
+.footer {
+  background-color: var(--color-rainy-sky);
+  border-top: 3px solid var(--color-glacial-water);
+  padding: 1.25rem 1.5rem;
+}
+
+.inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-text-on-dark);
+  opacity: 0.85;
+}
+
+.divider {
+  opacity: 0.5;
+}
