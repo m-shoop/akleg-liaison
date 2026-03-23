@@ -18,6 +18,7 @@ class TokenResponse(BaseModel):
 class RegisterRequest(BaseModel):
     username: str
     password: str
+    registration_key: str
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -41,6 +42,11 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     Create a new user account.
     In production this endpoint should be restricted to admins.
     """
+    from app.config import settings
+
+    if body.registration_key != settings.registration_key:
+        raise HTTPException(status_code=403, detail="Invalid registration key")
+
     existing = await get_user_by_username(db, body.username)
     if existing:
         raise HTTPException(status_code=400, detail="Username already taken")

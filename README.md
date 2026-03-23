@@ -133,6 +133,7 @@ Copy `backend/.env.example` to `backend/.env` and fill in the values:
 | `DATABASE_URL` | PostgreSQL connection string (`postgresql+asyncpg://...`) |
 | `MISTRAL_API_KEY` | API key from [console.mistral.ai](https://console.mistral.ai) |
 | `SECRET_KEY` | Random secret for JWT signing — generate with `secrets.token_hex(32)` |
+| `REGISTRATION_KEY` | Shared secret required to create new user accounts |
 
 ---
 
@@ -140,7 +141,15 @@ Copy `backend/.env.example` to `backend/.env` and fill in the values:
 
 ### Creating a user account
 
-User accounts are created directly in the database. Passwords are stored as bcrypt hashes. Once logged in, users can scrape meetings, manage notes, tag bills, and export reports.
+Registration requires a `REGISTRATION_KEY` — set this in your `.env` file and share it out-of-band with anyone who needs an account.
+
+```bash
+curl -X POST http://localhost:8000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "your-username", "password": "your-password", "registration_key": "your-key"}'
+```
+
+Passwords are stored as bcrypt hashes. Once logged in, users can scrape meetings, manage notes, tag bills, and export reports.
 
 ### Scraping meetings
 
