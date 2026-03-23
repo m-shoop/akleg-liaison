@@ -17,6 +17,22 @@ A web application built for Alaska Department of Public Safety liaisons to monit
 
 ---
 
+## Screenshots
+
+**Bills page**
+![Bills page](screenshots/Screenshot%20Bills.png)
+
+**Meetings page**
+![Meetings page](screenshots/Screenshot%20-%20Meetings.png)
+
+**PDF export — bills only**
+![PDF export without meetings](screenshots/Screenshot%20Bills%20Report.png)
+
+**PDF export — meetings + bills**
+![PDF export with meetings](screenshots/Screenshot%20Bills%20Report%20with%20Meetings.png)
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
