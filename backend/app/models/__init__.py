@@ -7,6 +7,7 @@ from app.models.bill import (
     EventType,
     OutcomeType,
 )
+from app.models.meeting import AgendaItem, Meeting
 from app.models.tag import BillTag, Tag
 from app.models.user import User
 
@@ -21,4 +22,6 @@ __all__ = [
     "Tag",
     "BillTag",
     "User",
+    "Meeting",
+    "AgendaItem",
 ]

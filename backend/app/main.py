@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
-from app.routers import auth, bills, tags
+from app.routers import auth, bills, meetings, tags
 from app.services.scheduler import scheduler_loop
 
 logging.basicConfig(level=logging.INFO)
@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AK Leg Liaison",
+    title="Department of Public Safety - Legislative Reporting",
     description="Track Alaska Legislature bills",
     version="0.1.0",
     lifespan=lifespan,
@@ -46,6 +46,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(bills.router)
 app.include_router(tags.router)
+app.include_router(meetings.router)
 
 
 @app.get("/health")

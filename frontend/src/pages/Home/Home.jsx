@@ -1,10 +1,33 @@
 import { useEffect, useRef, useState } from "react";
 import { useReactToPrint } from "react-to-print";
 import { fetchBills } from "../../api/bills";
+import { fetchMeetings } from "../../api/meetings";
 import BillCard from "../../components/BillCard/BillCard";
 import OutcomeFilter from "../../components/OutcomeFilter/OutcomeFilter";
 import { DEFAULT_SELECTED } from "../../utils/outcomeTypes";
 import styles from "./Home.module.css";
+
+function fmtDate(isoDate) {
+  return new Date(isoDate + "T00:00:00").toLocaleDateString("en-US", {
+    weekday: "short", month: "short", day: "numeric",
+  });
+}
+
+function fmtTime(timeStr) {
+  if (!timeStr) return "";
+  const [h, m] = timeStr.split(":").map(Number);
+  const ampm = h >= 12 ? "PM" : "AM";
+  const hour = h % 12 || 12;
+  return `${hour}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
+function groupByDate(meetings) {
+  return meetings.reduce((acc, m) => {
+    if (!acc[m.meeting_date]) acc[m.meeting_date] = [];
+    acc[m.meeting_date].push(m);
+    return acc;
+  }, {});
+}
 
 export default function Home() {
   const [bills, setBills] = useState([]);
@@ -15,6 +38,10 @@ export default function Home() {
   const [showUntracked, setShowUntracked] = useState(false);
   const [sideBySide, setSideBySide] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [printStartDate, setPrintStartDate] = useState("");
+  const [printEndDate, setPrintEndDate] = useState("");
+  const [printMeetings, setPrintMeetings] = useState(null);
+  const [pendingPrint, setPendingPrint] = useState(false);
   const contentRef = useRef(null);
 
   useEffect(() => {
@@ -61,7 +88,28 @@ export default function Home() {
       })
     : sortedBills;
 
-  const handlePrint = useReactToPrint({ contentRef });
+  const handlePrint = useReactToPrint({
+    contentRef,
+    onAfterPrint: () => setPrintMeetings(null),
+  });
+
+  useEffect(() => {
+    if (pendingPrint) {
+      setPendingPrint(false);
+      handlePrint();
+    }
+  }, [pendingPrint, handlePrint]);
+
+  async function exportPDF() {
+    if (printStartDate && printEndDate) {
+      const data = await fetchMeetings({ startDate: printStartDate, endDate: printEndDate });
+      setPrintMeetings(data);
+      setPendingPrint(true);
+    } else {
+      setPrintMeetings(null);
+      handlePrint();
+    }
+  }
 
   return (
     <div className={styles.page}>
@@ -110,9 +158,25 @@ export default function Home() {
             >
               {sideBySide ? "Single Column" : "Side by Side"}
             </button>
-            <button className={styles.printBtn} onClick={handlePrint}>
-              Export PDF
-            </button>
+            <div className={styles.printRow}>
+              <span className={styles.printRowLabel}>Meetings:</span>
+              <input
+                type="date"
+                className={styles.printDateInput}
+                value={printStartDate}
+                onChange={(e) => setPrintStartDate(e.target.value)}
+              />
+              <span className={styles.printRowSep}>–</span>
+              <input
+                type="date"
+                className={styles.printDateInput}
+                value={printEndDate}
+                onChange={(e) => setPrintEndDate(e.target.value)}
+              />
+              <button className={styles.printBtn} onClick={exportPDF} disabled={pendingPrint}>
+                {pendingPrint ? "Preparing…" : "Export PDF"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -125,8 +189,87 @@ export default function Home() {
       )}
 
       <div ref={contentRef}>
+        {printMeetings !== null && (
+          <div className={styles.printMeetingsSection}>
+            <div className={styles.printSectionHeader}>
+              <span className={styles.printSectionTitle}>Alaska State Legislative Meeting Schedule</span>
+              {printStartDate && printEndDate && (
+                <span className={styles.printSectionMeta}>
+                  {fmtDate(printStartDate)} – {fmtDate(printEndDate)}
+                </span>
+              )}
+            </div>
+            {printMeetings.length === 0 ? (
+              <p className={styles.printEmpty}>No meetings found for this date range.</p>
+            ) : (
+              Object.keys(groupByDate(printMeetings)).sort().map((dateKey) => (
+                <div key={dateKey} className={styles.printDayBlock}>
+                  <div className={styles.printDayHeading}>{fmtDate(dateKey)}</div>
+                  <div className={styles.printDayMeetings}>
+                    {groupByDate(printMeetings)[dateKey].map((m) => (
+                      <div
+                        key={m.id}
+                        className={`${styles.printMeetingCard} ${m.chamber === "H" ? styles.printHouse : styles.printSenate}`}
+                      >
+                        <div className={styles.printMeetingMain}>
+                          <div className={styles.printMeetingDate}>
+                            <span>{fmtDate(m.meeting_date)}</span>
+                            {m.meeting_time && <span>{fmtTime(m.meeting_time)}</span>}
+                          </div>
+                          <div className={styles.printMeetingHeader}>
+                            <span className={styles.printChamberBadge}>{m.chamber}</span>
+                            {m.committee_url ? (
+                              <a href={m.committee_url} className={styles.printMeetingName}>{m.committee_name}</a>
+                            ) : (
+                              <span className={styles.printMeetingName}>{m.committee_name}</span>
+                            )}
+                            <span className={styles.printMeetingType}>{m.committee_type}</span>
+                            {m.location && (
+                              <span className={styles.printMeetingLoc}>{m.location}</span>
+                            )}
+                          </div>
+                          {m.agenda_items.length > 0 && (
+                            <table className={styles.printAgendaTable}>
+                              <tbody>
+                                {m.agenda_items.map((item) =>
+                                  item.is_bill ? (
+                                    <tr key={item.id}>
+                                      <td className={styles.printBillNum}>
+                                        {item.prefix && `${item.prefix} `}
+                                        {item.url ? (
+                                          <a href={item.url}>{item.bill_number}</a>
+                                        ) : (
+                                          item.bill_number
+                                        )}
+                                      </td>
+                                      <td className={styles.printBillDesc}>{item.content}</td>
+                                      <td className={styles.printTeleconf}>{item.is_teleconferenced ? "TC" : ""}</td>
+                                    </tr>
+                                  ) : (
+                                    <tr key={item.id}>
+                                      <td className={styles.printNotePrefix}>{item.prefix ?? ""}</td>
+                                      <td className={styles.printNoteContent}>{item.content}</td>
+                                      <td className={styles.printTeleconf}>{item.is_teleconferenced ? "TC" : ""}</td>
+                                    </tr>
+                                  )
+                                )}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                        <div className={styles.printDpsNotes}>{m.dps_notes ?? ""}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+            <div className={styles.printSectionDivider} />
+          </div>
+        )}
+
         <div className={styles.printHeader}>
-          <h1 className={styles.printTitle}>AK Leg Liaison — Tracked Bills</h1>
+          <h1 className={styles.printTitle}>Department of Public Safety - Legislative Reporting — Tracked Bills</h1>
           <p className={styles.printMeta}>
             34th Alaska Legislature · {sortedBills.length} bill
             {sortedBills.length !== 1 ? "s" : ""} · Report generated {reportDate}

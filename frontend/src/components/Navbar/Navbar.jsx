@@ -15,7 +15,7 @@ export default function Navbar() {
     <header className={styles.header}>
       <nav className={styles.nav}>
         <NavLink to="/" className={styles.brand}>
-          AK Leg Liaison
+          Department of Public Safety - Legislative Reporting
         </NavLink>
 
         <ul className={styles.links}>
@@ -28,6 +28,16 @@ export default function Navbar() {
               end
             >
               Bills
+            </NavLink>
+          </li>
+          <li>
+            <NavLink
+              to="/meetings"
+              className={({ isActive }) =>
+                isActive ? `${styles.link} ${styles.active}` : styles.link
+              }
+            >
+              Meetings
             </NavLink>
           </li>
           {isLoggedIn && (

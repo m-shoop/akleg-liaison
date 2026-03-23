@@ -55,4 +55,5 @@ export const DEFAULT_SELECTED = new Set([
   "heard_and_held",
   "moved_out_of_committee",
   "passed",
+  "referred_to_committee",
 ]);

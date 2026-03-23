@@ -33,7 +33,7 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, abbr
 
   return (
     <article className={`${styles.card}${!bill.is_tracked ? ` ${styles.cardUntracked}` : ""}`}>
-      <div className={styles.header}>
+      <div className={styles.headerRow}>
         {bill.source_url ? (
           <a
             href={bill.source_url}
@@ -46,23 +46,23 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, abbr
         ) : (
           <span className={styles.billNumber}>{bill.bill_number}</span>
         )}
-        <div className={styles.headerRight}>
-          <span className={styles.status}>{bill.status ?? "Unknown"}</span>
-          {isLoggedIn && (
-            <button
-              className={styles.trackBtn}
-              onClick={handleToggleTracked}
-              disabled={tracking}
-              title={bill.is_tracked ? "Mark as untracked" : "Mark as tracked"}
-            >
-              {tracking ? "…" : bill.is_tracked ? "Untrack" : "Track"}
-            </button>
-          )}
-        </div>
+        <p className={styles.shortTitle}>{bill.short_title ?? "Untitled"}</p>
       </div>
 
-      <p className={styles.shortTitle}>{bill.short_title ?? "Untitled"}</p>
-      <p className={styles.introduced}>Introduced {introduced}</p>
+      <div className={styles.metaRow}>
+        <span className={styles.status}>{bill.status ?? "Unknown"}</span>
+        <span className={styles.introduced}>Introduced {introduced}</span>
+        {isLoggedIn && (
+          <button
+            className={styles.trackBtn}
+            onClick={handleToggleTracked}
+            disabled={tracking}
+            title={bill.is_tracked ? "Mark as untracked" : "Mark as tracked"}
+          >
+            {tracking ? "…" : bill.is_tracked ? "Untrack" : "Track"}
+          </button>
+        )}
+      </div>
 
       {error && <p className={styles.error}>{error}</p>}
 

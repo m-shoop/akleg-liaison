@@ -223,6 +223,19 @@ async def get_event_by_id(
     return result.scalar_one_or_none()
 
 
+async def get_bill_by_number(
+    session: AsyncSession, bill_number: str, legislature_session: int
+) -> Bill | None:
+    """Return a bill by its bill_number + session, or None if not found."""
+    result = await session.execute(
+        select(Bill).where(
+            Bill.bill_number == bill_number,
+            Bill.session == legislature_session,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 async def list_events_for_bill(
     session: AsyncSession, bill_id: int
 ) -> list[BillEvent]:

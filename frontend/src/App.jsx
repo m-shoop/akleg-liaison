@@ -5,6 +5,7 @@ import Footer from "./components/Footer/Footer";
 import Home from "./pages/Home/Home";
 import Login from "./pages/Login/Login";
 import QueryBill from "./pages/QueryBill/QueryBill";
+import Meetings from "./pages/Meetings/Meetings";
 import styles from "./App.module.css";
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="/"           element={<Home />} />
           <Route path="/login"      element={<Login />} />
           <Route path="/query-bill" element={<QueryBill />} />
+          <Route path="/meetings"   element={<Meetings />} />
         </Routes>
       </main>
       <Footer />

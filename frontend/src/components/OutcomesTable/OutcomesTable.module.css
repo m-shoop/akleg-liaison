@@ -2,12 +2,12 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 0.55rem;
-  margin-top: 0.5rem;
+  margin-top: 0.2rem;
 }
 
 .table th {
   text-align: left;
-  padding: 0.25rem 0.5rem;
+  padding: 0.15rem 0.4rem;
   font-size: 0.48rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -18,14 +18,14 @@
 }
 
 .table td {
-  padding: 0.3rem 0.5rem;
+  padding: 0.07rem 0.4rem;
   vertical-align: top;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   color: var(--color-text-primary);
 }
 
 .rowAlt td {
-  background-color: var(--color-surface);
+  /* removed alternating background — rows are dense enough to read linearly */
 }
 
 .colDate {
@@ -75,6 +75,14 @@
 }
 
 @media print {
+  .table thead {
+    display: none;
+  }
+
+  .table td {
+    border-bottom: none;
+  }
+
   .dateLink {
     color: black;
     text-decoration: underline;

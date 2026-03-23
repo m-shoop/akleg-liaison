@@ -1,4 +1,4 @@
-import { flattenOutcomes, formatOutcomeType, formatOutcomeTypeShort } from "../../utils/outcomes";
+import { flattenOutcomes, formatOutcomeType } from "../../utils/outcomes";
 import styles from "./OutcomesTable.module.css";
 
 // Strip "House " or "Senate " prefix — redundant given the Chamber column.
@@ -7,14 +7,14 @@ function displayCommittee(name) {
   return name.replace(/^(House|Senate)\s+/i, "");
 }
 
-export default function OutcomesTable({ events, showDescription, selectedOutcomes, abbreviated = false }) {
+export default function OutcomesTable({ events, showDescription, selectedOutcomes }) {
   const rows = flattenOutcomes(events).filter((row) =>
     selectedOutcomes.has(row.outcome_type)
   );
 
   if (rows.length === 0) return null;
 
-  const formatLabel = abbreviated ? formatOutcomeTypeShort : formatOutcomeType;
+  const formatLabel = formatOutcomeType;
 
   const formatDate = (iso) =>
     new Date(iso).toLocaleDateString("en-US", {
@@ -27,10 +27,10 @@ export default function OutcomesTable({ events, showDescription, selectedOutcome
     <table className={styles.table}>
       <thead>
         <tr>
-          <th className={styles.colChamber}>Chamber</th>
           <th className={styles.colDate}>Date</th>
-          <th className={styles.colCommittee}>Committee</th>
           <th className={styles.colOutcome}>Outcome</th>
+          <th className={styles.colChamber}>Chamber</th>
+          <th className={styles.colCommittee}>Committee</th>
           {showDescription && (
             <th className={styles.colDescription}>Description</th>
           )}
@@ -39,7 +39,6 @@ export default function OutcomesTable({ events, showDescription, selectedOutcome
       <tbody>
         {rows.map((row, i) => (
           <tr key={i} className={i % 2 === 1 ? styles.rowAlt : undefined}>
-            <td className={styles.colChamber}>{row.chamber === "House" ? "H" : "S"}</td>
             <td className={styles.colDate}>
               {row.source_url ? (
                 <a
@@ -54,10 +53,11 @@ export default function OutcomesTable({ events, showDescription, selectedOutcome
                 formatDate(row.date)
               )}
             </td>
-            <td className={styles.colCommittee}>{displayCommittee(row.committee)}</td>
             <td className={styles.colOutcome}>
               {formatLabel(row.outcome_type)}
             </td>
+            <td className={styles.colChamber}>{row.chamber === "House" ? "H" : "S"}</td>
+            <td className={styles.colCommittee}>{displayCommittee(row.committee)}</td>
             {showDescription && (
               <td className={styles.colDescription}>{row.description}</td>
             )}

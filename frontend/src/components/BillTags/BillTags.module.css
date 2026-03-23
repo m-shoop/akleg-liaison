@@ -96,6 +96,11 @@
     border-color: #aaa;
   }
 
+  .pillLabel {
+    padding-left: 0.7rem;
+    padding-right: 0.7rem;
+  }
+
   .pillInactive {
     display: none;
   }
