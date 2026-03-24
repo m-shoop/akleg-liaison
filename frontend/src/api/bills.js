@@ -23,19 +23,6 @@ export async function setTracked(billId, isTracked, token) {
   return res.json();
 }
 
-export async function addBill(billNumber, session, token) {
-  const res = await fetch(`${BASE}/bills/fetch`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders(token) },
-    body: JSON.stringify({ bill_number: billNumber, session }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail ?? "Failed to add bill");
-  }
-  return res.json();
-}
-
 export async function fetchAllBills(token) {
   const res = await fetch(`${BASE}/bills/fetch-all`, {
     method: "POST",

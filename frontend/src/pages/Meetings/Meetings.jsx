@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { fetchMeetings, scrapeMeetings, updateDpsNotes } from "../../api/meetings";
+import { useJob } from "../../hooks/useJob";
+import Toast from "../../components/Toast/Toast";
 import styles from "./Meetings.module.css";
 
 function weekBounds() {
@@ -149,9 +151,24 @@ export default function Meetings() {
   const [endDate, setEndDate] = useState(bounds.end);
   const [meetings, setMeetings] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [scraping, setScraping] = useState(false);
+  const [scrapeJobId, setScrapeJobId] = useState(null);
+  const [toast, setToast] = useState(null);
   const [error, setError] = useState(null);
   const [showInactive, setShowInactive] = useState(false);
+
+  const { status: jobStatus, result: jobResult, error: jobError } = useJob(scrapeJobId);
+
+  useEffect(() => {
+    if (!scrapeJobId) return;
+    if (jobStatus === "complete") {
+      loadMeetings();
+      setToast({ message: `${jobResult?.meetings_saved ?? 0} meetings scraped successfully.`, type: "success" });
+      setScrapeJobId(null);
+    } else if (jobStatus === "failed") {
+      setToast({ message: jobError ?? "Scrape failed.", type: "error" });
+      setScrapeJobId(null);
+    }
+  }, [jobStatus]);
 
   async function loadMeetings(includeInactive = showInactive) {
     setLoading(true);
@@ -166,21 +183,17 @@ export default function Meetings() {
     }
   }
 
-  async function handleLoad() {
-    await loadMeetings();
-  }
+  useEffect(() => {
+    loadMeetings();
+  }, [startDate, endDate]);
 
   async function handleScrape() {
-    setScraping(true);
     setError(null);
     try {
-      const result = await scrapeMeetings({ startDate, endDate }, token);
-      await loadMeetings();
-      alert(`Scraped ${result.meetings_saved} meetings.`);
+      const job = await scrapeMeetings({ startDate, endDate }, token);
+      setScrapeJobId(job.id);
     } catch (e) {
-      setError(e.message);
-    } finally {
-      setScraping(false);
+      setToast({ message: e.message, type: "error" });
     }
   }
 
@@ -233,12 +246,9 @@ export default function Meetings() {
             </label>
           </div>
           <div className={styles.btnRow}>
-            <button className={styles.loadBtn} onClick={handleLoad} disabled={loading}>
-              {loading ? "Loading…" : "Load"}
-            </button>
             {isLoggedIn && (
-              <button className={styles.scrapeBtn} onClick={handleScrape} disabled={scraping}>
-                {scraping ? "Scraping…" : "Scrape from akleg.gov"}
+              <button className={styles.scrapeBtn} onClick={handleScrape} disabled={!!scrapeJobId}>
+                {scrapeJobId ? "Scraping…" : "Scrape from akleg.gov"}
               </button>
             )}
             {meetings !== null && (
@@ -254,7 +264,15 @@ export default function Meetings() {
         </div>
       </div>
 
+      {scrapeJobId && (
+        <p className={styles.notice}>Scraping meetings from akleg.gov — please stay on this page…</p>
+      )}
       {error && <p className={styles.error}>{error}</p>}
+      <Toast
+        message={toast?.message}
+        type={toast?.type}
+        onDismiss={() => setToast(null)}
+      />
 
       {meetings !== null && meetings.length === 0 && (
         <p className={styles.notice}>

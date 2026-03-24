@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { addBill, fetchBills } from "../../api/bills";
+import { fetchBills, refreshBill } from "../../api/bills";
 import { useAuth } from "../../context/AuthContext";
+import { useJob } from "../../hooks/useJob";
+import Toast from "../../components/Toast/Toast";
 import styles from "./QueryBill.module.css";
 
 export default function QueryBill() {
@@ -10,9 +12,20 @@ export default function QueryBill() {
   const [bills, setBills] = useState([]);
   const [billsLoading, setBillsLoading] = useState(true);
   const [billsError, setBillsError] = useState(null);
-  const [selectedBillNumber, setSelectedBillNumber] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState(null);
+  const [selectedBillId, setSelectedBillId] = useState("");
+  const [jobId, setJobId] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  const { status: jobStatus, error: jobError } = useJob(jobId);
+
+  useEffect(() => {
+    if (!jobId) return;
+    if (jobStatus === "complete") navigate("/", { state: { toast: "Bill queried successfully." } });
+    if (jobStatus === "failed") {
+      setToast({ message: jobError ?? "Query failed.", type: "error" });
+      setJobId(null);
+    }
+  }, [jobStatus]);
 
   useEffect(() => {
     fetchBills()
@@ -32,16 +45,12 @@ export default function QueryBill() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!selectedBillNumber) return;
-    setError(null);
-    setSubmitting(true);
+    if (!selectedBillId) return;
     try {
-      await addBill(selectedBillNumber, 34, token);
-      navigate("/");
+      const job = await refreshBill(selectedBillId, token);
+      setJobId(job.id);
     } catch (err) {
-      setError(err.message);
-    } finally {
-      setSubmitting(false);
+      setToast({ message: err.message, type: "error" });
     }
   }
 
@@ -66,14 +75,14 @@ export default function QueryBill() {
             {billsError && <span className={styles.errorNote}>{billsError}</span>}
             <select
               className={styles.select}
-              value={selectedBillNumber}
-              onChange={(e) => setSelectedBillNumber(e.target.value)}
+              value={selectedBillId}
+              onChange={(e) => setSelectedBillId(e.target.value)}
               disabled={billsLoading || !!billsError}
               required
             >
               <option value="">— Select a bill —</option>
               {bills.map((bill) => (
-                <option key={bill.id} value={bill.bill_number}>
+                <option key={bill.id} value={bill.id}>
                   {bill.bill_number}
                   {bill.short_title ? ` — ${bill.short_title}` : ""}
                 </option>
@@ -81,16 +90,19 @@ export default function QueryBill() {
             </select>
           </label>
 
-          {error && <p className={styles.error}>{error}</p>}
-
           <button
             type="submit"
             className={styles.submitBtn}
-            disabled={submitting || !selectedBillNumber}
+            disabled={!!jobId || !selectedBillId}
           >
-            {submitting ? "Querying…" : "Query Bill"}
+            {jobId ? "Querying…" : "Query Bill"}
           </button>
         </form>
+        <Toast
+          message={toast?.message}
+          type={toast?.type}
+          onDismiss={() => setToast(null)}
+        />
       </div>
     </div>
   );

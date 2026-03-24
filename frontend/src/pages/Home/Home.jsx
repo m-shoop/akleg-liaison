@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useReactToPrint } from "react-to-print";
 import { fetchBills } from "../../api/bills";
 import { fetchMeetings } from "../../api/meetings";
 import BillCard from "../../components/BillCard/BillCard";
 import OutcomeFilter from "../../components/OutcomeFilter/OutcomeFilter";
+import Toast from "../../components/Toast/Toast";
 import { DEFAULT_SELECTED } from "../../utils/outcomeTypes";
 import styles from "./Home.module.css";
 
@@ -30,6 +32,8 @@ function groupByDate(meetings) {
 }
 
 export default function Home() {
+  const location = useLocation();
+  const [toast, setToast] = useState(location.state?.toast ? { message: location.state.toast, type: "success" } : null);
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -37,6 +41,7 @@ export default function Home() {
   const [selectedOutcomes, setSelectedOutcomes] = useState(DEFAULT_SELECTED);
   const [showUntracked, setShowUntracked] = useState(false);
   const [sideBySide, setSideBySide] = useState(true);
+  const [showKeywords, setShowKeywords] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [printStartDate, setPrintStartDate] = useState("");
   const [printEndDate, setPrintEndDate] = useState("");
@@ -80,7 +85,9 @@ export default function Home() {
           showDescription ? o.description : null,
         ]);
 
-        const haystack = [bill.bill_number, bill.short_title, bill.status, ...bill.tags.map((t) => t.label), ...outcomeFields]
+        const keywordFields = showKeywords ? bill.keywords.map((s) => s.keyword) : [];
+
+        const haystack = [bill.bill_number, bill.short_title, bill.status, ...bill.tags.map((t) => t.label), ...outcomeFields, ...keywordFields]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
@@ -158,6 +165,12 @@ export default function Home() {
             >
               {sideBySide ? "Single Column" : "Side by Side"}
             </button>
+            <button
+              className={styles.toggleBtn}
+              onClick={() => setShowKeywords((v) => !v)}
+            >
+              {showKeywords ? "Hide Keywords" : "Show Keywords"}
+            </button>
             <div className={styles.printRow}>
               <span className={styles.printRowLabel}>Meetings:</span>
               <input
@@ -183,6 +196,7 @@ export default function Home() {
 
       {loading && <p className={styles.notice}>Loading bills…</p>}
       {error   && <p className={styles.error}>Error: {error}</p>}
+      <Toast message={toast?.message} type={toast?.type} onDismiss={() => setToast(null)} />
 
       {!loading && !error && bills.length === 0 && (
         <p className={styles.notice}>No bills have been tracked yet.</p>
@@ -291,6 +305,7 @@ export default function Home() {
                         bill={bill}
                         showDescription={showDescription}
                         selectedOutcomes={selectedOutcomes}
+                        showKeywords={showKeywords}
                         abbreviated={true}
                         onRefreshed={(updated) =>
                           setBills((prev) => prev.map((b) => b.id === updated.id ? updated : b))
@@ -317,6 +332,7 @@ export default function Home() {
                   bill={bill}
                   showDescription={showDescription}
                   selectedOutcomes={selectedOutcomes}
+                  showKeywords={showKeywords}
                   onRefreshed={(updated) =>
                     setBills((prev) => prev.map((b) => b.id === updated.id ? updated : b))
                   }

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
-from app.routers import auth, bills, meetings, tags
+from app.routers import auth, bills, jobs, meetings, tags
 from app.services.scheduler import scheduler_loop
 
 logging.basicConfig(level=logging.INFO)
@@ -14,10 +14,6 @@ logging.basicConfig(level=logging.INFO)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables on startup (use Alembic migrations in production)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
     # Start the background refresh scheduler
     task = asyncio.create_task(scheduler_loop())
     yield
@@ -47,6 +43,7 @@ app.include_router(auth.router)
 app.include_router(bills.router)
 app.include_router(tags.router)
 app.include_router(meetings.router)
+app.include_router(jobs.router)
 
 
 @app.get("/health")

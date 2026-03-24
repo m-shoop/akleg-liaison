@@ -67,6 +67,12 @@ class ScrapedEvent:
 
 
 @dataclass
+class ScrapedKeyword:
+    keyword: str
+    url: str | None = None
+
+
+@dataclass
 class ScrapedBill:
     bill_number: str
     session: int
@@ -77,6 +83,7 @@ class ScrapedBill:
     introduced_date: date | None = None
     sponsors: list[ScrapedSponsor] = field(default_factory=list)
     events: list[ScrapedEvent] = field(default_factory=list)
+    keywords: list[ScrapedKeyword] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -286,6 +293,29 @@ def _parse_bill_meta(soup: BeautifulSoup) -> dict:
     return meta
 
 
+def _parse_keywords(soup: BeautifulSoup) -> list[ScrapedKeyword]:
+    """Parse the official subject keywords from ul.list-links.
+
+    The first <li> contains "Similar Subject Match" / "Exact Subject Match"
+    navigation links — those are skipped.  All subsequent <li> elements each
+    contain one keyword link.
+    """
+    keywords: list[ScrapedKeyword] = []
+    ul = soup.select_one("ul.list-links")
+    if not ul:
+        return keywords
+    skip = {"Similar Subject Match", "Exact Subject Match"}
+    for li in ul.find_all("li"):
+        for link in li.find_all("a"):
+            text = link.get_text(strip=True)
+            if text in skip:
+                continue
+            href = link.get("href")
+            url = _absolute_url(href) if href else None
+            keywords.append(ScrapedKeyword(keyword=text, url=url))
+    return keywords
+
+
 def _parse_sponsors(soup: BeautifulSoup) -> list[ScrapedSponsor]:
     sponsors: list[ScrapedSponsor] = []
     for sel in (".sponsors", "#sponsors", ".bill-sponsors"):
@@ -319,6 +349,7 @@ def parse_bill_page(
     )
 
     bill.sponsors = _parse_sponsors(soup)
+    bill.keywords = _parse_keywords(soup)
 
     # Find the action table by its distinctive "Jrn Date" header — the page
     # contains several table.table elements (Full Text, Fiscal Notes, etc.)

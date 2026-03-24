@@ -5,7 +5,7 @@ import BillTags from "../BillTags/BillTags";
 import OutcomesTable from "../OutcomesTable/OutcomesTable";
 import styles from "./BillCard.module.css";
 
-export default function BillCard({ bill, showDescription, selectedOutcomes, abbreviated = false, onRefreshed: _onRefreshed, onTrackingChanged }) {
+export default function BillCard({ bill, showDescription, selectedOutcomes, showKeywords = false, abbreviated = false, onRefreshed: _onRefreshed, onTrackingChanged }) {
   const { isLoggedIn, token } = useAuth();
   const [tracking, setTracking] = useState(false);
   const [error, setError] = useState(null);
@@ -72,7 +72,22 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, abbr
         selectedOutcomes={selectedOutcomes}
         abbreviated={abbreviated}
       />
-      <BillTags bill={bill} />
+      <div className={styles.bottomRow}>
+        <BillTags bill={bill} />
+        {showKeywords && bill.keywords?.length > 0 && (
+          <div className={styles.keywords}>
+            {bill.keywords.map((s) =>
+              s.url ? (
+                <a key={s.keyword} href={s.url} target="_blank" rel="noreferrer" className={styles.keywordPill}>
+                  {s.keyword}
+                </a>
+              ) : (
+                <span key={s.keyword} className={styles.keywordPill}>{s.keyword}</span>
+              )
+            )}
+          </div>
+        )}
+      </div>
     </article>
   );
 }

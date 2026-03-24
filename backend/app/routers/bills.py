@@ -18,13 +18,14 @@ from app.repositories.bill_repository import (
     set_bill_tracked,
     upsert_bill,
 )
+from app.repositories.job_repository import create_job, get_job, set_job_complete, set_job_failed, set_job_running
 from app.schemas.bill import (
     BillEventOutcomeCreate,
     BillEventOutcomeRead,
     BillEventRead,
-    BillFetchRequest,
     BillRead,
 )
+from app.schemas.job import JobRead
 from app.services.bill_scraper import ScrapedEvent, scrape_bill, scrape_bill_list
 from app.services.bill_sync import refresh_bill as sync_refresh_bill
 from app.services.outcome_analyzer import analyze_event as analyze_event_with_mistral
@@ -54,29 +55,36 @@ async def _get_event_or_404(event_id: int, db: AsyncSession):
 # Bills
 # ---------------------------------------------------------------------------
 
-@router.post("/fetch", response_model=BillRead, status_code=201)
-async def fetch_and_persist_bill(
-    request: BillFetchRequest,
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
-):
-    """Scrape a bill from akleg.gov and upsert it into the database."""
-    bill_id = await sync_refresh_bill(db, request.bill_number, request.session)
-    await db.commit()
-    return await _get_bill_or_404(bill_id, db)
+async def _run_refresh_job(job_id, bill_number: str, session: int) -> None:
+    """Background task: re-scrapes a bill in its own DB session."""
+    from app.database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as db:
+        await set_job_running(db, job_id)
+        await db.commit()
+        try:
+            bill_id = await sync_refresh_bill(db, bill_number, session)
+            await set_job_complete(db, job_id, {"bill_id": bill_id})
+            await db.commit()
+        except Exception as exc:
+            await set_job_failed(db, job_id, str(exc))
+            await db.commit()
 
 
-@router.post("/{bill_id}/refresh", response_model=BillRead)
+@router.post("/{bill_id}/refresh", response_model=JobRead, status_code=202)
 async def refresh_bill(
     bill_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    """Re-scrape a bill and upsert any new events, analyzing any that are new."""
+    """Enqueue a bill re-scrape and return immediately. Poll GET /jobs/{id} for status."""
     bill = await _get_bill_or_404(bill_id, db)
-    await sync_refresh_bill(db, bill.bill_number, bill.session)
+    job_id = await create_job(db, job_type="refresh_bill")
     await db.commit()
-    return await _get_bill_or_404(bill_id, db)
+    background_tasks.add_task(_run_refresh_job, job_id, bill.bill_number, bill.session)
+    job = await get_job(db, job_id)
+    return job
 
 
 async def _run_fetch_all(session: int) -> None:

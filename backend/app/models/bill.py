@@ -101,6 +101,9 @@ class Bill(Base):
     tags: Mapped[list["Tag"]] = relationship(  # type: ignore[name-defined]
         "Tag", secondary="bill_tags", viewonly=True
     )
+    keywords: Mapped[list["BillKeyword"]] = relationship(
+        back_populates="bill", cascade="all, delete-orphan", order_by="BillKeyword.keyword"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -206,3 +209,23 @@ class BillEventOutcome(Base):
     )
 
     event: Mapped["BillEvent"] = relationship(back_populates="outcomes")
+
+
+# ---------------------------------------------------------------------------
+# Subjects  (official subject keywords from akleg.gov)
+# ---------------------------------------------------------------------------
+
+class BillKeyword(Base):
+    __tablename__ = "bill_keywords"
+    __table_args__ = (
+        UniqueConstraint("bill_id", "keyword", name="uq_bill_keyword"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bill_id: Mapped[int] = mapped_column(
+        ForeignKey("bills.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    keyword: Mapped[str] = mapped_column(String(200), nullable=False)
+    url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    bill: Mapped["Bill"] = relationship(back_populates="keywords")

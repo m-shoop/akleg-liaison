@@ -6,6 +6,14 @@ from app.models.bill import Chamber, EventType, OutcomeType
 from app.schemas.tag import TagRead
 
 
+class BillKeywordRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    keyword: str
+    url: str | None
+
+
 class BillSponsorRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -59,6 +67,7 @@ class BillRead(BaseModel):
     sponsors: list[BillSponsorRead]
     events: list[BillEventRead]
     tags: list[TagRead]
+    keywords: list[BillKeywordRead]
 
 
 class BillFetchRequest(BaseModel):

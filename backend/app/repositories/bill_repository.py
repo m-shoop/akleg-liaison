@@ -18,7 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.bill import Bill, BillEvent, BillEventOutcome, BillSponsor
+from app.models.bill import Bill, BillEvent, BillEventOutcome, BillSponsor, BillKeyword
 from app.services.bill_scraper import ScrapedBill, ScrapedEvent
 from app.services.outcome_analyzer import ScrapedOutcome
 
@@ -77,6 +77,13 @@ async def upsert_bill(
             chamber=sp.chamber,
             sponsor_type=sp.sponsor_type,
         ))
+
+    # Subjects: delete and re-insert on each run
+    await session.execute(
+        BillKeyword.__table__.delete().where(BillKeyword.bill_id == bill_id)
+    )
+    for sub in scraped.keywords:
+        session.add(BillKeyword(bill_id=bill_id, keyword=sub.keyword, url=sub.url))
 
     return bill_id, is_tracked
 
@@ -167,6 +174,7 @@ async def get_bill_by_id(
             selectinload(Bill.sponsors),
             selectinload(Bill.events).selectinload(BillEvent.outcomes),
             selectinload(Bill.tags),
+            selectinload(Bill.keywords),
         )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
@@ -187,6 +195,7 @@ async def list_bills(
             selectinload(Bill.sponsors),
             selectinload(Bill.events).selectinload(BillEvent.outcomes),
             selectinload(Bill.tags),
+            selectinload(Bill.keywords),
         )
         .order_by(Bill.session.desc(), Bill.bill_number)
     )

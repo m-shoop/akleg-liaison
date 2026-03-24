@@ -1,20 +1,46 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.database import AsyncSessionLocal, get_db
 from app.dependencies import get_current_user
 from app.models.user import User
+from app.repositories.job_repository import (
+    create_job,
+    set_job_complete,
+    set_job_failed,
+    set_job_running,
+)
 from app.repositories.meeting_repository import (
     get_meeting_by_id,
     list_meetings,
     update_dps_notes,
 )
+from app.schemas.job import JobRead
 from app.schemas.meeting import MeetingDpsNotesUpdate, MeetingRead, MeetingScrapeRequest
 from app.services.meeting_scraper import scrape_and_store_meetings
 
 router = APIRouter(tags=["meetings"])
+
+
+async def _run_scrape_job(
+    job_id,
+    start: date,
+    end: date,
+    legislature_session: int,
+) -> None:
+    """Background task: runs the scrape in its own DB session."""
+    async with AsyncSessionLocal() as db:
+        await set_job_running(db, job_id)
+        await db.commit()
+        try:
+            count = await scrape_and_store_meetings(db, start, end, legislature_session)
+            await set_job_complete(db, job_id, {"meetings_saved": count})
+            await db.commit()
+        except Exception as exc:
+            await set_job_failed(db, job_id, str(exc))
+            await db.commit()
 
 
 @router.get("/meetings", response_model=list[MeetingRead])
@@ -28,23 +54,22 @@ async def get_meetings(
     return await list_meetings(db, start_date, end_date, legislature_session, include_inactive)
 
 
-@router.post("/meetings/scrape", status_code=201)
+@router.post("/meetings/scrape", response_model=JobRead, status_code=202)
 async def scrape_meetings(
     body: MeetingScrapeRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    """Fetch and store meetings for a given date range from akleg.gov."""
-    try:
-        count = await scrape_and_store_meetings(
-            db,
-            start=body.start_date,
-            end=body.end_date,
-            legislature_session=body.legislature_session,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return {"meetings_saved": count}
+    """Enqueue a scrape job and return immediately. Poll GET /jobs/{id} for status."""
+    job_id = await create_job(db, job_type="scrape_meetings")
+    await db.commit()
+    background_tasks.add_task(
+        _run_scrape_job, job_id, body.start_date, body.end_date, body.legislature_session
+    )
+    from app.repositories.job_repository import get_job
+    job = await get_job(db, job_id)
+    return job
 
 
 @router.patch("/meetings/{meeting_id}/dps-notes", response_model=MeetingRead)
