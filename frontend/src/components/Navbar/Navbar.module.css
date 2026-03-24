@@ -101,3 +101,43 @@
   background-color: rgba(200, 184, 154, 0.15);
   color: var(--color-text-on-dark);
 }
+
+@media (max-width: 640px) {
+  .header {
+    height: auto;
+  }
+
+  .nav {
+    flex-wrap: wrap;
+    gap: 0;
+    padding: 0.4rem 1rem 0;
+  }
+
+  .brand {
+    font-size: 1rem;
+    padding: 0.2rem 0;
+  }
+
+  .links {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+    padding-bottom: 0.3rem;
+    gap: 0;
+  }
+
+  .link {
+    font-size: 0.8rem;
+    padding: 0.3rem 0.5rem;
+  }
+
+  .username {
+    display: none;
+  }
+
+  .loginBtn,
+  .logoutBtn {
+    font-size: 0.8rem;
+    padding: 0.3rem 0.75rem;
+  }
+}

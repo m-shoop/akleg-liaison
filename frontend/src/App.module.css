@@ -3,3 +3,9 @@
   /* Push content below the fixed navbar */
   padding-top: 64px;
 }
+
+@media (max-width: 640px) {
+  .main {
+    padding-top: 86px;
+  }
+}

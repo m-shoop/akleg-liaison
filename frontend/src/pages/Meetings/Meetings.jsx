@@ -150,7 +150,7 @@ export default function Meetings() {
   const bounds = weekBounds();
   const [startDate, setStartDate] = useState(bounds.start);
   const [endDate, setEndDate] = useState(bounds.end);
-  const [meetings, setMeetings] = useState(null);
+  const [allMeetings, setAllMeetings] = useState(null);
   const [loading, setLoading] = useState(false);
   const [scrapeJobId, setScrapeJobId] = useState(null);
   const [toast, setToast] = useState(null);
@@ -172,12 +172,12 @@ export default function Meetings() {
     }
   }, [jobStatus]);
 
-  async function loadMeetings(includeInactive = showInactive) {
+  async function loadMeetings() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchMeetings({ startDate, endDate, includeInactive });
-      setMeetings(data);
+      const data = await fetchMeetings({ startDate, endDate, includeInactive: true });
+      setAllMeetings(data);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -199,13 +199,15 @@ export default function Meetings() {
     }
   }
 
-  async function handleToggleInactive() {
-    const next = !showInactive;
-    setShowInactive(next);
-    if (meetings !== null) {
-      await loadMeetings(next);
-    }
+  function handleToggleInactive() {
+    setShowInactive((v) => !v);
   }
+
+  // Derive visible meetings from allMeetings based on showInactive
+  const hasInactive = allMeetings?.some((m) => !m.is_active) ?? false;
+  const meetings = allMeetings
+    ? showInactive ? allMeetings : allMeetings.filter((m) => m.is_active)
+    : null;
 
   // Filter then group by date
   const query = searchQuery.trim().toLowerCase();
@@ -283,7 +285,7 @@ export default function Meetings() {
                 {scrapeJobId ? "Scraping…" : "Scrape from akleg.gov"}
               </button>
             )}
-            {meetings !== null && (
+            {hasInactive && (
               <button
                 className={`${styles.loadBtn} ${showInactive ? styles.loadBtnActive : ""}`}
                 onClick={handleToggleInactive}

@@ -158,34 +158,62 @@ export default function Home() {
                 onChange={setSelectedOutcomes}
               />
             </div>
-            <button
-              id="tour-toggle-descriptions"
-              className={styles.toggleBtn}
-              onClick={() => setShowDescription((v) => !v)}
-            >
-              {showDescription ? "Hide" : "Show"} Descriptions
-            </button>
-            <button
-              id="tour-toggle-untracked"
-              className={styles.toggleBtn}
-              onClick={() => setShowUntracked((v) => !v)}
-            >
-              {showUntracked ? "Hide Untracked" : "Show Untracked"}
-            </button>
-            <button
-              id="tour-toggle-layout"
-              className={styles.toggleBtn}
-              onClick={() => setSideBySide((v) => !v)}
-            >
-              {sideBySide ? "Single Column" : "Side by Side"}
-            </button>
-            <button
-              id="tour-toggle-keywords"
-              className={styles.toggleBtn}
-              onClick={() => setShowKeywords((v) => !v)}
-            >
-              {showKeywords ? "Hide Keywords" : "Show Keywords"}
-            </button>
+            <div id="tour-toggle-descriptions" className={styles.toggleGroup}>
+              <button
+                className={`${styles.toggleOption} ${!showDescription ? styles.toggleSelected : ""}`}
+                onClick={() => setShowDescription(false)}
+              >
+                Hide Descriptions
+              </button>
+              <button
+                className={`${styles.toggleOption} ${showDescription ? styles.toggleSelected : ""}`}
+                onClick={() => setShowDescription(true)}
+              >
+                Show Descriptions
+              </button>
+            </div>
+            <div id="tour-toggle-untracked" className={styles.toggleGroup}>
+              <button
+                className={`${styles.toggleOption} ${!showUntracked ? styles.toggleSelected : ""}`}
+                onClick={() => setShowUntracked(false)}
+              >
+                Hide Untracked
+              </button>
+              <button
+                className={`${styles.toggleOption} ${showUntracked ? styles.toggleSelected : ""}`}
+                onClick={() => setShowUntracked(true)}
+              >
+                Show Untracked
+              </button>
+            </div>
+            <div id="tour-toggle-layout" className={styles.toggleGroup}>
+              <button
+                className={`${styles.toggleOption} ${sideBySide ? styles.toggleSelected : ""}`}
+                onClick={() => setSideBySide(true)}
+              >
+                Side by Side
+              </button>
+              <button
+                className={`${styles.toggleOption} ${!sideBySide ? styles.toggleSelected : ""}`}
+                onClick={() => setSideBySide(false)}
+              >
+                Single Column
+              </button>
+            </div>
+            <div id="tour-toggle-keywords" className={styles.toggleGroup}>
+              <button
+                className={`${styles.toggleOption} ${!showKeywords ? styles.toggleSelected : ""}`}
+                onClick={() => setShowKeywords(false)}
+              >
+                Hide Keywords
+              </button>
+              <button
+                className={`${styles.toggleOption} ${showKeywords ? styles.toggleSelected : ""}`}
+                onClick={() => setShowKeywords(true)}
+              >
+                Show Keywords
+              </button>
+            </div>
             <div id="tour-export-pdf" className={styles.printRow}>
               <span className={styles.printRowLabel}>Meetings:</span>
               <input

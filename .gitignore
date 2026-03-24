@@ -27,3 +27,6 @@ frontend/.env.local
 # OS
 .DS_Store
 Thumbs.db
+
+# Database dumps
+*.dump
