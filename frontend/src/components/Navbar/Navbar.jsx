@@ -15,7 +15,7 @@ export default function Navbar() {
     <header className={styles.header}>
       <nav className={styles.nav}>
         <NavLink to="/" className={styles.brand}>
-          Department of Public Safety - Legislative Reporting
+          Leg Up - Legislative Reporting
         </NavLink>
 
         <ul className={styles.links}>

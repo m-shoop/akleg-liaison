@@ -20,7 +20,10 @@ export default function QueryBill() {
 
   useEffect(() => {
     if (!jobId) return;
-    if (jobStatus === "complete") navigate("/", { state: { toast: "Bill queried successfully." } });
+    if (jobStatus === "complete") {
+      const bill = bills.find((b) => b.id === Number(selectedBillId) || b.id === selectedBillId);
+      navigate("/", { state: { toast: "Bill queried successfully.", search: bill?.bill_number ?? "" } });
+    }
     if (jobStatus === "failed") {
       setToast({ message: jobError ?? "Query failed.", type: "error" });
       setJobId(null);

@@ -1,6 +1,6 @@
-# AK Leg Liaison — Department of Public Safety Legislative Reporting
+# Leg Up — Alaska Legislature Liaison Tool for DPS
 
-A web application built for Alaska Department of Public Safety liaisons to monitor and report on the Alaska State Legislature. It tracks bills of interest, scrapes and stores weekly committee meeting schedules, and produces formatted PDF reports.
+**Leg Up** is a web application built for Alaska Department of Public Safety liaisons to monitor and report on the Alaska State Legislature. It tracks bills of interest, scrapes and stores weekly committee meeting schedules, and produces formatted PDF reports.
 
 ---
 

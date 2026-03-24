@@ -6,6 +6,7 @@ import { fetchMeetings } from "../../api/meetings";
 import BillCard from "../../components/BillCard/BillCard";
 import OutcomeFilter from "../../components/OutcomeFilter/OutcomeFilter";
 import Toast from "../../components/Toast/Toast";
+import { createBillsTour } from "../../tours/billsTour";
 import { DEFAULT_SELECTED } from "../../utils/outcomeTypes";
 import styles from "./Home.module.css";
 
@@ -42,7 +43,7 @@ export default function Home() {
   const [showUntracked, setShowUntracked] = useState(false);
   const [sideBySide, setSideBySide] = useState(true);
   const [showKeywords, setShowKeywords] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(location.state?.search ?? "");
   const [printStartDate, setPrintStartDate] = useState("");
   const [printEndDate, setPrintEndDate] = useState("");
   const [printMeetings, setPrintMeetings] = useState(null);
@@ -134,44 +135,58 @@ export default function Home() {
             </div>
             <div className={styles.searchRow}>
               <input
+                id="tour-search"
                 className={styles.searchInput}
                 type="search"
                 placeholder="Search bills, outcomes, committees…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
+              <button
+                className={styles.helpBtn}
+                onClick={() => createBillsTour().drive()}
+                title="Tour the Bills page"
+              >
+                ?
+              </button>
             </div>
           </div>
           <div className={styles.controls}>
-            <OutcomeFilter
-              selected={selectedOutcomes}
-              onChange={setSelectedOutcomes}
-            />
+            <div id="tour-filter-outcomes">
+              <OutcomeFilter
+                selected={selectedOutcomes}
+                onChange={setSelectedOutcomes}
+              />
+            </div>
             <button
+              id="tour-toggle-descriptions"
               className={styles.toggleBtn}
               onClick={() => setShowDescription((v) => !v)}
             >
               {showDescription ? "Hide" : "Show"} Descriptions
             </button>
             <button
+              id="tour-toggle-untracked"
               className={styles.toggleBtn}
               onClick={() => setShowUntracked((v) => !v)}
             >
               {showUntracked ? "Hide Untracked" : "Show Untracked"}
             </button>
             <button
+              id="tour-toggle-layout"
               className={styles.toggleBtn}
               onClick={() => setSideBySide((v) => !v)}
             >
               {sideBySide ? "Single Column" : "Side by Side"}
             </button>
             <button
+              id="tour-toggle-keywords"
               className={styles.toggleBtn}
               onClick={() => setShowKeywords((v) => !v)}
             >
               {showKeywords ? "Hide Keywords" : "Show Keywords"}
             </button>
-            <div className={styles.printRow}>
+            <div id="tour-export-pdf" className={styles.printRow}>
               <span className={styles.printRowLabel}>Meetings:</span>
               <input
                 type="date"
@@ -283,7 +298,7 @@ export default function Home() {
         )}
 
         <div className={styles.printHeader}>
-          <h1 className={styles.printTitle}>Department of Public Safety - Legislative Reporting — Tracked Bills</h1>
+          <h1 className={styles.printTitle}>Tracked Bills</h1>
           <p className={styles.printMeta}>
             34th Alaska Legislature · {sortedBills.length} bill
             {sortedBills.length !== 1 ? "s" : ""} · Report generated {reportDate}
@@ -299,8 +314,8 @@ export default function Home() {
               <div key={label} className={styles.sideColumn}>
                 <h2 className={styles.columnHeader}>{label}</h2>
                 <ul className={styles.list}>
-                  {columnBills.map((bill) => (
-                    <li key={bill.id}>
+                  {columnBills.map((bill, idx) => (
+                    <li key={bill.id} id={idx === 0 && label === "Senate Bills" ? "tour-first-bill" : undefined}>
                       <BillCard
                         bill={bill}
                         showDescription={showDescription}
@@ -326,8 +341,8 @@ export default function Home() {
           </div>
         ) : (
           <ul className={styles.list}>
-            {visibleBills.map((bill) => (
-              <li key={bill.id}>
+            {visibleBills.map((bill, idx) => (
+              <li key={bill.id} id={idx === 0 ? "tour-first-bill" : undefined}>
                 <BillCard
                   bill={bill}
                   showDescription={showDescription}

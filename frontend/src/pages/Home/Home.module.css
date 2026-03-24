@@ -38,10 +38,34 @@
 
 .searchRow {
   /* spacing handled by titleBlock gap */
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.helpBtn {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-rainy-sky);
+  background: transparent;
+  color: var(--color-rainy-sky);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.helpBtn:hover {
+  background-color: var(--color-rainy-sky);
+  color: var(--color-text-on-dark);
 }
 
 .searchInput {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 0.5rem 0.85rem;
   border: 1.5px solid var(--color-border);
   border-radius: 4px;

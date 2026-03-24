@@ -3,6 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import { fetchMeetings, scrapeMeetings, updateDpsNotes } from "../../api/meetings";
 import { useJob } from "../../hooks/useJob";
 import Toast from "../../components/Toast/Toast";
+import { createMeetingsTour } from "../../tours/meetingsTour";
 import styles from "./Meetings.module.css";
 
 function weekBounds() {
@@ -34,7 +35,7 @@ function fmtTime(timeStr) {
   return `${hour}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
-function MeetingCard({ meeting, onNotesSaved }) {
+function MeetingCard({ meeting, isFirst, onNotesSaved }) {
   const { isLoggedIn, token } = useAuth();
   const [notes, setNotes] = useState(meeting.dps_notes ?? "");
   const [saving, setSaving] = useState(false);
@@ -55,7 +56,7 @@ function MeetingCard({ meeting, onNotesSaved }) {
   const inactive = !meeting.is_active;
 
   return (
-    <article className={`${styles.card} ${meeting.chamber === "H" ? styles.house : styles.senate} ${inactive ? styles.inactive : ""}`}>
+    <article id={isFirst ? "tour-first-meeting" : undefined} className={`${styles.card} ${meeting.chamber === "H" ? styles.house : styles.senate} ${inactive ? styles.inactive : ""}`}>
       <div className={styles.cardMain}>
         {inactive && (
           <div className={styles.inactiveBanner}>Deactivated — this meeting was removed from the schedule</div>
@@ -155,6 +156,7 @@ export default function Meetings() {
   const [toast, setToast] = useState(null);
   const [error, setError] = useState(null);
   const [showInactive, setShowInactive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { status: jobStatus, result: jobResult, error: jobError } = useJob(scrapeJobId);
 
@@ -205,9 +207,30 @@ export default function Meetings() {
     }
   }
 
-  // Group meetings by date for display
-  const byDate = meetings
-    ? meetings.reduce((acc, m) => {
+  // Filter then group by date
+  const query = searchQuery.trim().toLowerCase();
+  const filteredMeetings = meetings && query
+    ? meetings.filter((m) => {
+        const agendaText = m.agenda_items
+          .flatMap((i) => [i.bill_number, i.content])
+          .filter(Boolean)
+          .join(" ");
+        const haystack = [
+          m.committee_name,
+          m.committee_type,
+          m.location,
+          m.dps_notes,
+          agendaText,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(query);
+      })
+    : meetings;
+
+  const byDate = filteredMeetings
+    ? filteredMeetings.reduce((acc, m) => {
         const key = m.meeting_date;
         if (!acc[key]) acc[key] = [];
         acc[key].push(m);
@@ -218,14 +241,23 @@ export default function Meetings() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
-        <h1 className={styles.title}>Meeting Schedule</h1>
-        <div className={styles.legend}>
-        <span className={styles.legendItem}><code>*</code> first hearing in first committee of referral</span>
-        <span className={styles.legendItem}><code>+</code> teleconferenced</span>
-        <span className={styles.legendItem}><code>=</code> previously heard / scheduled</span>
-      </div>
-      <div className={styles.controls}>
-          <div className={styles.dateRow}>
+        <div>
+          <h1 className={styles.title}>Meeting Schedule</h1>
+          {meetings !== null && (
+            <p className={styles.subtitle}>
+              {query
+                ? `${filteredMeetings.length} of ${meetings.length} meeting${meetings.length !== 1 ? "s" : ""}`
+                : `${meetings.length} meeting${meetings.length !== 1 ? "s" : ""}`}
+            </p>
+          )}
+        </div>
+        <div id="tour-legend" className={styles.legend}>
+          <span className={styles.legendItem}><code>*</code> first hearing in first committee of referral</span>
+          <span className={styles.legendItem}><code>+</code> teleconferenced</span>
+          <span className={styles.legendItem}><code>=</code> previously heard / scheduled</span>
+        </div>
+        <div className={styles.controls}>
+          <div id="tour-date-range" className={styles.dateRow}>
             <label>
               From
               <input
@@ -245,7 +277,7 @@ export default function Meetings() {
               />
             </label>
           </div>
-          <div className={styles.btnRow}>
+          <div id="tour-controls" className={styles.btnRow}>
             {isLoggedIn && (
               <button className={styles.scrapeBtn} onClick={handleScrape} disabled={!!scrapeJobId}>
                 {scrapeJobId ? "Scraping…" : "Scrape from akleg.gov"}
@@ -264,6 +296,24 @@ export default function Meetings() {
         </div>
       </div>
 
+      <div className={styles.searchRow}>
+        <input
+          id="tour-meetings-search"
+          className={styles.searchInput}
+          type="search"
+          placeholder="Search committees, bills, locations, notes…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        <button
+          className={styles.helpBtn}
+          onClick={() => createMeetingsTour().drive()}
+          title="Tour the Meetings page"
+        >
+          ?
+        </button>
+      </div>
+
       {scrapeJobId && (
         <p className={styles.notice}>Scraping meetings from akleg.gov — please stay on this page…</p>
       )}
@@ -280,17 +330,27 @@ export default function Meetings() {
           {isLoggedIn && ' Use "Scrape from akleg.gov" to import them.'}
         </p>
       )}
+      {meetings !== null && meetings.length > 0 && filteredMeetings.length === 0 && (
+        <p className={styles.notice}>No meetings match your search.</p>
+      )}
 
-      {Object.keys(byDate).sort().map((dateKey) => (
-        <section key={dateKey} className={styles.daySection}>
-          <h2 className={styles.dayHeading}>{fmt(dateKey)}</h2>
-          <div className={styles.dayCards}>
-            {byDate[dateKey].map((m) => (
-              <MeetingCard key={m.id} meeting={m} onNotesSaved={() => loadMeetings()} />
-            ))}
-          </div>
-        </section>
-      ))}
+      {(() => {
+        let firstCardRendered = false;
+        return Object.keys(byDate).sort().map((dateKey) => (
+          <section key={dateKey} className={styles.daySection}>
+            <h2 className={styles.dayHeading}>{fmt(dateKey)}</h2>
+            <div className={styles.dayCards}>
+              {byDate[dateKey].map((m) => {
+                const isFirst = !firstCardRendered;
+                if (isFirst) firstCardRendered = true;
+                return (
+                  <MeetingCard key={m.id} meeting={m} isFirst={isFirst} onNotesSaved={() => loadMeetings()} />
+                );
+              })}
+            </div>
+          </section>
+        ));
+      })()}
     </div>
   );
 }

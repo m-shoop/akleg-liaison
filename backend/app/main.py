@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Department of Public Safety - Legislative Reporting",
+    title="Leg Up",
     description="Track Alaska Legislature bills",
     version="0.1.0",
     lifespan=lifespan,
