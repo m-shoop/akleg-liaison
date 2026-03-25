@@ -37,6 +37,7 @@ class MeetingRead(BaseModel):
     # True when an inactive sibling meeting (same chamber/committee/date) has notes
     has_inactive_notes_sibling: bool = False
     created_at: datetime
+    updated_at: datetime
     agenda_items: list[AgendaItemRead]
 
 

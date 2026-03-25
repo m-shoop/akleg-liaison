@@ -150,6 +150,14 @@ a.keywordPill:hover {
   text-underline-offset: 2px;
 }
 
+.lastSynced {
+  font-size: 0.65rem;
+  color: var(--color-text-secondary);
+  opacity: 0.6;
+  text-align: right;
+  margin-top: 0.15rem;
+}
+
 @media print {
   .card {
     break-inside: avoid;
@@ -165,6 +173,11 @@ a.keywordPill:hover {
   .trackBtn,
   .refreshBtn {
     display: none;
+  }
+
+  .lastSynced {
+    opacity: 1;
+    color: #888;
   }
 
   .billNumber {

@@ -264,8 +264,8 @@ export default function Home() {
                   <div className={styles.printDayHeading}>{fmtDate(dateKey)}</div>
                   <div className={styles.printDayMeetings}>
                     {groupByDate(printMeetings)[dateKey].map((m) => (
+                      <div key={m.id}>
                       <div
-                        key={m.id}
                         className={`${styles.printMeetingCard} ${m.chamber === "H" ? styles.printHouse : styles.printSenate}`}
                       >
                         <div className={styles.printMeetingMain}>
@@ -315,6 +315,12 @@ export default function Home() {
                           )}
                         </div>
                         <div className={styles.printDpsNotes}>{m.dps_notes ?? ""}</div>
+                      </div>
+                      {m.updated_at && (
+                        <p className={styles.printLastSynced}>
+                          Synced {new Date(m.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </p>
+                      )}
                       </div>
                     ))}
                   </div>

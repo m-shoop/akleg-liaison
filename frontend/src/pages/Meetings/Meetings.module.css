@@ -446,6 +446,21 @@ a.committeeName:hover {
   cursor: not-allowed;
 }
 
+.lastSynced {
+  font-size: 0.65rem;
+  color: var(--color-text-secondary);
+  opacity: 0.6;
+  text-align: right;
+  margin-top: 0.15rem;
+}
+
+@media print {
+  .lastSynced {
+    opacity: 1;
+    color: #888;
+  }
+}
+
 .notice {
   color: var(--color-text-secondary);
   font-size: 0.95rem;

@@ -464,6 +464,13 @@
     margin: 0.5rem 0;
   }
 
+  .printLastSynced {
+    font-size: 0.6rem;
+    color: #999;
+    text-align: right;
+    margin: 0.1rem 0 0;
+  }
+
   .printMeetingsSection a {
     color: inherit;
     text-decoration: underline;

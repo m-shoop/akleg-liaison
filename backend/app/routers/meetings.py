@@ -12,6 +12,7 @@ from app.repositories.job_repository import (
     set_job_failed,
     set_job_running,
 )
+from app.repositories.audit_log_repository import log_action
 from app.repositories.meeting_repository import (
     get_meeting_by_id,
     list_meetings,
@@ -77,11 +78,14 @@ async def patch_dps_notes(
     meeting_id: int,
     body: MeetingDpsNotesUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    meeting = await update_dps_notes(db, meeting_id, body.dps_notes)
-    if meeting is None:
+    existing = await get_meeting_by_id(db, meeting_id)
+    if existing is None:
         raise HTTPException(status_code=404, detail="Meeting not found")
+    old_notes = existing.dps_notes
+    meeting = await update_dps_notes(db, meeting_id, body.dps_notes)
+    await log_action(db, current_user, "meeting_notes_updated", entity_type="meeting", entity_id=meeting_id, details={"old_notes": old_notes, "new_notes": body.dps_notes, "committee": existing.committee_name, "meeting_date": str(existing.meeting_date)})
     await db.commit()
     await db.refresh(meeting)
     return meeting

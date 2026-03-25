@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
+from app.repositories.audit_log_repository import log_action
 from app.repositories.bill_repository import get_bill_by_id
 from app.repositories.tag_repository import (
     add_bill_tag,
@@ -52,7 +53,7 @@ async def add_tag_to_bill(
     bill_id: int,
     body: TagCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Add a tag (by label) to a bill.
@@ -69,6 +70,7 @@ async def add_tag_to_bill(
 
     tag = await get_or_create_tag(db, label)
     await add_bill_tag(db, bill_id, tag.id)
+    await log_action(db, current_user, "tag_added", entity_type="bill", entity_id=bill_id, details={"bill_number": bill.bill_number, "tag": label})
     await db.commit()
     await db.refresh(tag)
     return tag
@@ -79,7 +81,7 @@ async def remove_tag_from_bill(
     bill_id: int,
     tag_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Remove a tag from a bill (deletes the bill_tags row)."""
     bill = await get_bill_by_id(db, bill_id)
@@ -91,4 +93,5 @@ async def remove_tag_from_bill(
         raise HTTPException(status_code=404, detail="Tag not found")
 
     await remove_bill_tag(db, bill_id, tag_id)
+    await log_action(db, current_user, "tag_removed", entity_type="bill", entity_id=bill_id, details={"bill_number": bill.bill_number, "tag": tag.label})
     await db.commit()

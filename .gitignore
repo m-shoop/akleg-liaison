@@ -30,3 +30,4 @@ Thumbs.db
 
 # Database dumps
 *.dump
+.pgpass

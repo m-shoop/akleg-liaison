@@ -10,6 +10,10 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, show
   const [tracking, setTracking] = useState(false);
   const [error, setError] = useState(null);
 
+  const lastSynced = bill.updated_at
+    ? new Date(bill.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : null;
+
   const introduced = bill.introduced_date
     ? new Date(bill.introduced_date).toLocaleDateString("en-US", {
         month: "short",
@@ -88,6 +92,9 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, show
           </div>
         )}
       </div>
+      {lastSynced && (
+        <p className={styles.lastSynced}>Synced {lastSynced}</p>
+      )}
     </article>
   );
 }

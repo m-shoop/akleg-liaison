@@ -54,6 +54,9 @@ function MeetingCard({ meeting, isFirst, onNotesSaved }) {
 
   const chamberLabel = meeting.chamber === "H" ? "House" : "Senate";
   const inactive = !meeting.is_active;
+  const lastSynced = meeting.updated_at
+    ? new Date(meeting.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : null;
 
   return (
     <article id={isFirst ? "tour-first-meeting" : undefined} className={`${styles.card} ${meeting.chamber === "H" ? styles.house : styles.senate} ${inactive ? styles.inactive : ""}`}>
@@ -123,6 +126,7 @@ function MeetingCard({ meeting, isFirst, onNotesSaved }) {
             </tbody>
           </table>
         )}
+        {lastSynced && <p className={styles.lastSynced}>Synced {lastSynced}</p>}
       </div>
 
       {isLoggedIn && (

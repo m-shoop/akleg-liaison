@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.repositories.audit_log_repository import log_action
 from app.repositories.user_repository import create_user, get_user_by_username
 from app.services.auth_service import create_access_token, hash_password, verify_password
 
@@ -33,6 +34,8 @@ async def login(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    await log_action(db, user, "login")
+    await db.commit()
     return TokenResponse(access_token=create_access_token(user.username))
 
 

@@ -18,6 +18,7 @@ from app.repositories.bill_repository import (
     set_bill_tracked,
     upsert_bill,
 )
+from app.repositories.audit_log_repository import log_action
 from app.repositories.job_repository import create_job, get_job, set_job_complete, set_job_failed, set_job_running
 from app.schemas.bill import (
     BillEventOutcomeCreate,
@@ -76,11 +77,12 @@ async def refresh_bill(
     bill_id: int,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Enqueue a bill re-scrape and return immediately. Poll GET /jobs/{id} for status."""
     bill = await _get_bill_or_404(bill_id, db)
     job_id = await create_job(db, job_type="refresh_bill")
+    await log_action(db, current_user, "bill_queried", entity_type="bill", entity_id=bill_id, details={"bill_number": bill.bill_number})
     await db.commit()
     background_tasks.add_task(_run_refresh_job, job_id, bill.bill_number, bill.session)
     job = await get_job(db, job_id)
@@ -130,12 +132,14 @@ async def update_bill_tracked(
     bill_id: int,
     is_tracked: bool = Query(...),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Set or clear the is_tracked flag on a bill."""
     bill = await set_bill_tracked(db, bill_id, is_tracked)
     if bill is None:
         raise HTTPException(status_code=404, detail="Bill not found")
+    action = "bill_tracked" if is_tracked else "bill_untracked"
+    await log_action(db, current_user, action, entity_type="bill", entity_id=bill_id, details={"bill_number": bill.bill_number})
     await db.commit()
     return await _get_bill_or_404(bill_id, db)
 
