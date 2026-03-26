@@ -5,7 +5,8 @@ export default function Footer() {
   return (
     <footer className={styles.footer}>
       <div className={styles.inner}>
-        <span>© {year} Alaska Legislative Liaison</span>
+        <span>Site design © Michael Shoop {year}.</span>
+        <span> Legislative data sourced from akleg.gov is public domain.</span>
         <span className={styles.divider}>·</span>
         <span>34th Legislature</span>
       </div>
