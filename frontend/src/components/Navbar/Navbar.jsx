@@ -37,7 +37,7 @@ export default function Navbar() {
                 isActive ? `${styles.link} ${styles.active}` : styles.link
               }
             >
-              Meetings
+              Hearings
             </NavLink>
           </li>
           {isLoggedIn && (

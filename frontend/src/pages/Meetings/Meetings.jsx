@@ -40,8 +40,8 @@ function exportToCalendar(meeting) {
     const start = new Date(2000, 0, 1, h, m);
     const end = new Date(start.getTime() + 60 * 60 * 1000);
     const pad = (n) => String(n).padStart(2, "0");
-    dtStart = `${dateStr}T${pad(start.getHours())}${pad(start.getMinutes())}00`;
-    dtEnd   = `${dateStr}T${pad(end.getHours())}${pad(end.getMinutes())}00`;
+    dtStart = `TZID=America/Anchorage:${dateStr}T${pad(start.getHours())}${pad(start.getMinutes())}00`;
+    dtEnd   = `TZID=America/Anchorage:${dateStr}T${pad(end.getHours())}${pad(end.getMinutes())}00`;
   } else {
     dtStart = dateStr;
     dtEnd   = dateStr;
@@ -70,8 +70,8 @@ function exportToCalendar(meeting) {
     "VERSION:2.0",
     "PRODID:-//Leg Up//Meeting Export//EN",
     "BEGIN:VEVENT",
-    `DTSTART:${dtStart}`,
-    `DTEND:${dtEnd}`,
+    `DTSTART;${dtStart}`,
+    `DTEND;${dtEnd}`,
     `SUMMARY:${escape(summary)}`,
     `DESCRIPTION:${description}`,
     `LOCATION:${escape(meeting.location ?? "")}`,
@@ -323,12 +323,12 @@ export default function Meetings() {
     <div className={styles.page}>
       <div className={styles.pageHeader}>
         <div>
-          <h1 className={styles.title}>Meeting Schedule</h1>
+          <h1 className={styles.title}>Hearing Schedule</h1>
           {meetings !== null && (
             <p className={styles.subtitle}>
               {query
-                ? `${filteredMeetings.length} of ${meetings.length} meeting${meetings.length !== 1 ? "s" : ""}`
-                : `${meetings.length} meeting${meetings.length !== 1 ? "s" : ""}`}
+                ? `${filteredMeetings.length} of ${meetings.length} hearing${meetings.length !== 1 ? "s" : ""}`
+                : `${meetings.length} hearing${meetings.length !== 1 ? "s" : ""}`}
             </p>
           )}
         </div>
