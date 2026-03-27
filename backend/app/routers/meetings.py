@@ -47,7 +47,7 @@ async def _run_scrape_job(
 @router.get("/meetings", response_model=list[MeetingRead])
 async def get_meetings(
     start_date: date = Query(...),
-    end_date: date = Query(...),
+    end_date: date | None = Query(None),
     legislature_session: int = Query(34),
     include_inactive: bool = Query(False),
     db: AsyncSession = Depends(get_db),

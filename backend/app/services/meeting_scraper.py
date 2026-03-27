@@ -315,7 +315,7 @@ async def scrape_and_store_meetings(
     from app.repositories.bill_repository import get_bill_by_number
     from app.repositories.meeting_repository import (
         deactivate_removed_meetings,
-        upsert_agenda_item,
+        replace_agenda_items,
         upsert_meeting,
     )
 
@@ -345,6 +345,7 @@ async def scrape_and_store_meetings(
 
         # Build a cache of bill_number → bill_id for this meeting's bills
         bill_id_cache: dict[str, int | None] = {}
+        agenda_rows: list[dict] = []
 
         for i, item in enumerate(m.agenda_items):
             # Resolve the relevant bill number (own for bill rows, context for notes)
@@ -357,18 +358,19 @@ async def scrape_and_store_meetings(
                     bill_id_cache[ref_number] = db_bill.id if db_bill else None
                 bill_id = bill_id_cache[ref_number]
 
-            await upsert_agenda_item(
-                db,
-                meeting_id=meeting_id,
-                bill_number=ref_number,
-                bill_id=bill_id,
-                content=item.content,
-                url=item.url,
-                is_bill=item.is_bill,
-                is_teleconferenced=item.is_teleconferenced,
-                prefix=item.prefix,
-                sort_order=i,
-            )
+            agenda_rows.append({
+                "meeting_id": meeting_id,
+                "bill_number": ref_number,
+                "bill_id": bill_id,
+                "content": item.content,
+                "url": item.url,
+                "is_bill": item.is_bill,
+                "is_teleconferenced": item.is_teleconferenced,
+                "prefix": item.prefix,
+                "sort_order": i,
+            })
+
+        await replace_agenda_items(db, meeting_id, agenda_rows)
 
         saved += 1
 

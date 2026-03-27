@@ -257,6 +257,36 @@
   color: var(--color-text-secondary);
 }
 
+.cardDateRight {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.calBtn {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  border: 1px solid var(--color-rainy-sky);
+  background: transparent;
+  color: var(--color-rainy-sky);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.calBtn:hover {
+  background-color: var(--color-rainy-sky);
+  color: var(--color-text-on-dark);
+}
+
+@media print {
+  .calBtn {
+    display: none;
+  }
+}
+
 .cardHeader {
   display: flex;
   align-items: baseline;
@@ -310,6 +340,24 @@ a.committeeName:hover {
   color: var(--color-text-secondary);
   white-space: nowrap;
   margin-left: auto;
+}
+
+/* Agenda toggle */
+
+.agendaToggle {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.agendaToggle:hover {
+  color: var(--color-rainforest);
 }
 
 /* Agenda table */
@@ -417,6 +465,14 @@ a.committeeName:hover {
   color: var(--color-text-primary);
   resize: none;
   transition: border-color 0.15s;
+}
+
+.dpsReadOnly {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  margin: 0;
 }
 
 .dpsInput:focus {

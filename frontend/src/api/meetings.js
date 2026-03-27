@@ -3,10 +3,10 @@ const API = "/api";
 export async function fetchMeetings({ startDate, endDate, legislatureSession = 34, includeInactive = false }) {
   const params = new URLSearchParams({
     start_date: startDate,
-    end_date: endDate,
     legislature_session: legislatureSession,
     include_inactive: includeInactive,
   });
+  if (endDate) params.set("end_date", endDate);
   const res = await fetch(`${API}/meetings?${params}`);
   if (!res.ok) throw new Error("Failed to fetch meetings");
   return res.json();

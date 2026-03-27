@@ -1,6 +1,5 @@
 from datetime import date
-
-from sqlalchemy import select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -54,6 +53,7 @@ async def upsert_meeting(
                 committee_url=committee_url,
                 location=location,
                 is_active=True,
+                updated_at=func.now(),
             ),
         )
         .returning(Meeting.id)
@@ -85,53 +85,41 @@ async def deactivate_removed_meetings(
     await session.execute(stmt)
 
 
-async def upsert_agenda_item(
+async def replace_agenda_items(
     session: AsyncSession,
     meeting_id: int,
-    bill_number: str | None,
-    bill_id: int | None,
-    content: str,
-    url: str | None,
-    is_bill: bool,
-    is_teleconferenced: bool,
-    prefix: str | None,
-    sort_order: int,
+    items: list[dict],
 ) -> None:
-    """Insert an agenda item; skip silently if the (meeting_id, sort_order) pair already exists."""
-    stmt = (
-        insert(AgendaItem)
-        .values(
-            meeting_id=meeting_id,
-            bill_number=bill_number,
-            bill_id=bill_id,
-            content=content,
-            url=url,
-            is_bill=is_bill,
-            is_teleconferenced=is_teleconferenced,
-            prefix=prefix,
-            sort_order=sort_order,
-        )
-        .on_conflict_do_nothing()
+    """Delete all existing agenda items for a meeting and insert the fresh set.
+
+    This ensures the stored agenda always matches the latest scrape exactly,
+    with no risk of stale or duplicate rows accumulating over time.
+    """
+    await session.execute(
+        delete(AgendaItem).where(AgendaItem.meeting_id == meeting_id)
     )
-    await session.execute(stmt)
+    if items:
+        await session.execute(insert(AgendaItem), items)
 
 
 async def list_meetings(
     session: AsyncSession,
     start_date: date,
-    end_date: date,
+    end_date: date | None,
     legislature_session: int,
     include_inactive: bool = False,
 ) -> list[Meeting]:
     # Always load all meetings (active + inactive) for the range so we can
     # compute has_inactive_notes_sibling without a second query.
+    filters = [
+        Meeting.legislature_session == legislature_session,
+        Meeting.meeting_date >= start_date,
+    ]
+    if end_date is not None:
+        filters.append(Meeting.meeting_date <= end_date)
     stmt = (
         select(Meeting)
-        .where(
-            Meeting.legislature_session == legislature_session,
-            Meeting.meeting_date >= start_date,
-            Meeting.meeting_date <= end_date,
-        )
+        .where(*filters)
         .options(selectinload(Meeting.agenda_items))
         .order_by(Meeting.meeting_date, Meeting.meeting_time, Meeting.chamber, Meeting.committee_name)
     )

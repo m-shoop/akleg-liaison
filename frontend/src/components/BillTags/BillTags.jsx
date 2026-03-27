@@ -60,7 +60,7 @@ export default function BillTags({ bill }) {
   return (
     <div className={styles.container}>
       <div className={styles.pills}>
-        {tags.map((tag) => (
+        {tags.filter((tag) => tag.is_active).map((tag) => (
           <span
             key={tag.id}
             className={`${styles.pill} ${!tag.is_active ? styles.pillInactive : ""}`}

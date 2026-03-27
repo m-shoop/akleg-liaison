@@ -8,15 +8,9 @@ import styles from "./Meetings.module.css";
 
 function weekBounds() {
   const today = new Date();
-  const day = today.getDay(); // 0=Sun
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - ((day + 6) % 7) + 7); // next Monday
-  const friday = new Date(monday);
-  friday.setDate(monday.getDate() + 4);
-  return {
-    start: monday.toISOString().slice(0, 10),
-    end: friday.toISOString().slice(0, 10),
-  };
+  const sunday = new Date(today);
+  sunday.setDate(today.getDate() - today.getDay()); // Sunday of this week
+  return sunday.toISOString().slice(0, 10);
 }
 
 function fmt(isoDate) {
@@ -35,11 +29,75 @@ function fmtTime(timeStr) {
   return `${hour}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
-function MeetingCard({ meeting, isFirst, onNotesSaved }) {
+function exportToCalendar(meeting) {
+  const chamberLabel = meeting.chamber === "H" ? "House" : "Senate";
+  const summary = `${chamberLabel} ${meeting.committee_name} ${meeting.committee_type}`;
+  const dateStr = meeting.meeting_date.replace(/-/g, "");
+
+  let dtStart, dtEnd;
+  if (meeting.meeting_time) {
+    const [h, m] = meeting.meeting_time.split(":").map(Number);
+    const start = new Date(2000, 0, 1, h, m);
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    const pad = (n) => String(n).padStart(2, "0");
+    dtStart = `${dateStr}T${pad(start.getHours())}${pad(start.getMinutes())}00`;
+    dtEnd   = `${dateStr}T${pad(end.getHours())}${pad(end.getMinutes())}00`;
+  } else {
+    dtStart = dateStr;
+    dtEnd   = dateStr;
+  }
+
+  // Build description: notes first, then agenda items
+  const descLines = [];
+  if (meeting.dps_notes) {
+    descLines.push(`Notes: ${meeting.dps_notes}`);
+    descLines.push("");
+  }
+  meeting.agenda_items.forEach((item) => {
+    const prefix = item.prefix ? `${item.prefix} ` : "";
+    if (item.is_bill) {
+      descLines.push(`${prefix}${item.bill_number} — ${item.content}`);
+    } else {
+      descLines.push(`${prefix}${item.content}`);
+    }
+  });
+
+  const escape = (s) => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,");
+  const description = escape(descLines.join("\n")).replace(/\n/g, "\\n");
+
+  const ics = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Leg Up//Meeting Export//EN",
+    "BEGIN:VEVENT",
+    `DTSTART:${dtStart}`,
+    `DTEND:${dtEnd}`,
+    `SUMMARY:${escape(summary)}`,
+    `DESCRIPTION:${description}`,
+    `LOCATION:${escape(meeting.location ?? "")}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+
+  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${meeting.committee_name.toLowerCase().replace(/\s+/g, "-")}-${meeting.meeting_date}.ics`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function MeetingCard({ meeting, isFirst, globalExpanded, onNotesSaved }) {
   const { isLoggedIn, token } = useAuth();
   const [notes, setNotes] = useState(meeting.dps_notes ?? "");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [expanded, setExpanded] = useState(globalExpanded);
+
+  useEffect(() => {
+    setExpanded(globalExpanded);
+  }, [globalExpanded]);
 
   async function handleSave() {
     setSaving(true);
@@ -71,7 +129,12 @@ function MeetingCard({ meeting, isFirst, onNotesSaved }) {
         )}
         <div className={styles.cardDate}>
           <span>{fmt(meeting.meeting_date)}</span>
-          {meeting.meeting_time && <span>{fmtTime(meeting.meeting_time)}</span>}
+          <div className={styles.cardDateRight}>
+            {meeting.meeting_time && <span>{fmtTime(meeting.meeting_time)}</span>}
+            <button className={styles.calBtn} onClick={() => exportToCalendar(meeting)} title="Export to Outlook calendar">
+              + Calendar
+            </button>
+          </div>
         </div>
         <div className={styles.cardHeader}>
           <span className={styles.chamberBadge}>{meeting.chamber}</span>
@@ -89,6 +152,14 @@ function MeetingCard({ meeting, isFirst, onNotesSaved }) {
         </div>
 
         {meeting.agenda_items.length > 0 && (
+          <button
+            className={styles.agendaToggle}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? "▾ Hide agenda" : `▸ Show agenda (${meeting.agenda_items.filter(i => i.is_bill).length} bill${meeting.agenda_items.filter(i => i.is_bill).length !== 1 ? "s" : ""})`}
+          </button>
+        )}
+        {expanded && meeting.agenda_items.length > 0 && (
           <table className={styles.agendaTable}>
             <tbody>
               {meeting.agenda_items.map((item) =>
@@ -129,31 +200,34 @@ function MeetingCard({ meeting, isFirst, onNotesSaved }) {
         {lastSynced && <p className={styles.lastSynced}>Synced {lastSynced}</p>}
       </div>
 
-      {isLoggedIn && (
-        <div className={styles.dpsRow}>
-          <label className={styles.dpsLabel}>Notes</label>
-          <textarea
-            className={styles.dpsInput}
-            value={notes}
-            placeholder={`Notes for ${chamberLabel} ${meeting.committee_name} meeting`}
-            onChange={(e) => { setNotes(e.target.value); setDirty(true); }}
-          />
-          {dirty && (
-            <button className={styles.saveBtn} onClick={handleSave} disabled={saving}>
-              {saving ? "Saving…" : "Save"}
-            </button>
-          )}
-        </div>
-      )}
+      <div className={styles.dpsRow}>
+        <label className={styles.dpsLabel}>Notes</label>
+        {isLoggedIn ? (
+          <>
+            <textarea
+              className={styles.dpsInput}
+              value={notes}
+              placeholder={`Notes for ${chamberLabel} ${meeting.committee_name} meeting`}
+              onChange={(e) => { setNotes(e.target.value); setDirty(true); }}
+            />
+            {dirty && (
+              <button className={styles.saveBtn} onClick={handleSave} disabled={saving}>
+                {saving ? "Saving…" : "Save"}
+              </button>
+            )}
+          </>
+        ) : (
+          <p className={styles.dpsReadOnly}>{notes || ""}</p>
+        )}
+      </div>
     </article>
   );
 }
 
 export default function Meetings() {
   const { isLoggedIn, token } = useAuth();
-  const bounds = weekBounds();
-  const [startDate, setStartDate] = useState(bounds.start);
-  const [endDate, setEndDate] = useState(bounds.end);
+  const [startDate, setStartDate] = useState(weekBounds());
+  const [endDate, setEndDate] = useState("");
   const [allMeetings, setAllMeetings] = useState(null);
   const [loading, setLoading] = useState(false);
   const [scrapeJobId, setScrapeJobId] = useState(null);
@@ -161,6 +235,7 @@ export default function Meetings() {
   const [error, setError] = useState(null);
   const [showInactive, setShowInactive] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [globalExpanded, setGlobalExpanded] = useState(false);
 
   const { status: jobStatus, result: jobResult, error: jobError } = useJob(scrapeJobId);
 
@@ -285,8 +360,16 @@ export default function Meetings() {
           </div>
           <div id="tour-controls" className={styles.btnRow}>
             {isLoggedIn && (
-              <button className={styles.scrapeBtn} onClick={handleScrape} disabled={!!scrapeJobId}>
+              <button className={styles.scrapeBtn} onClick={handleScrape} disabled={!!scrapeJobId || !endDate}>
                 {scrapeJobId ? "Scraping…" : "Scrape from akleg.gov"}
+              </button>
+            )}
+            {meetings !== null && meetings.length > 0 && (
+              <button
+                className={`${styles.loadBtn} ${globalExpanded ? styles.loadBtnActive : ""}`}
+                onClick={() => setGlobalExpanded((v) => !v)}
+              >
+                {globalExpanded ? "Collapse agendas" : "Expand agendas"}
               </button>
             )}
             {hasInactive && (
@@ -350,7 +433,7 @@ export default function Meetings() {
                 const isFirst = !firstCardRendered;
                 if (isFirst) firstCardRendered = true;
                 return (
-                  <MeetingCard key={m.id} meeting={m} isFirst={isFirst} onNotesSaved={() => loadMeetings()} />
+                  <MeetingCard key={m.id} meeting={m} isFirst={isFirst} globalExpanded={globalExpanded} onNotesSaved={() => loadMeetings()} />
                 );
               })}
             </div>
