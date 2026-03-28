@@ -1,42 +1,69 @@
 """
-Background scheduler: syncs all bills from akleg.gov twice per day at 4:15 AM
-and 4:15 PM Juneau time, and immediately on startup.
+Background scheduler: syncs all bills from akleg.gov twice per day at 4:05 AM
+and 4:05 PM Juneau time.
+
+Also syncs committee meeting hearings from akleg.gov every Thursday at 4:05 PM
+Juneau time. The sync covers the next Sunday through the following Saturday
+(7 days), capturing the week whose hearings must be finalized by the Thursday
+4 PM policy deadline.
 
 For each bill on the website:
   - Bill metadata (title, status, sponsors) is always upserted.
   - New bills are added with is_tracked=False by default.
   - Events and Mistral analysis are only run for bills already marked as tracked.
 
-The loop runs as an asyncio task alongside the FastAPI server so HTTP requests
+Both loops run as asyncio tasks alongside the FastAPI server so HTTP requests
 are never blocked.
 """
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from app.database import AsyncSessionLocal
 from app.services.bill_scraper import scrape_bill_list
 from app.services.bill_sync import sync_bill_for_scheduler
+from app.services.meeting_scraper import scrape_and_store_meetings
 
 logger = logging.getLogger(__name__)
 
 _JUNEAU_TZ = ZoneInfo("America/Anchorage")
-_SYNC_TIMES = [(4, 15), (16, 15)]  # 4:15 AM and 4:15 PM Juneau
+_BILL_SYNC_TIMES = [(4, 5), (16, 5)]  # 4:05 AM and 4:05 PM Juneau
+_LEGISLATURE_SESSION = 34
 
 
-def _seconds_until_next_sync() -> float:
-    """Return seconds until the next scheduled sync time in Juneau time."""
+def _seconds_until_next_bill_sync() -> float:
+    """Return seconds until the next scheduled bill sync time in Juneau time."""
     now = datetime.now(_JUNEAU_TZ)
     candidates = []
-    for hour, minute in _SYNC_TIMES:
+    for hour, minute in _BILL_SYNC_TIMES:
         candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
         if candidate <= now:
             candidate += timedelta(days=1)
         candidates.append(candidate)
     next_run = min(candidates)
     return (next_run - now).total_seconds()
+
+
+def _seconds_until_next_hearing_sync() -> float:
+    """Return seconds until the next Thursday 4:05 PM Juneau time."""
+    now = datetime.now(_JUNEAU_TZ)
+    # weekday(): Monday=0 … Thursday=3 … Sunday=6
+    days_ahead = (3 - now.weekday()) % 7
+    candidate = now.replace(hour=16, minute=5, second=0, microsecond=0) + timedelta(days=days_ahead)
+    if candidate <= now:
+        candidate += timedelta(days=7)
+    return (candidate - now).total_seconds()
+
+
+def _hearing_sync_date_range() -> tuple[date, date]:
+    """Return (next_sunday, following_saturday) from the current Juneau date."""
+    today = datetime.now(_JUNEAU_TZ).date()
+    days_until_sunday = (6 - today.weekday()) % 7 or 7
+    next_sunday = today + timedelta(days=days_until_sunday)
+    following_saturday = next_sunday + timedelta(days=6)
+    return next_sunday, following_saturday
 
 
 async def _sync_all_bills() -> None:
@@ -46,13 +73,13 @@ async def _sync_all_bills() -> None:
     """
     logger.info("[scheduler] Starting bill sync.")
 
-    bill_numbers = await scrape_bill_list(34)
+    bill_numbers = await scrape_bill_list(_LEGISLATURE_SESSION)
     logger.info("[scheduler] %d bill(s) found on akleg.gov.", len(bill_numbers))
 
     for bill_number in bill_numbers:
         try:
             async with AsyncSessionLocal() as db:
-                await sync_bill_for_scheduler(db, bill_number, 34)
+                await sync_bill_for_scheduler(db, bill_number, _LEGISLATURE_SESSION)
                 await db.commit()
             logger.info("[scheduler] Synced %s.", bill_number)
         except Exception as exc:
@@ -61,20 +88,49 @@ async def _sync_all_bills() -> None:
     logger.info("[scheduler] Bill sync complete.")
 
 
+async def _sync_hearings() -> None:
+    """
+    Fetch and persist committee meeting hearings for the next Sunday–Saturday.
+    """
+    start, end = _hearing_sync_date_range()
+    logger.info("[scheduler] Starting hearing sync for %s to %s.", start, end)
+    try:
+        async with AsyncSessionLocal() as db:
+            count = await scrape_and_store_meetings(db, start, end, _LEGISLATURE_SESSION)
+        logger.info("[scheduler] Hearing sync complete: %d meeting(s) saved.", count)
+    except Exception as exc:
+        logger.warning("[scheduler] Error during hearing sync: %s", exc)
+
+
 async def scheduler_loop() -> None:
     """
-    Main loop. Runs immediately on startup, then waits until the next scheduled
-    sync time (4:15 AM or 4:15 PM Juneau). Designed to run as a fire-and-forget
-    asyncio.Task.
+    Bill sync loop. Runs immediately on startup, then waits until the next
+    scheduled sync time (4:05 AM or 4:05 PM Juneau). Designed to run as a
+    fire-and-forget asyncio.Task.
     """
-    await _sync_all_bills()
-
     while True:
-        wait = _seconds_until_next_sync()
+        wait = _seconds_until_next_bill_sync()
         next_run = datetime.now(_JUNEAU_TZ) + timedelta(seconds=wait)
         logger.info(
-            "[scheduler] Next sync at %s.",
+            "[scheduler] Next bill sync at %s.",
             next_run.strftime("%Y-%m-%d %H:%M %Z"),
         )
         await asyncio.sleep(wait)
         await _sync_all_bills()
+
+
+async def hearing_scheduler_loop() -> None:
+    """
+    Hearing sync loop. Waits until the next Thursday 4:05 PM Juneau, then
+    syncs committee meeting hearings for the following week (Sunday–Saturday).
+    Designed to run as a fire-and-forget asyncio.Task.
+    """
+    while True:
+        wait = _seconds_until_next_hearing_sync()
+        next_run = datetime.now(_JUNEAU_TZ) + timedelta(seconds=wait)
+        logger.info(
+            "[scheduler] Next hearing sync at %s.",
+            next_run.strftime("%Y-%m-%d %H:%M %Z"),
+        )
+        await asyncio.sleep(wait)
+        await _sync_hearings()

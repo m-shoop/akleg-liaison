@@ -150,6 +150,21 @@ a.keywordPill:hover {
   text-underline-offset: 2px;
 }
 
+.hearingBadge {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--color-rainforest);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.hearingBadge:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .lastSynced {
   font-size: 0.65rem;
   color: var(--color-text-secondary);
@@ -173,6 +188,10 @@ a.keywordPill:hover {
   .trackBtn,
   .refreshBtn {
     display: none;
+  }
+
+  .hearingBadge {
+    color: var(--color-rainforest);
   }
 
   .lastSynced {

@@ -1,11 +1,25 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { setTracked } from "../../api/bills";
 import { useAuth } from "../../context/AuthContext";
 import BillTags from "../BillTags/BillTags";
 import OutcomesTable from "../OutcomesTable/OutcomesTable";
 import styles from "./BillCard.module.css";
 
-export default function BillCard({ bill, showDescription, selectedOutcomes, showKeywords = false, abbreviated = false, onRefreshed: _onRefreshed, onTrackingChanged }) {
+function sundayOfWeek(isoDate) {
+  const d = new Date(isoDate + "T00:00:00");
+  d.setDate(d.getDate() - d.getDay());
+  return d.toISOString().slice(0, 10);
+}
+
+
+function fmtHearingDate(isoDate) {
+  return new Date(isoDate + "T00:00:00").toLocaleDateString("en-US", {
+    month: "short", day: "numeric",
+  });
+}
+
+export default function BillCard({ bill, showDescription, selectedOutcomes, showKeywords = false, abbreviated = false, nextHearingDate = null, onRefreshed: _onRefreshed, onTrackingChanged }) {
   const { isLoggedIn, token } = useAuth();
   const [tracking, setTracking] = useState(false);
   const [error, setError] = useState(null);
@@ -69,6 +83,15 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, show
       </div>
 
       {error && <p className={styles.error}>{error}</p>}
+
+      {nextHearingDate && (
+        <Link
+          to={`/meetings?search=${encodeURIComponent(bill.bill_number)}&start=${sundayOfWeek(nextHearingDate)}&show_hidden=1`}
+          className={styles.hearingBadge}
+        >
+          Next Hearing: {fmtHearingDate(nextHearingDate)}
+        </Link>
+      )}
 
       <OutcomesTable
         events={bill.events}

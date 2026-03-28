@@ -33,6 +33,7 @@ class MeetingRead(BaseModel):
     location: str | None
     legislature_session: int
     is_active: bool
+    hidden: bool
     dps_notes: str | None
     # True when an inactive sibling meeting (same chamber/committee/date) has notes
     has_inactive_notes_sibling: bool = False
@@ -49,3 +50,7 @@ class MeetingScrapeRequest(BaseModel):
 
 class MeetingDpsNotesUpdate(BaseModel):
     dps_notes: str | None
+
+
+class MeetingHiddenUpdate(BaseModel):
+    hidden: bool

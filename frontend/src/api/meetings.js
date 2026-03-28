@@ -32,6 +32,26 @@ export async function scrapeMeetings({ startDate, endDate, legislatureSession = 
   return res.json();
 }
 
+export async function fetchUpcomingHearings({ legislatureSession = 34 } = {}) {
+  const params = new URLSearchParams({ legislature_session: legislatureSession });
+  const res = await fetch(`${API}/meetings/upcoming-bill-hearings?${params}`);
+  if (!res.ok) throw new Error("Failed to fetch upcoming hearings");
+  return res.json(); // { [bill_id]: "YYYY-MM-DD" }
+}
+
+export async function updateHidden(meetingId, hidden, token) {
+  const res = await fetch(`${API}/meetings/${meetingId}/hidden`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ hidden }),
+  });
+  if (!res.ok) throw new Error("Failed to update hidden status");
+  return res.json();
+}
+
 export async function updateDpsNotes(meetingId, dpsNotes, token) {
   const res = await fetch(`${API}/meetings/${meetingId}/dps-notes`, {
     method: "PATCH",

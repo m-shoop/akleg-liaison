@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useReactToPrint } from "react-to-print";
 import { fetchBills } from "../../api/bills";
-import { fetchMeetings } from "../../api/meetings";
+import { fetchMeetings, fetchUpcomingHearings } from "../../api/meetings";
 import BillCard from "../../components/BillCard/BillCard";
 import OutcomeFilter from "../../components/OutcomeFilter/OutcomeFilter";
 import Toast from "../../components/Toast/Toast";
@@ -74,6 +74,7 @@ export default function Home() {
   const [printStartDate, setPrintStartDate] = useState("");
   const [printEndDate, setPrintEndDate] = useState("");
   const [printMeetings, setPrintMeetings] = useState(null);
+  const [upcomingHearings, setUpcomingHearings] = useState({});
   const [pendingPrint, setPendingPrint] = useState(false);
   const [headerOpen, setHeaderOpen] = useState(false);
   const [headerIncluded, setHeaderIncluded] = useState(
@@ -93,8 +94,14 @@ export default function Home() {
 
   useEffect(() => {
     setLoading(true);
-    fetchBills({ includeUntracked: showUntracked })
-      .then(setBills)
+    Promise.all([
+      fetchBills({ includeUntracked: showUntracked }),
+      fetchUpcomingHearings(),
+    ])
+      .then(([billsData, hearingsData]) => {
+        setBills(billsData);
+        setUpcomingHearings(hearingsData);
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [showUntracked]);
@@ -308,14 +315,14 @@ export default function Home() {
                 </span>
               )}
             </div>
-            {printMeetings.length === 0 ? (
+            {printMeetings.filter((m) => !m.hidden).length === 0 ? (
               <p className={styles.printEmpty}>No meetings found for this date range.</p>
             ) : (
-              Object.keys(groupByDate(printMeetings)).sort().map((dateKey) => (
+              Object.keys(groupByDate(printMeetings.filter((m) => !m.hidden))).sort().map((dateKey) => (
                 <div key={dateKey} className={styles.printDayBlock}>
                   <div className={styles.printDayHeading}>{fmtDate(dateKey)}</div>
                   <div className={styles.printDayMeetings}>
-                    {groupByDate(printMeetings)[dateKey].map((m) => (
+                    {groupByDate(printMeetings.filter((m) => !m.hidden))[dateKey].map((m) => (
                       <div key={m.id}>
                       <div
                         className={`${styles.printMeetingCard} ${m.chamber === "H" ? styles.printHouse : styles.printSenate}`}
@@ -391,7 +398,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className={`${styles.reportHeaderToggleRow} ${!headerIncluded ? styles.reportHeaderExcluded : ""}`}>
+        <div id="tour-report-header" className={`${styles.reportHeaderToggleRow} ${!headerIncluded ? styles.reportHeaderExcluded : ""}`}>
           <button className={styles.reportHeaderToggle} onClick={() => setHeaderOpen((v) => !v)}>
             {headerOpen ? "▾ Hide report header" : "▸ Report header"}
           </button>
@@ -460,6 +467,7 @@ export default function Home() {
                         selectedOutcomes={selectedOutcomes}
                         showKeywords={showKeywords}
                         abbreviated={true}
+                        nextHearingDate={upcomingHearings[bill.id] ?? null}
                         onRefreshed={(updated) =>
                           setBills((prev) => prev.map((b) => b.id === updated.id ? updated : b))
                         }
@@ -486,6 +494,7 @@ export default function Home() {
                   showDescription={showDescription}
                   selectedOutcomes={selectedOutcomes}
                   showKeywords={showKeywords}
+                  nextHearingDate={upcomingHearings[bill.id] ?? null}
                   onRefreshed={(updated) =>
                     setBills((prev) => prev.map((b) => b.id === updated.id ? updated : b))
                   }

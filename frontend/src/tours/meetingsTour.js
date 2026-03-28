@@ -26,7 +26,23 @@ export function createMeetingsTour() {
         popover: {
           title: "Controls",
           description:
-            "Scrape the latest schedule from akleg.gov (requires login). Use 'Show inactive' to reveal meetings that were removed from the schedule after a prior scrape.",
+            "Scrape the latest schedule directly from akleg.gov to pick up any changes. Requires login and a To date to be set.",
+        },
+      },
+      {
+        element: "#tour-expand-agendas",
+        popover: {
+          title: "Expand / Collapse Agendas",
+          description:
+            "Toggle all meeting agendas open or closed at once. You can also expand or collapse individual meetings independently by clicking '▸ Show agenda' on each card.",
+        },
+      },
+      {
+        element: "#tour-show-inactive",
+        popover: {
+          title: "Show Inactive Meetings",
+          description:
+            "Reveals meetings that were removed from the akleg.gov schedule after a prior scrape. Inactive meetings are shown with a strikethrough and reduced opacity. Only appears when inactive meetings exist in the selected date range.",
         },
       },
       {
@@ -42,7 +58,7 @@ export function createMeetingsTour() {
         popover: {
           title: "Meeting Card",
           description:
-            "Each card shows the date, time, chamber, committee, location, and full agenda. Click a committee name or bill number to open it on akleg.gov. Use the Notes column on the right to attach internal DPS notes — they persist across scrapes.",
+            "Each card shows the date, time, committee, and location. Click '▸ Show agenda' to expand the bill list for that meeting. Click a committee name or bill number to open it on akleg.gov. Use the Notes column on the right to attach internal DPS notes — they persist across scrapes.",
         },
       },
     ],

@@ -61,12 +61,13 @@ export default function QueryBill() {
     <div className={styles.page}>
       <div className={styles.card}>
         <p className={styles.description}>
-          This website will query the Alaska State Government website to pull down
-          new events associated with tracked bills every day at 4AM local Juneau time.
+          Leg Up automatically refreshes its data every day at 4:05AM and 4:05PM local Juneau time.
           <br /><br />
-          If you'd rather not wait until 4AM tomorrow, you can use this form below
-          to force an immediate pull from the Alaska State Government website. (Only tracked 
-          bills appear in the selection drop-down.)
+          If you need to refresh a bill's data, you can use this form below
+          to request a refresh from the Alaska State Government website. 
+          <br /> <br />
+          Only tracked 
+          bills appear in the selection drop-down.
         </p>
         <h1 className={styles.title}>Query a Bill</h1>
         <p className={styles.subtitle}>34th Alaska Legislature</p>

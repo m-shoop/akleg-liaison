@@ -7,6 +7,29 @@ from sqlalchemy.orm import selectinload
 from app.models.meeting import AgendaItem, Meeting
 
 
+async def get_upcoming_hearing_dates(
+    session: AsyncSession,
+    legislature_session: int,
+    as_of: date,
+) -> dict[int, date]:
+    """Return {bill_id: earliest_upcoming_meeting_date} for all bills that
+    appear as bill items on active meetings on or after `as_of`."""
+    stmt = (
+        select(AgendaItem.bill_id, func.min(Meeting.meeting_date))
+        .join(Meeting, AgendaItem.meeting_id == Meeting.id)
+        .where(
+            AgendaItem.bill_id.isnot(None),
+            AgendaItem.is_bill == True,  # noqa: E712
+            Meeting.is_active == True,  # noqa: E712
+            Meeting.legislature_session == legislature_session,
+            Meeting.meeting_date >= as_of,
+        )
+        .group_by(AgendaItem.bill_id)
+    )
+    result = await session.execute(stmt)
+    return {row[0]: row[1] for row in result.all()}
+
+
 async def upsert_meeting(
     session: AsyncSession,
     chamber: str,
@@ -160,4 +183,14 @@ async def update_dps_notes(
     if meeting is None:
         return None
     meeting.dps_notes = dps_notes
+    return meeting
+
+
+async def update_hidden(
+    session: AsyncSession, meeting_id: int, hidden: bool
+) -> Meeting | None:
+    meeting = await get_meeting_by_id(session, meeting_id)
+    if meeting is None:
+        return None
+    meeting.hidden = hidden
     return meeting

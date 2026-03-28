@@ -40,6 +40,31 @@ export default function Navbar() {
               Hearings
             </NavLink>
           </li>
+          <li className={styles.dropdown}>
+            <button className={styles.dropdownBtn}>Helpful Links ▾</button>
+            <ul className={styles.dropdownMenu}>
+              <li>
+                <a
+                  href="https://www.legfin.akleg.gov/FiscalNotes/allNotes.php"
+                  target="_blank"
+                  rel="noreferrer"
+                  className={styles.dropdownItem}
+                >
+                  Fiscal Notes
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://omb.alaska.gov/forms-and-manuals/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className={styles.dropdownItem}
+                >
+                  OMB Forms and Manuals
+                </a>
+              </li>
+            </ul>
+          </li>
           {isLoggedIn && (
             <li>
               <NavLink

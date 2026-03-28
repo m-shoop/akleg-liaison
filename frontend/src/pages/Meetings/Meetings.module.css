@@ -47,7 +47,6 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  align-items: flex-end;
 }
 
 .dateRow {
@@ -80,6 +79,38 @@
 }
 
 .loadBtnActive {
+  background-color: var(--color-rainy-sky);
+  color: var(--color-text-on-dark);
+}
+
+.toggleGroup {
+  display: flex;
+  border-radius: 4px;
+  border: 1.5px solid var(--color-rainy-sky);
+  overflow: hidden;
+}
+
+.toggleOption {
+  flex: 1;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: transparent;
+  color: var(--color-rainy-sky);
+  border: none;
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.toggleOption + .toggleOption {
+  border-left: 1.5px solid var(--color-rainy-sky);
+}
+
+.toggleOption:hover:not(.toggleSelected) {
+  background-color: rgba(90, 110, 127, 0.08);
+}
+
+.toggleSelected {
   background-color: var(--color-rainy-sky);
   color: var(--color-text-on-dark);
 }
@@ -175,6 +206,23 @@
   padding-bottom: 0.4rem;
   border-bottom: 2px solid var(--color-border);
   margin-bottom: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  user-select: none;
+}
+
+.dayHeading:hover {
+  color: var(--color-rainforest);
+}
+
+.dayCount {
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .dayCards {
@@ -236,6 +284,10 @@
   opacity: 0.55;
   border-left-color: #bbb;
   border-color: #ddd;
+}
+
+.hiddenMeeting {
+  opacity: 0.45;
 }
 
 .inactive .committeeName {
@@ -502,6 +554,56 @@ a.committeeName:hover {
   cursor: not-allowed;
 }
 
+.hideRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 90px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--color-border);
+  padding-left: 0.75rem;
+}
+
+.hiddenNote {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+  margin: 0;
+}
+
+.hideBtn {
+  align-self: flex-start;
+  padding: 0.3rem 0.7rem;
+  border-radius: 4px;
+  border: 1.5px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.hideBtn:hover:not(:disabled) {
+  border-color: var(--color-rainy-sky);
+  color: var(--color-rainy-sky);
+}
+
+.hideBtnActive {
+  border-color: var(--color-rainy-sky);
+  color: var(--color-rainy-sky);
+}
+
+.hideBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media print {
+  .hideRow {
+    display: none;
+  }
+}
+
 .lastSynced {
   font-size: 0.65rem;
   color: var(--color-text-secondary);
@@ -518,7 +620,7 @@ a.committeeName:hover {
 }
 
 .notice {
-  color: var(--color-text-secondary);
+  color: darkorange;
   font-size: 0.95rem;
   padding: 1rem 0;
 }

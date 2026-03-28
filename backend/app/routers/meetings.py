@@ -15,11 +15,13 @@ from app.repositories.job_repository import (
 from app.repositories.audit_log_repository import log_action
 from app.repositories.meeting_repository import (
     get_meeting_by_id,
+    get_upcoming_hearing_dates,
     list_meetings,
     update_dps_notes,
+    update_hidden,
 )
 from app.schemas.job import JobRead
-from app.schemas.meeting import MeetingDpsNotesUpdate, MeetingRead, MeetingScrapeRequest
+from app.schemas.meeting import MeetingDpsNotesUpdate, MeetingHiddenUpdate, MeetingRead, MeetingScrapeRequest
 from app.services.meeting_scraper import scrape_and_store_meetings
 
 router = APIRouter(tags=["meetings"])
@@ -42,6 +44,16 @@ async def _run_scrape_job(
         except Exception as exc:
             await set_job_failed(db, job_id, str(exc))
             await db.commit()
+
+
+@router.get("/meetings/upcoming-bill-hearings", response_model=dict[int, date])
+async def upcoming_bill_hearings(
+    legislature_session: int = Query(34),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return {bill_id: earliest_upcoming_meeting_date} for all tracked bills
+    with an active hearing scheduled today or later."""
+    return await get_upcoming_hearing_dates(db, legislature_session, date.today())
 
 
 @router.get("/meetings", response_model=list[MeetingRead])
@@ -71,6 +83,23 @@ async def scrape_meetings(
     from app.repositories.job_repository import get_job
     job = await get_job(db, job_id)
     return job
+
+
+@router.patch("/meetings/{meeting_id}/hidden", response_model=MeetingRead)
+async def patch_hidden(
+    meeting_id: int,
+    body: MeetingHiddenUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    existing = await get_meeting_by_id(db, meeting_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    meeting = await update_hidden(db, meeting_id, body.hidden)
+    await log_action(db, current_user, "meeting_hidden_updated", entity_type="meeting", entity_id=meeting_id, details={"hidden": body.hidden, "committee": existing.committee_name, "meeting_date": str(existing.meeting_date)})
+    await db.commit()
+    await db.refresh(meeting)
+    return meeting
 
 
 @router.patch("/meetings/{meeting_id}/dps-notes", response_model=MeetingRead)

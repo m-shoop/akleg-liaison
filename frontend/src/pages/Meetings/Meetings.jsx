@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { fetchMeetings, scrapeMeetings, updateDpsNotes } from "../../api/meetings";
+import { fetchMeetings, scrapeMeetings, updateDpsNotes, updateHidden } from "../../api/meetings";
 import { useJob } from "../../hooks/useJob";
 import Toast from "../../components/Toast/Toast";
 import { createMeetingsTour } from "../../tours/meetingsTour";
@@ -88,11 +89,12 @@ function exportToCalendar(meeting) {
   URL.revokeObjectURL(url);
 }
 
-function MeetingCard({ meeting, isFirst, globalExpanded, onNotesSaved }) {
+function MeetingCard({ meeting, isFirst, globalExpanded, showHidden, onNotesSaved, onHiddenChanged }) {
   const { isLoggedIn, token } = useAuth();
   const [notes, setNotes] = useState(meeting.dps_notes ?? "");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [hidingBusy, setHidingBusy] = useState(false);
   const [expanded, setExpanded] = useState(globalExpanded);
 
   useEffect(() => {
@@ -110,6 +112,16 @@ function MeetingCard({ meeting, isFirst, globalExpanded, onNotesSaved }) {
     }
   }
 
+  async function handleToggleHidden() {
+    setHidingBusy(true);
+    try {
+      const updated = await updateHidden(meeting.id, !meeting.hidden, token);
+      onHiddenChanged(updated);
+    } finally {
+      setHidingBusy(false);
+    }
+  }
+
   const chamberLabel = meeting.chamber === "H" ? "House" : "Senate";
   const inactive = !meeting.is_active;
   const lastSynced = meeting.updated_at
@@ -117,7 +129,7 @@ function MeetingCard({ meeting, isFirst, globalExpanded, onNotesSaved }) {
     : null;
 
   return (
-    <article id={isFirst ? "tour-first-meeting" : undefined} className={`${styles.card} ${meeting.chamber === "H" ? styles.house : styles.senate} ${inactive ? styles.inactive : ""}`}>
+    <article id={isFirst ? "tour-first-meeting" : undefined} className={`${styles.card} ${meeting.chamber === "H" ? styles.house : styles.senate} ${inactive ? styles.inactive : ""} ${meeting.hidden ? styles.hiddenMeeting : ""}`}>
       <div className={styles.cardMain}>
         {inactive && (
           <div className={styles.inactiveBanner}>Deactivated — this meeting was removed from the schedule</div>
@@ -176,7 +188,6 @@ function MeetingCard({ meeting, isFirst, globalExpanded, onNotesSaved }) {
                       )}
                     </td>
                     <td className={styles.billDesc}>{item.content}</td>
-                    <td className={styles.teleconf}>{item.is_teleconferenced ? "Teleconf" : ""}</td>
                   </tr>
                 ) : (
                   <tr key={item.id} className={styles.noteRow}>
@@ -190,7 +201,6 @@ function MeetingCard({ meeting, isFirst, globalExpanded, onNotesSaved }) {
                         item.content
                       )}
                     </td>
-                    <td className={styles.teleconf}>{item.is_teleconferenced ? "Teleconf" : ""}</td>
                   </tr>
                 )
               )}
@@ -220,22 +230,51 @@ function MeetingCard({ meeting, isFirst, globalExpanded, onNotesSaved }) {
           <p className={styles.dpsReadOnly}>{notes || ""}</p>
         )}
       </div>
+
+      {isLoggedIn && (
+        <div className={styles.hideRow}>
+          <label className={styles.dpsLabel}>Visibility</label>
+          {meeting.hidden && showHidden && (
+            <p className={styles.hiddenNote}>Hidden from view and PDF</p>
+          )}
+          <button
+            className={`${styles.hideBtn} ${meeting.hidden ? styles.hideBtnActive : ""}`}
+            onClick={handleToggleHidden}
+            disabled={hidingBusy}
+            title={meeting.hidden ? "Unhide this hearing" : "Hide this hearing and remove it from the PDF export."}
+          >
+            {hidingBusy ? "…" : meeting.hidden ? "Unhide" : "Hide"}
+          </button>
+        </div>
+      )}
     </article>
   );
 }
 
 export default function Meetings() {
   const { isLoggedIn, token } = useAuth();
-  const [startDate, setStartDate] = useState(weekBounds());
-  const [endDate, setEndDate] = useState("");
+  const [searchParams] = useSearchParams();
+  const [startDate, setStartDate] = useState(() => searchParams.get("start") || weekBounds());
+  const [endDate, setEndDate] = useState(() => searchParams.get("end") || "");
   const [allMeetings, setAllMeetings] = useState(null);
   const [loading, setLoading] = useState(false);
   const [scrapeJobId, setScrapeJobId] = useState(null);
   const [toast, setToast] = useState(null);
   const [error, setError] = useState(null);
   const [showInactive, setShowInactive] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [showHidden, setShowHidden] = useState(() => searchParams.get("show_hidden") === "1");
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || "");
   const [globalExpanded, setGlobalExpanded] = useState(false);
+  const [collapsedDates, setCollapsedDates] = useState(new Set());
+
+  function toggleDate(dateKey) {
+    setCollapsedDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(dateKey)) next.delete(dateKey);
+      else next.add(dateKey);
+      return next;
+    });
+  }
 
   const { status: jobStatus, result: jobResult, error: jobError } = useJob(scrapeJobId);
 
@@ -243,10 +282,10 @@ export default function Meetings() {
     if (!scrapeJobId) return;
     if (jobStatus === "complete") {
       loadMeetings();
-      setToast({ message: `${jobResult?.meetings_saved ?? 0} meetings scraped successfully.`, type: "success" });
+      setToast({ message: `${jobResult?.meetings_saved ?? 0} hearings refreshed successfully.`, type: "success" });
       setScrapeJobId(null);
     } else if (jobStatus === "failed") {
-      setToast({ message: jobError ?? "Scrape failed.", type: "error" });
+      setToast({ message: jobError ?? "Refresh failed.", type: "error" });
       setScrapeJobId(null);
     }
   }, [jobStatus]);
@@ -282,33 +321,43 @@ export default function Meetings() {
     setShowInactive((v) => !v);
   }
 
-  // Derive visible meetings from allMeetings based on showInactive
+  // Derive visible meetings from allMeetings based on showInactive / showHidden
   const hasInactive = allMeetings?.some((m) => !m.is_active) ?? false;
+  const hasHidden = allMeetings?.some((m) => m.hidden) ?? false;
   const meetings = allMeetings
-    ? showInactive ? allMeetings : allMeetings.filter((m) => m.is_active)
+    ? allMeetings
+        .filter((m) => showInactive || m.is_active)
+        .filter((m) => showHidden || !m.hidden)
     : null;
 
   // Filter then group by date
   const query = searchQuery.trim().toLowerCase();
+
+  function matchesQuery(m) {
+    const agendaText = m.agenda_items
+      .flatMap((i) => [i.bill_number, i.content])
+      .filter(Boolean)
+      .join(" ");
+    const haystack = [
+      m.committee_name,
+      m.committee_type,
+      m.location,
+      m.dps_notes,
+      agendaText,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(query);
+  }
+
   const filteredMeetings = meetings && query
-    ? meetings.filter((m) => {
-        const agendaText = m.agenda_items
-          .flatMap((i) => [i.bill_number, i.content])
-          .filter(Boolean)
-          .join(" ");
-        const haystack = [
-          m.committee_name,
-          m.committee_type,
-          m.location,
-          m.dps_notes,
-          agendaText,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(query);
-      })
+    ? meetings.filter(matchesQuery)
     : meetings;
+
+  const hiddenMatchCount = !showHidden && query && allMeetings
+    ? allMeetings.filter((m) => m.hidden && matchesQuery(m)).length
+    : 0;
 
   const byDate = filteredMeetings
     ? filteredMeetings.reduce((acc, m) => {
@@ -331,13 +380,6 @@ export default function Meetings() {
                 : `${meetings.length} hearing${meetings.length !== 1 ? "s" : ""}`}
             </p>
           )}
-        </div>
-        <div id="tour-legend" className={styles.legend}>
-          <span className={styles.legendItem}><code>*</code> first hearing in first committee of referral</span>
-          <span className={styles.legendItem}><code>+</code> teleconferenced</span>
-          <span className={styles.legendItem}><code>=</code> previously heard / scheduled</span>
-        </div>
-        <div className={styles.controls}>
           <div id="tour-date-range" className={styles.dateRow}>
             <label>
               From
@@ -358,14 +400,22 @@ export default function Meetings() {
               />
             </label>
           </div>
+        </div>
+        <div id="tour-legend" className={styles.legend}>
+          <span className={styles.legendItem}><code>*</code> first hearing in first committee of referral</span>
+          <span className={styles.legendItem}><code>+</code> teleconferenced</span>
+          <span className={styles.legendItem}><code>=</code> previously heard / scheduled</span>
+        </div>
+        <div className={styles.controls}>
           <div id="tour-controls" className={styles.btnRow}>
             {isLoggedIn && (
               <button className={styles.scrapeBtn} onClick={handleScrape} disabled={!!scrapeJobId || !endDate}>
-                {scrapeJobId ? "Scraping…" : "Scrape from akleg.gov"}
+                {scrapeJobId ? "Refreshing" : "Refresh hearings from akleg.gov"}
               </button>
             )}
             {meetings !== null && meetings.length > 0 && (
               <button
+                id="tour-expand-agendas"
                 className={`${styles.loadBtn} ${globalExpanded ? styles.loadBtnActive : ""}`}
                 onClick={() => setGlobalExpanded((v) => !v)}
               >
@@ -374,12 +424,29 @@ export default function Meetings() {
             )}
             {hasInactive && (
               <button
+                id="tour-show-inactive"
                 className={`${styles.loadBtn} ${showInactive ? styles.loadBtnActive : ""}`}
                 onClick={handleToggleInactive}
                 disabled={loading}
               >
                 {showInactive ? "Hide inactive" : "Show inactive"}
               </button>
+            )}
+            {(hasHidden || showHidden) && isLoggedIn && (
+              <div className={styles.toggleGroup}>
+                <button
+                  className={`${styles.toggleOption} ${!showHidden ? styles.toggleSelected : ""}`}
+                  onClick={() => setShowHidden(false)}
+                >
+                  Hide hidden
+                </button>
+                <button
+                  className={`${styles.toggleOption} ${showHidden ? styles.toggleSelected : ""}`}
+                  onClick={() => setShowHidden(true)}
+                >
+                  Display hidden
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -403,8 +470,14 @@ export default function Meetings() {
         </button>
       </div>
 
+      {hiddenMatchCount > 0 && (
+        <p className={styles.notice}>
+          {hiddenMatchCount} hidden hearing{hiddenMatchCount !== 1 ? "s" : ""} {hiddenMatchCount !== 1 ? "match" : "matches"} your search — turn on &ldquo;Display hidden&rdquo; to view {hiddenMatchCount !== 1 ? "them" : "it"}.
+        </p>
+      )}
+
       {scrapeJobId && (
-        <p className={styles.notice}>Scraping meetings from akleg.gov — please stay on this page…</p>
+        <p className={styles.notice}>Refreshing hearings from akleg.gov — please stay on this page…</p>
       )}
       {error && <p className={styles.error}>{error}</p>}
       <Toast
@@ -416,7 +489,7 @@ export default function Meetings() {
       {meetings !== null && meetings.length === 0 && (
         <p className={styles.notice}>
           No meetings found for this date range.
-          {isLoggedIn && ' Use "Scrape from akleg.gov" to import them.'}
+          {isLoggedIn && ' Use "Refresh hearings from akleg.gov" to import them.'}
         </p>
       )}
       {meetings !== null && meetings.length > 0 && filteredMeetings.length === 0 && (
@@ -425,20 +498,31 @@ export default function Meetings() {
 
       {(() => {
         let firstCardRendered = false;
-        return Object.keys(byDate).sort().map((dateKey) => (
-          <section key={dateKey} className={styles.daySection}>
-            <h2 className={styles.dayHeading}>{fmt(dateKey)}</h2>
-            <div className={styles.dayCards}>
-              {byDate[dateKey].map((m) => {
-                const isFirst = !firstCardRendered;
-                if (isFirst) firstCardRendered = true;
-                return (
-                  <MeetingCard key={m.id} meeting={m} isFirst={isFirst} globalExpanded={globalExpanded} onNotesSaved={() => loadMeetings()} />
-                );
-              })}
-            </div>
-          </section>
-        ));
+        return Object.keys(byDate).sort().map((dateKey) => {
+          const isCollapsed = collapsedDates.has(dateKey);
+          return (
+            <section key={dateKey} className={styles.daySection}>
+              <h2 className={styles.dayHeading} onClick={() => toggleDate(dateKey)}>
+                <span>{isCollapsed ? "▸" : "▾"}</span>
+                {fmt(dateKey)}
+                <span className={styles.dayCount}>
+                  {byDate[dateKey].length} meeting{byDate[dateKey].length !== 1 ? "s" : ""}
+                </span>
+              </h2>
+              {!isCollapsed && (
+                <div className={styles.dayCards}>
+                  {byDate[dateKey].map((m) => {
+                    const isFirst = !firstCardRendered;
+                    if (isFirst) firstCardRendered = true;
+                    return (
+                      <MeetingCard key={m.id} meeting={m} isFirst={isFirst} globalExpanded={globalExpanded} showHidden={showHidden} onNotesSaved={() => loadMeetings()} onHiddenChanged={(updated) => setAllMeetings((prev) => prev.map((x) => x.id === updated.id ? updated : x))} />
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          );
+        });
       })()}
     </div>
   );

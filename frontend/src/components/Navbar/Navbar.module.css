@@ -58,6 +58,62 @@
   background-color: rgba(168, 200, 192, 0.2);
 }
 
+.dropdown {
+  position: relative;
+}
+
+.dropdownBtn {
+  padding: 0.4rem 0.9rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-lichen);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.dropdownBtn:hover {
+  color: var(--color-text-on-dark);
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.dropdownMenu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  list-style: none;
+  background-color: var(--color-rainforest);
+  border: 1px solid var(--color-glacial-water);
+  border-radius: 4px;
+  padding: 0.25rem 0;
+  min-width: 200px;
+  z-index: 200;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.dropdown:hover .dropdownMenu,
+.dropdown:focus-within .dropdownMenu {
+  display: block;
+}
+
+.dropdownItem {
+  display: block;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  color: var(--color-lichen);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.dropdownItem:hover {
+  color: var(--color-text-on-dark);
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
 .authArea {
   display: flex;
   align-items: center;

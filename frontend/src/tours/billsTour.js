@@ -62,6 +62,14 @@ export function createBillsTour() {
         },
       },
       {
+        element: "#tour-report-header",
+        popover: {
+          title: "Report Header",
+          description:
+            "Click '▸ Report header' to expand a customizable cover section for the PDF — includes the committee hearing title, date range, updated date, and call-in instructions. Check 'Include in PDF' to include it in the export. Your text and dates are saved automatically.",
+        },
+      },
+      {
         element: "#tour-first-bill",
         popover: {
           title: "Bill Card",
