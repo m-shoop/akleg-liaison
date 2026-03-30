@@ -4,7 +4,7 @@ from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.repositories.user_repository import get_user_by_username
 from app.services.auth_service import decode_token
 
@@ -29,3 +29,15 @@ async def get_current_user(
     if user is None or not user.is_active:
         raise credentials_exception
     return user
+
+
+async def require_editor(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Dependency that requires the user to have the admin (editor) role."""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions",
+        )
+    return current_user

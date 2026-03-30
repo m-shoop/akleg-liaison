@@ -12,9 +12,10 @@ async def get_user_by_username(session: AsyncSession, username: str) -> User | N
 
 
 async def create_user(
-    session: AsyncSession, username: str, hashed_password: str
+    session: AsyncSession, username: str, hashed_password: str, role: "UserRole | None" = None
 ) -> User:
-    user = User(username=username, hashed_password=hashed_password)
+    from app.models.user import UserRole
+    user = User(username=username, hashed_password=hashed_password, role=role or UserRole.VIEWER)
     session.add(user)
     await session.flush()
     return user

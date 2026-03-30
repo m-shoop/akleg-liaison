@@ -90,7 +90,7 @@ function exportToCalendar(meeting) {
 }
 
 function MeetingCard({ meeting, isFirst, globalExpanded, showHidden, onNotesSaved, onHiddenChanged }) {
-  const { isLoggedIn, token } = useAuth();
+  const { isLoggedIn, isEditor, token } = useAuth();
   const [notes, setNotes] = useState(meeting.dps_notes ?? "");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -210,9 +210,10 @@ function MeetingCard({ meeting, isFirst, globalExpanded, showHidden, onNotesSave
         {lastSynced && <p className={styles.lastSynced}>Synced {lastSynced}</p>}
       </div>
 
+      {isLoggedIn && (
       <div className={styles.dpsRow}>
         <label className={styles.dpsLabel}>Notes</label>
-        {isLoggedIn ? (
+        {isEditor ? (
           <>
             <textarea
               className={styles.dpsInput}
@@ -230,8 +231,9 @@ function MeetingCard({ meeting, isFirst, globalExpanded, showHidden, onNotesSave
           <p className={styles.dpsReadOnly}>{notes || ""}</p>
         )}
       </div>
+      )}
 
-      {isLoggedIn && (
+      {isEditor && (
         <div className={styles.hideRow}>
           <label className={styles.dpsLabel}>Visibility</label>
           {meeting.hidden && showHidden && (
@@ -252,7 +254,7 @@ function MeetingCard({ meeting, isFirst, globalExpanded, showHidden, onNotesSave
 }
 
 export default function Meetings() {
-  const { isLoggedIn, token } = useAuth();
+  const { isEditor, token } = useAuth();
   const [searchParams] = useSearchParams();
   const [startDate, setStartDate] = useState(() => searchParams.get("start") || weekBounds());
   const [endDate, setEndDate] = useState(() => searchParams.get("end") || "");
@@ -408,7 +410,7 @@ export default function Meetings() {
         </div>
         <div className={styles.controls}>
           <div id="tour-controls" className={styles.btnRow}>
-            {isLoggedIn && (
+            {isEditor && (
               <button className={styles.scrapeBtn} onClick={handleScrape} disabled={!!scrapeJobId || !endDate}>
                 {scrapeJobId ? "Refreshing" : "Refresh hearings from akleg.gov"}
               </button>
@@ -432,7 +434,7 @@ export default function Meetings() {
                 {showInactive ? "Hide inactive" : "Show inactive"}
               </button>
             )}
-            {(hasHidden || showHidden) && isLoggedIn && (
+            {(hasHidden || showHidden) && isEditor && (
               <div className={styles.toggleGroup}>
                 <button
                   className={`${styles.toggleOption} ${!showHidden ? styles.toggleSelected : ""}`}
@@ -489,7 +491,7 @@ export default function Meetings() {
       {meetings !== null && meetings.length === 0 && (
         <p className={styles.notice}>
           No meetings found for this date range.
-          {isLoggedIn && ' Use "Refresh hearings from akleg.gov" to import them.'}
+          {isEditor && ' Use "Refresh hearings from akleg.gov" to import them.'}
         </p>
       )}
       {meetings !== null && meetings.length > 0 && filteredMeetings.length === 0 && (

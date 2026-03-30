@@ -31,7 +31,7 @@ from bs4 import BeautifulSoup, Tag
 BASE_URL = "https://akleg.gov"
 
 _HEADER_RE = re.compile(r"^\(([A-Z])\)(.+)")
-_BILL_RE = re.compile(r"\b([HS]B)\s+(\d+)\b", re.IGNORECASE)
+_BILL_RE = re.compile(r"\b([HS](?:JR|CR|[BR]))\s+(\d+)\b", re.IGNORECASE)
 _DATE_RE = re.compile(
     r"^([A-Za-z]+)\s+(\d+)\s+[A-Za-z]+\s+(\d+):(\d+)\s*(AM|PM)", re.IGNORECASE
 )

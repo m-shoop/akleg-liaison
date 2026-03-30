@@ -4,7 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal, get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_editor
 from app.models.user import User
 from app.repositories.job_repository import (
     create_job,
@@ -72,7 +72,7 @@ async def scrape_meetings(
     body: MeetingScrapeRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_editor),
 ):
     """Enqueue a scrape job and return immediately. Poll GET /jobs/{id} for status."""
     job_id = await create_job(db, job_type="scrape_meetings")
@@ -90,7 +90,7 @@ async def patch_hidden(
     meeting_id: int,
     body: MeetingHiddenUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     existing = await get_meeting_by_id(db, meeting_id)
     if existing is None:
@@ -107,7 +107,7 @@ async def patch_dps_notes(
     meeting_id: int,
     body: MeetingDpsNotesUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     existing = await get_meeting_by_id(db, meeting_id)
     if existing is None:

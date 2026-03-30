@@ -20,7 +20,7 @@ function fmtHearingDate(isoDate) {
 }
 
 export default function BillCard({ bill, showDescription, selectedOutcomes, showKeywords = false, abbreviated = false, nextHearingDate = null, onRefreshed: _onRefreshed, onTrackingChanged }) {
-  const { isLoggedIn, token } = useAuth();
+  const { isEditor, token } = useAuth();
   const [tracking, setTracking] = useState(false);
   const [error, setError] = useState(null);
 
@@ -70,7 +70,7 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, show
       <div className={styles.metaRow}>
         <span className={styles.status}>{bill.status ?? "Unknown"}</span>
         <span className={styles.introduced}>Introduced {introduced}</span>
-        {isLoggedIn && (
+        {isEditor && (
           <button
             className={styles.trackBtn}
             onClick={handleToggleTracked}

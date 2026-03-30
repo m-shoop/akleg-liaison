@@ -404,9 +404,26 @@
   transition: background-color 0.15s, color 0.15s;
 }
 
-.printBtn:hover {
+.printBtn:hover:not(:disabled) {
   background-color: var(--color-rainforest);
   color: white;
+}
+
+.printBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.printDateNotice {
+  font-size: 0.78rem;
+  color: darkorange;
+  margin-top: 0.25rem;
+}
+
+@media print {
+  .printDateNotice {
+    display: none;
+  }
 }
 
 /* Print-only meeting schedule — hidden on screen */

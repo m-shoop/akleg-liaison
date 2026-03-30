@@ -4,7 +4,7 @@ import { addTagToBill, removeTagFromBill, setTagActive } from "../../api/tags";
 import styles from "./BillTags.module.css";
 
 export default function BillTags({ bill }) {
-  const { isLoggedIn, token } = useAuth();
+  const { isLoggedIn, isEditor, token } = useAuth();
   const [tags, setTags] = useState(bill.tags ?? []);
   const [inputValue, setInputValue] = useState("");
   const [busy, setBusy] = useState(false);
@@ -57,6 +57,8 @@ export default function BillTags({ bill }) {
     }
   }
 
+  if (!isLoggedIn) return null;
+
   return (
     <div className={styles.container}>
       <div className={styles.pills}>
@@ -65,7 +67,7 @@ export default function BillTags({ bill }) {
             key={tag.id}
             className={`${styles.pill} ${!tag.is_active ? styles.pillInactive : ""}`}
           >
-            {isLoggedIn ? (
+            {isEditor ? (
               <button
                 className={styles.pillLabel}
                 onClick={() => handleToggleActive(tag)}
@@ -77,7 +79,7 @@ export default function BillTags({ bill }) {
             ) : (
               <span className={styles.pillLabel}>{tag.label}</span>
             )}
-            {isLoggedIn && (
+            {isEditor && (
               <button
                 className={styles.pillRemove}
                 onClick={() => handleRemove(tag.id)}
@@ -91,7 +93,7 @@ export default function BillTags({ bill }) {
           </span>
         ))}
 
-        {isLoggedIn && (
+        {isEditor && (
           <form onSubmit={handleAdd} className={styles.addForm}>
             <input
               className={styles.addInput}

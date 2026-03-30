@@ -112,12 +112,21 @@ export default function Home() {
     year: "numeric",
   });
 
+  const TYPE_ORDER = ["B", "CR", "JR", "R", "SCR"];
+  function measureTypeRank(billNumber) {
+    const type = billNumber.trim().toUpperCase().replace(/^[HS]/, "").replace(/\s*\d+.*$/, "");
+    const idx = TYPE_ORDER.indexOf(type);
+    return idx === -1 ? 99 : idx;
+  }
+
   const sortedBills = [...bills].sort((a, b) => {
-    const chamberA = a.bill_number.startsWith("HB") ? 0 : 1;
-    const chamberB = b.bill_number.startsWith("HB") ? 0 : 1;
+    const chamberA = a.bill_number.startsWith("H") ? 0 : 1;
+    const chamberB = b.bill_number.startsWith("H") ? 0 : 1;
+    const typeA = measureTypeRank(a.bill_number);
+    const typeB = measureTypeRank(b.bill_number);
     const numA = parseInt(a.bill_number.replace(/\D/g, ""), 10);
     const numB = parseInt(b.bill_number.replace(/\D/g, ""), 10);
-    return chamberA - chamberB || numA - numB;
+    return chamberA - chamberB || typeA - typeB || numA - numB;
   });
 
   const query = searchQuery.trim().toLowerCase();
@@ -173,12 +182,12 @@ export default function Home() {
         <div className={styles.titleRow}>
           <div className={styles.titleBlock}>
             <div>
-              <h1 className={styles.title}>Tracked Bills</h1>
+              <h1 className={styles.title}>Tracked Measures</h1>
               <p className={styles.subtitle}>
                 34th Alaska Legislature ·{" "}
                 {query
-                  ? `${visibleBills.length} of ${sortedBills.length} bills`
-                  : `${bills.length} bill${bills.length !== 1 ? "s" : ""}`}
+                  ? `${visibleBills.length} of ${sortedBills.length} measures`
+                  : `${bills.length} measure${bills.length !== 1 ? "s" : ""}`}
               </p>
             </div>
             <div className={styles.searchRow}>
@@ -263,7 +272,7 @@ export default function Home() {
               </button>
             </div>
             <div id="tour-export-pdf" className={styles.printRow}>
-              <span className={styles.printRowLabel}>Meetings:</span>
+              <span className={styles.printRowLabel}>Hearings:</span>
               <input
                 type="date"
                 className={styles.printDateInput}
@@ -277,10 +286,13 @@ export default function Home() {
                 value={printEndDate}
                 onChange={(e) => setPrintEndDate(e.target.value)}
               />
-              <button className={styles.printBtn} onClick={exportPDF} disabled={pendingPrint}>
+              <button className={styles.printBtn} onClick={exportPDF} disabled={pendingPrint || (!!(printStartDate) !== !!(printEndDate))}>
                 {pendingPrint ? "Preparing…" : "Export PDF"}
               </button>
             </div>
+            {!!(printStartDate) !== !!(printEndDate) && (
+              <p className={styles.printDateNotice}>Select both a from and to date to export hearings. Clear both to export only bills.</p>
+            )}
           </div>
         </div>
       </div>
@@ -391,9 +403,9 @@ export default function Home() {
         )}
 
         <div className={styles.printHeader}>
-          <h1 className={styles.printTitle}>Legislative Bills</h1>
+          <h1 className={styles.printTitle}>Legislative Measures</h1>
           <p className={styles.printMeta}>
-            34th Alaska Legislature · {sortedBills.length} bill
+            34th Alaska Legislature · {sortedBills.length} measure
             {sortedBills.length !== 1 ? "s" : ""} · Report generated {reportDate}
           </p>
         </div>
@@ -453,14 +465,14 @@ export default function Home() {
         {sideBySide ? (
           <div className={styles.sideBySideGrid}>
             {[
-              { label: "Senate Bills", bills: visibleBills.filter((b) => b.bill_number.startsWith("SB")) },
-              { label: "House Bills",  bills: visibleBills.filter((b) => b.bill_number.startsWith("HB")) },
+              { label: "Senate Measures", bills: visibleBills.filter((b) => b.bill_number.startsWith("S")) },
+              { label: "House Measures",  bills: visibleBills.filter((b) => b.bill_number.startsWith("H")) },
             ].map(({ label, bills: columnBills }) => (
               <div key={label} className={styles.sideColumn}>
                 <h2 className={styles.columnHeader}>{label}</h2>
                 <ul className={styles.list}>
                   {columnBills.map((bill, idx) => (
-                    <li key={bill.id} id={idx === 0 && label === "Senate Bills" ? "tour-first-bill" : undefined}>
+                    <li key={bill.id} id={idx === 0 && label === "Senate Measures" ? "tour-first-bill" : undefined}>
                       <BillCard
                         bill={bill}
                         showDescription={showDescription}

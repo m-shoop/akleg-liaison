@@ -18,8 +18,8 @@ export default function Login() {
     setError(null);
     setLoading(true);
     try {
-      const { access_token } = await loginRequest(username, password);
-      login(access_token, username);
+      const { access_token, role } = await loginRequest(username, password);
+      login(access_token, username, role);
       navigate("/");
     } catch (err) {
       setError(err.message);

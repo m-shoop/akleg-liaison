@@ -491,7 +491,7 @@ a.committeeName:hover {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  width: 220px;
+  width: max(220px, 18vw);
   flex-shrink: 0;
   border-left: 1px solid var(--color-border);
   padding-left: 0.75rem;

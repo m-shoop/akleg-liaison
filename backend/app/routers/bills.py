@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_editor
 from app.models.bill import BillEventOutcome
 from app.models.user import User
 from app.repositories.bill_repository import (
@@ -77,7 +77,7 @@ async def refresh_bill(
     bill_id: int,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     """Enqueue a bill re-scrape and return immediately. Poll GET /jobs/{id} for status."""
     bill = await _get_bill_or_404(bill_id, db)
@@ -109,7 +109,7 @@ async def _run_fetch_all(session: int) -> None:
 @router.post("/fetch-all", status_code=202)
 async def fetch_all_bills(
     background_tasks: BackgroundTasks,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_editor),
 ):
     """
     Scrape every bill listed on akleg.gov for session 34, upsert them all,
@@ -132,7 +132,7 @@ async def update_bill_tracked(
     bill_id: int,
     is_tracked: bool = Query(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     """Set or clear the is_tracked flag on a bill."""
     bill = await set_bill_tracked(db, bill_id, is_tracked)

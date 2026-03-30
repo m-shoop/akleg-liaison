@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_editor
 from app.models.user import User
 from app.repositories.audit_log_repository import log_action
 from app.repositories.bill_repository import get_bill_by_id
@@ -33,7 +33,7 @@ async def update_tag(
     tag_id: int,
     body: TagUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_editor),
 ):
     """Toggle a tag's global is_active flag."""
     tag = await set_tag_active(db, tag_id, body.is_active)
@@ -53,7 +53,7 @@ async def add_tag_to_bill(
     bill_id: int,
     body: TagCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     """
     Add a tag (by label) to a bill.
@@ -81,7 +81,7 @@ async def remove_tag_from_bill(
     bill_id: int,
     tag_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     """Remove a tag from a bill (deletes the bill_tags row)."""
     bill = await get_bill_by_id(db, bill_id)

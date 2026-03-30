@@ -35,6 +35,7 @@ BILL_DETAIL_PATH = "/basis/Bill/Detail/{session}?Root={bill_number}"
 BILL_RANGE_PATH = "/basis/Bill/Range/{session}?session=&bill1=&bill2="
 
 _CHAMBER_RE = re.compile(r"^\(([HS])\)")
+_BILL_ROOT_RE = re.compile(r"^([A-Z]+)\s*(\d+)$", re.IGNORECASE)
 
 
 def build_bill_url(bill_number: str, session: int) -> str:
@@ -390,10 +391,10 @@ async def scrape_bill_list(session: int) -> list[str]:
     for td in soup.find_all("td", class_="billRoot"):
         link = td.find("a")
         if link:
-            # The link text contains extra spaces, e.g. "HB   1" — normalise.
-            parts = link.get_text(strip=True).split()
-            if len(parts) == 2:
-                bill_numbers.append(f"{parts[0]} {parts[1]}")
+            # Handles "HB   1" (extra spaces) and "SB1003" (no space).
+            m = _BILL_ROOT_RE.match(link.get_text(strip=True))
+            if m:
+                bill_numbers.append(f"{m.group(1).upper()} {m.group(2)}")
     return bill_numbers
 
 
