@@ -1,14 +1,17 @@
 """
 Shared pytest fixtures for the test suite.
 
-Database strategy: tests run against the dev database using regular sessions.
-Each test uses a unique short ID (via the `uid` fixture) in usernames and other
-identifiers so tests don't collide with each other across runs.
+Database strategy: each test runs inside a single connection whose outer
+transaction is rolled back at teardown. Route handlers get sessions that use
+SAVEPOINT semantics (join_transaction_mode="create_savepoint") so their
+session.commit() calls only release savepoints — the outer transaction is
+never committed to disk, and the rollback at the end wipes everything clean.
 
 Set TEST_DATABASE_URL to point at a different database if desired:
   export TEST_DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/akleg_liaison_test"
 """
 
+import os
 import uuid
 
 import pytest
@@ -19,59 +22,64 @@ from app.config import settings
 from app.database import get_db
 from app.main import app
 
-# Use TEST_DATABASE_URL if set, otherwise fall back to the app's configured DB.
-import os
 TEST_DB_URL = os.getenv("TEST_DATABASE_URL", settings.database_url)
+
+REGISTRATION_KEY = os.getenv("REGISTRATION_KEY", settings.registration_key)
 
 
 @pytest.fixture
-async def client():
+async def _conn():
     """
-    AsyncClient wired to the FastAPI app.
-
-    A fresh engine is created for each test so that asyncpg connections are
-    always bound to the current event loop. pytest-asyncio creates a new event
-    loop per test function; reusing a module-level engine across loops causes
-    asyncpg 'another operation is in progress' errors.
-
-    Each request gets its own session (same as production behaviour).
+    A single DB connection per test with an open transaction.
+    Rolled back at teardown — no test data ever reaches disk.
     """
     engine = create_async_engine(TEST_DB_URL, echo=False)
-    TestSession = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with engine.connect() as conn:
+        await conn.begin()
+        yield conn
+        await conn.rollback()
+    await engine.dispose()
 
+
+@pytest.fixture
+async def db(_conn):
+    """Session for seeding data in tests; shares the outer test transaction."""
+    session = AsyncSession(_conn, expire_on_commit=False, join_transaction_mode="create_savepoint")
+    try:
+        yield session
+    finally:
+        await session.close()
+
+
+@pytest.fixture
+async def client(_conn):
+    """
+    AsyncClient wired to the FastAPI app.
+    Each request gets its own session bound to the same connection as `db`,
+    so route handler commits only release savepoints within the outer transaction.
+    """
     async def override_get_db():
-        async with TestSession() as session:
+        session = AsyncSession(_conn, expire_on_commit=False, join_transaction_mode="create_savepoint")
+        try:
             yield session
+        finally:
+            await session.close()
 
     app.dependency_overrides[get_db] = override_get_db
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.pop(get_db, None)
-    await engine.dispose()
-
-
-@pytest.fixture
-async def db():
-    """Direct DB session for seeding data or making assertions in test code."""
-    engine = create_async_engine(TEST_DB_URL, echo=False)
-    TestSession = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with TestSession() as session:
-        yield session
-    await engine.dispose()
 
 
 @pytest.fixture
 def uid():
-    """Short unique ID so test-created usernames/labels never collide across runs."""
+    """Short unique ID so test-created usernames/labels never collide within a run."""
     return uuid.uuid4().hex[:8]
 
 
 # ---------------------------------------------------------------------------
 # Convenience helpers
 # ---------------------------------------------------------------------------
-
-REGISTRATION_KEY = os.getenv("REGISTRATION_KEY", settings.registration_key)
-
 
 async def register_user(client: AsyncClient, username: str, password: str, role: str = "viewer") -> dict:
     resp = await client.post("/auth/register", json={

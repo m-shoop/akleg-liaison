@@ -660,6 +660,7 @@
   }
 
   @page {
+    size: letter portrait;
     margin: 1.5cm 0.75cm;
     @bottom-right {
       content: "Page " counter(page) " of " counter(pages);
