@@ -56,4 +56,7 @@ export const DEFAULT_SELECTED = new Set([
   "moved_out_of_committee",
   "passed",
   "referred_to_committee",
+  "signed_into_law",
+  "vetoed",
+  "pocket_vetoed",
 ]);

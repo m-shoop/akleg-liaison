@@ -124,8 +124,8 @@ function MeetingCard({ meeting, isFirst, globalExpanded, showHidden, onNotesSave
 
   const chamberLabel = meeting.chamber === "H" ? "House" : "Senate";
   const inactive = !meeting.is_active;
-  const lastSynced = meeting.updated_at
-    ? new Date(meeting.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+  const lastSynced = meeting.last_sync
+    ? new Date(meeting.last_sync).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : null;
 
   return (

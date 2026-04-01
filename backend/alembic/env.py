@@ -11,7 +11,14 @@ from app.database import Base
 import app.models  # noqa: F401
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url)
+
+# Use the URL already set on the config object (e.g. by the test suite via
+# set_main_option) if it looks like a real connection string; otherwise fall
+# back to the application settings.  This lets conftest.py point migrations
+# at a throwaway test database without env.py silently overriding it.
+_configured_url = config.get_main_option("sqlalchemy.url", "")
+if not _configured_url.startswith("postgresql"):
+    config.set_main_option("sqlalchemy.url", settings.database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -20,8 +27,9 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
+    url = config.get_main_option("sqlalchemy.url")
     context.configure(
-        url=settings.database_url,
+        url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -37,7 +45,8 @@ def do_run_migrations(connection):
 
 
 async def run_migrations_online() -> None:
-    engine = create_async_engine(settings.database_url)
+    url = config.get_main_option("sqlalchemy.url")
+    engine = create_async_engine(url)
     async with engine.begin() as conn:
         await conn.run_sync(do_run_migrations)
     await engine.dispose()

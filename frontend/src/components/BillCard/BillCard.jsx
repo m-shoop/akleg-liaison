@@ -24,8 +24,8 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, show
   const [tracking, setTracking] = useState(false);
   const [error, setError] = useState(null);
 
-  const lastSynced = bill.updated_at
-    ? new Date(bill.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+  const lastSynced = bill.last_sync
+    ? new Date(bill.last_sync).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : null;
 
   const introduced = bill.introduced_date

@@ -62,6 +62,7 @@ class BillRead(BaseModel):
     introduced_date: date | None
     source_url: str | None
     is_tracked: bool
+    last_sync: datetime | None
     created_at: datetime
     updated_at: datetime
     sponsors: list[BillSponsorRead]

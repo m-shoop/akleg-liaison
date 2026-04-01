@@ -81,6 +81,9 @@ class Bill(Base):
     introduced_date: Mapped[date | None] = mapped_column(Date)
     source_url: Mapped[str | None] = mapped_column(String(500))
     is_tracked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    last_sync: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

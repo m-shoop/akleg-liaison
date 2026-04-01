@@ -60,6 +60,7 @@ async def upsert_meeting(
             location=location,
             legislature_session=legislature_session,
             is_active=True,
+            last_sync=func.now(),
         )
         .on_conflict_do_update(
             index_elements=[
@@ -77,6 +78,7 @@ async def upsert_meeting(
                 location=location,
                 is_active=True,
                 updated_at=func.now(),
+                last_sync=func.now(),
             ),
         )
         .returning(Meeting.id)

@@ -35,6 +35,7 @@ class MeetingRead(BaseModel):
     is_active: bool
     hidden: bool
     dps_notes: str | None
+    last_sync: datetime | None
     # True when an inactive sibling meeting (same chamber/committee/date) has notes
     has_inactive_notes_sibling: bool = False
     created_at: datetime

@@ -387,9 +387,9 @@ export default function Home() {
                         </div>
                         <div className={styles.printDpsNotes}>{m.dps_notes ?? ""}</div>
                       </div>
-                      {m.updated_at && (
+                      {m.last_sync && (
                         <p className={styles.printLastSynced}>
-                          Synced {new Date(m.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          Synced {new Date(m.last_sync).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                         </p>
                       )}
                       </div>

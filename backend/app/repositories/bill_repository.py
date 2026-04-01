@@ -48,6 +48,7 @@ async def upsert_bill(
             introduced_date=scraped.introduced_date,
             source_url=scraped.source_url,
             is_tracked=default_tracked,
+            last_sync=func.now(),
         )
         .on_conflict_do_update(
             constraint="uq_bill_session",
@@ -58,6 +59,7 @@ async def upsert_bill(
                 introduced_date=scraped.introduced_date,
                 source_url=scraped.source_url,
                 updated_at=func.now(),
+                last_sync=func.now(),
                 # is_tracked intentionally omitted — preserve the user's choice
             ),
         )
