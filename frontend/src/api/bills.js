@@ -1,3 +1,5 @@
+import { apiFetch } from "./apiFetch";
+
 const BASE = "/api";
 
 function authHeaders(token) {
@@ -6,13 +8,13 @@ function authHeaders(token) {
 
 export async function fetchBills({ includeUntracked = false } = {}) {
   const url = includeUntracked ? `${BASE}/bills?include_untracked=true` : `${BASE}/bills`;
-  const res = await fetch(url);
+  const res = await apiFetch(url);
   if (!res.ok) throw new Error(`Failed to fetch bills: ${res.status}`);
   return res.json();
 }
 
 export async function setTracked(billId, isTracked, token) {
-  const res = await fetch(
+  const res = await apiFetch(
     `${BASE}/bills/${billId}/tracked?is_tracked=${isTracked}`,
     { method: "PATCH", headers: authHeaders(token) }
   );
@@ -24,7 +26,7 @@ export async function setTracked(billId, isTracked, token) {
 }
 
 export async function fetchAllBills(token) {
-  const res = await fetch(`${BASE}/bills/fetch-all`, {
+  const res = await apiFetch(`${BASE}/bills/fetch-all`, {
     method: "POST",
     headers: authHeaders(token),
   });
@@ -36,7 +38,7 @@ export async function fetchAllBills(token) {
 }
 
 export async function refreshBill(billId, token) {
-  const res = await fetch(`${BASE}/bills/${billId}/refresh`, {
+  const res = await apiFetch(`${BASE}/bills/${billId}/refresh`, {
     method: "POST",
     headers: authHeaders(token),
   });

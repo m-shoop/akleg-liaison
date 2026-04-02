@@ -1,29 +1,42 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { addTagToBill, removeTagFromBill, setTagActive } from "../../api/tags";
+import { addTagToBill, fetchTags, removeTagFromBill } from "../../api/tags";
 import styles from "./BillTags.module.css";
 
 export default function BillTags({ bill }) {
   const { isLoggedIn, isEditor, token } = useAuth();
   const [tags, setTags] = useState(bill.tags ?? []);
+  const [allTags, setAllTags] = useState([]);
   const [inputValue, setInputValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const inputRef = useRef(null);
 
-  async function handleAdd(e) {
-    e.preventDefault();
-    const label = inputValue.trim();
-    if (!label) return;
+  useEffect(() => {
+    if (isEditor) {
+      fetchTags().then(setAllTags).catch(() => {});
+    }
+  }, [isEditor]);
+
+  const suggestions = inputValue.trim()
+    ? allTags.filter(
+        (t) =>
+          t.label.toLowerCase().includes(inputValue.trim().toLowerCase()) &&
+          !tags.some((existing) => existing.id === t.id)
+      )
+    : [];
+
+  async function addTag(label) {
+    const trimmed = label.trim();
+    if (!trimmed) return;
     setError(null);
     setBusy(true);
     try {
-      const newTag = await addTagToBill(bill.id, label, token);
-      setTags((prev) => {
-        // Avoid duplicates if the tag was already on this bill
-        if (prev.some((t) => t.id === newTag.id)) return prev;
-        return [...prev, newTag];
-      });
+      const newTag = await addTagToBill(bill.id, trimmed, token);
+      setTags((prev) => prev.some((t) => t.id === newTag.id) ? prev : [...prev, newTag]);
       setInputValue("");
+      setHighlightedIndex(-1);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -44,16 +57,20 @@ export default function BillTags({ bill }) {
     }
   }
 
-  async function handleToggleActive(tag) {
-    setError(null);
-    setBusy(true);
-    try {
-      const updatedTag = await setTagActive(tag.id, !tag.is_active, token);
-      setTags((prev) => prev.map((t) => (t.id === updatedTag.id ? updatedTag : t)));
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
+  function handleKeyDown(e) {
+    if (!suggestions.length) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((i) => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter" && highlightedIndex >= 0) {
+      e.preventDefault();
+      addTag(suggestions[highlightedIndex].label);
+    } else if (e.key === "Escape") {
+      setHighlightedIndex(-1);
+      setInputValue("");
     }
   }
 
@@ -63,22 +80,8 @@ export default function BillTags({ bill }) {
     <div className={styles.container}>
       <div className={styles.pills}>
         {tags.filter((tag) => tag.is_active).map((tag) => (
-          <span
-            key={tag.id}
-            className={`${styles.pill} ${!tag.is_active ? styles.pillInactive : ""}`}
-          >
-            {isEditor ? (
-              <button
-                className={styles.pillLabel}
-                onClick={() => handleToggleActive(tag)}
-                disabled={busy}
-                title={tag.is_active ? "Click to hide globally" : "Click to show globally"}
-              >
-                {tag.label}
-              </button>
-            ) : (
-              <span className={styles.pillLabel}>{tag.label}</span>
-            )}
+          <span key={tag.id} className={styles.pill}>
+            <span className={styles.pillLabel}>{tag.label}</span>
             {isEditor && (
               <button
                 className={styles.pillRemove}
@@ -94,16 +97,36 @@ export default function BillTags({ bill }) {
         ))}
 
         {isEditor && (
-          <form onSubmit={handleAdd} className={styles.addForm}>
-            <input
-              className={styles.addInput}
-              type="text"
-              placeholder="Add tag…"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              disabled={busy}
-            />
-          </form>
+          <div className={styles.addWrapper}>
+            <form onSubmit={(e) => { e.preventDefault(); addTag(highlightedIndex >= 0 ? suggestions[highlightedIndex].label : inputValue); }} className={styles.addForm}>
+              <input
+                ref={inputRef}
+                className={styles.addInput}
+                type="text"
+                placeholder="Add tag…"
+                value={inputValue}
+                onChange={(e) => { setInputValue(e.target.value); setHighlightedIndex(-1); }}
+                onKeyDown={handleKeyDown}
+                onBlur={() => setTimeout(() => setHighlightedIndex(-1), 150)}
+                disabled={busy}
+                autoComplete="off"
+              />
+            </form>
+            {suggestions.length > 0 && (
+              <ul className={styles.dropdown}>
+                {suggestions.map((t, i) => (
+                  <li
+                    key={t.id}
+                    className={`${styles.dropdownItem} ${i === highlightedIndex ? styles.dropdownItemHighlighted : ""}`}
+                    onMouseDown={() => addTag(t.label)}
+                    onMouseEnter={() => setHighlightedIndex(i)}
+                  >
+                    {t.label}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </div>
 

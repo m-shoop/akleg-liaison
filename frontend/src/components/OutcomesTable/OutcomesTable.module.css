@@ -74,10 +74,6 @@
 }
 
 @media print {
-  .table thead {
-    display: none;
-  }
-
   .table td {
     border-bottom: none;
   }

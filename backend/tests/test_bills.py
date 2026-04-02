@@ -76,11 +76,12 @@ async def test_editor_can_track_bill(client: AsyncClient, db, uid: str):
     bill_id = await _seed_bill(db, uid, tracked=False)
     token = await _editor_token(client, uid)
 
-    resp = await client.patch(
-        f"/bills/{bill_id}/tracked",
-        params={"is_tracked": True},
-        headers={"Authorization": f"Bearer {token}"},
-    )
+    with patch("app.routers.bills._run_refresh_job", new_callable=AsyncMock):
+        resp = await client.patch(
+            f"/bills/{bill_id}/tracked",
+            params={"is_tracked": True},
+            headers={"Authorization": f"Bearer {token}"},
+        )
     assert resp.status_code == 200
     assert resp.json()["is_tracked"] is True
 
@@ -112,8 +113,7 @@ async def test_editor_can_enqueue_refresh(client: AsyncClient, db, uid: str):
     bill_id = await _seed_bill(db, uid)
     token = await _editor_token(client, uid)
 
-    with patch("app.routers.bills.sync_refresh_bill", new_callable=AsyncMock) as mock_refresh:
-        mock_refresh.return_value = bill_id
+    with patch("app.routers.bills._run_refresh_job", new_callable=AsyncMock):
         resp = await client.post(
             f"/bills/{bill_id}/refresh",
             headers={"Authorization": f"Bearer {token}"},
