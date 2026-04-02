@@ -16,6 +16,18 @@
   min-width: 0;
 }
 
+.sponsors {
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.sponsorsLabel {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
 .metaRow {
   display: flex;
   align-items: center;

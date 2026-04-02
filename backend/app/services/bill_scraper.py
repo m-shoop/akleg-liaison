@@ -318,15 +318,32 @@ def _parse_keywords(soup: BeautifulSoup) -> list[ScrapedKeyword]:
 
 
 def _parse_sponsors(soup: BeautifulSoup) -> list[ScrapedSponsor]:
+    """Parse sponsors from the .information-holder block.
+
+    The page has one <li> whose <span> starts with "Sponsor" and whose
+    <strong> contains a comma-separated list of names, e.g.:
+        REPRESENTATIVES COULOMBE, Tomaszewski, Vance, ...
+    or a single senator:
+        SENATOR STEVENS
+    """
     sponsors: list[ScrapedSponsor] = []
-    for sel in (".sponsors", "#sponsors", ".bill-sponsors"):
-        section = soup.select_one(sel)
-        if section:
-            for link in section.find_all("a"):
-                name = link.get_text(strip=True)
-                if name:
-                    sponsors.append(ScrapedSponsor(name=name))
-            break
+    for li in soup.select(".information-holder ul.information li"):
+        span = li.find("span")
+        strong = li.find("strong")
+        if not span or not strong:
+            continue
+        if not span.get_text(strip=True).upper().startswith("SPONSOR"):
+            continue
+        raw = strong.get_text(separator=" ", strip=True)
+        # Strip leading "REPRESENTATIVES" / "SENATORS" / "REPRESENTATIVE" / "SENATOR"
+        raw = re.sub(r"^(REPRESENTATIVES?|SENATORS?)\s+", "", raw, flags=re.IGNORECASE)
+        names = [n.strip() for n in raw.split(",") if n.strip()]
+        for i, name in enumerate(names):
+            sponsors.append(ScrapedSponsor(
+                name=name,
+                sponsor_type="primary" if i == 0 else "cosponsor",
+            ))
+        break
     return sponsors
 
 

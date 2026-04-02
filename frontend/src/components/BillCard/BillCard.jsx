@@ -89,6 +89,13 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, show
         <p className={styles.shortTitle}>{bill.short_title ?? "Untitled"}</p>
       </div>
 
+      {bill.sponsors?.length > 0 && (
+        <p className={styles.sponsors}>
+          <span className={styles.sponsorsLabel}>Sponsor{bill.sponsors.length > 1 ? "s" : ""}:</span>{" "}
+          {bill.sponsors.map((s) => s.name).join(", ")}
+        </p>
+      )}
+
       <div className={styles.metaRow}>
         {committeeLink(bill.status) ? (
           <a href={committeeLink(bill.status)} target="_blank" rel="noreferrer" className={styles.status}>
