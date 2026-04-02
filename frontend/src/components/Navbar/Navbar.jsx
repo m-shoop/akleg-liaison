@@ -27,7 +27,7 @@ export default function Navbar() {
               }
               end
             >
-              Measures
+              Legislation
             </NavLink>
           </li>
           <li>

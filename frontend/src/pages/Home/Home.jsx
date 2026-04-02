@@ -8,6 +8,7 @@ import OutcomeFilter from "../../components/OutcomeFilter/OutcomeFilter";
 import Toast from "../../components/Toast/Toast";
 import { createBillsTour } from "../../tours/billsTour";
 import { DEFAULT_SELECTED } from "../../utils/outcomeTypes";
+import { weekBounds, weekBoundsTitle } from "../../utils/weekBounds";
 import styles from "./Home.module.css";
 
 function fmtDate(isoDate) {
@@ -76,6 +77,8 @@ export default function Home() {
   const [printMeetings, setPrintMeetings] = useState(null);
   const [upcomingHearings, setUpcomingHearings] = useState({});
   const [pendingPrint, setPendingPrint] = useState(false);
+  const [filterToHearings, setFilterToHearings] = useState(false);
+  const [hearingBillIds, setHearingBillIds] = useState(null);
   const [headerOpen, setHeaderOpen] = useState(false);
   const [headerIncluded, setHeaderIncluded] = useState(
     () => localStorage.getItem("rh_included") === "true"
@@ -92,15 +95,41 @@ export default function Home() {
   useEffect(() => { localStorage.setItem("rh_body", headerBody); }, [headerBody]);
   useEffect(() => { localStorage.setItem("rh_included", headerIncluded); }, [headerIncluded]);
 
+  // Auto-off when either date is cleared
+  useEffect(() => {
+    if (!printStartDate || !printEndDate) {
+      setFilterToHearings(false);
+    }
+  }, [printStartDate, printEndDate]);
+
+  // Fetch hearing bill IDs whenever the filter is on and both dates are set
+  useEffect(() => {
+    if (!filterToHearings || !printStartDate || !printEndDate) {
+      setHearingBillIds(null);
+      return;
+    }
+    fetchMeetings({ startDate: printStartDate, endDate: printEndDate })
+      .then((meetings) => {
+        const ids = new Set(
+          meetings
+            .flatMap((m) => m.agenda_items)
+            .filter((item) => item.is_bill && item.bill_id != null)
+            .map((item) => item.bill_id)
+        );
+        setHearingBillIds(ids);
+      })
+      .catch(() => setHearingBillIds(new Set()));
+  }, [filterToHearings, printStartDate, printEndDate]);
+
   useEffect(() => {
     setLoading(true);
     Promise.all([
       fetchBills({ includeUntracked: showUntracked }),
       fetchUpcomingHearings(),
     ])
-      .then(([billsData, hearingsData]) => {
+      .then(([billsData, upcomingData]) => {
         setBills(billsData);
-        setUpcomingHearings(hearingsData);
+        setUpcomingHearings(upcomingData);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -130,7 +159,7 @@ export default function Home() {
   });
 
   const query = searchQuery.trim().toLowerCase();
-  const visibleBills = query
+  const searchedBills = query
     ? sortedBills.filter((bill) => {
         // Only search outcomes whose type is currently visible in the table
         const visibleOutcomes = bill.events
@@ -152,6 +181,10 @@ export default function Home() {
         return haystack.includes(query);
       })
     : sortedBills;
+
+  const visibleBills = filterToHearings && hearingBillIds !== null
+    ? searchedBills.filter((b) => hearingBillIds.has(b.id))
+    : searchedBills;
 
   const handlePrint = useReactToPrint({
     contentRef,
@@ -182,10 +215,10 @@ export default function Home() {
         <div className={styles.titleRow}>
           <div className={styles.titleBlock}>
             <div>
-              <h1 className={styles.title}>Tracked Measures</h1>
+              <h1 className={styles.title}>Tracked Legislation</h1>
               <p className={styles.subtitle}>
                 34th Alaska Legislature ·{" "}
-                {query
+                {(query || filterToHearings)
                   ? `${visibleBills.length} of ${sortedBills.length} measures`
                   : `${bills.length} measure${bills.length !== 1 ? "s" : ""}`}
               </p>
@@ -290,9 +323,62 @@ export default function Home() {
                 {pendingPrint ? "Preparing…" : "Export PDF"}
               </button>
             </div>
+            <div className={styles.weekShortcuts}>
+              <button
+                className={styles.weekShortcutBtn}
+                onClick={() => { const b = weekBounds(-1); setPrintStartDate(b.start); setPrintEndDate(b.end); }}
+                title={weekBoundsTitle(-1)}
+              >
+                Last Week
+              </button>
+              <button
+                className={styles.weekShortcutBtn}
+                onClick={() => { const b = weekBounds(0); setPrintStartDate(b.start); setPrintEndDate(b.end); }}
+                title={weekBoundsTitle(0)}
+              >
+                This Week
+              </button>
+              <button
+                className={styles.weekShortcutBtn}
+                onClick={() => { const b = weekBounds(1); setPrintStartDate(b.start); setPrintEndDate(b.end); }}
+                title={weekBoundsTitle(1)}
+              >
+                Next Week
+              </button>
+              {(printStartDate || printEndDate) && (
+                <button
+                  className={styles.clearDatesBtn}
+                  onClick={() => { setPrintStartDate(""); setPrintEndDate(""); }}
+                >
+                  Clear Dates
+                </button>
+              )}
+            </div>
             {!!(printStartDate) !== !!(printEndDate) && (
               <p className={styles.printDateNotice}>Select both a from and to date to export hearings. Clear both to export only bills.</p>
             )}
+            <div
+              className={styles.hearingFilterRow}
+              title={(!printStartDate || !printEndDate) ? "Add dates to use this filter" : undefined}
+            >
+              <span className={styles.hearingFilterLabel}>Filter to Measures with Hearings on These Dates</span>
+              <div className={`${styles.toggleGroup} ${(!printStartDate || !printEndDate) ? styles.toggleDisabled : ""}`}>
+                <button
+                  className={`${styles.toggleOption} ${!filterToHearings ? styles.toggleSelected : ""}`}
+                  onClick={() => setFilterToHearings(false)}
+                  disabled={!printStartDate || !printEndDate}
+                >
+                  Off
+                </button>
+                <button
+                  className={`${styles.toggleOption} ${filterToHearings ? styles.toggleSelected : ""}`}
+                  onClick={() => setFilterToHearings(true)}
+                  disabled={!printStartDate || !printEndDate}
+                >
+                  On
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -479,7 +565,7 @@ export default function Home() {
                         selectedOutcomes={selectedOutcomes}
                         showKeywords={showKeywords}
                         abbreviated={true}
-                        nextHearingDate={upcomingHearings[bill.id] ?? null}
+                        upcomingHearingDates={upcomingHearings[bill.id] ?? []}
                         onRefreshed={(updated) =>
                           setBills((prev) => prev.map((b) => b.id === updated.id ? updated : b))
                         }
@@ -506,7 +592,8 @@ export default function Home() {
                   showDescription={showDescription}
                   selectedOutcomes={selectedOutcomes}
                   showKeywords={showKeywords}
-                  nextHearingDate={upcomingHearings[bill.id] ?? null}
+                  upcomingHearingDates={upcomingHearings[bill.id] ?? []}
+                  recentHearingDates={recentHearings[bill.id] ?? []}
                   onRefreshed={(updated) =>
                     setBills((prev) => prev.map((b) => b.id === updated.id ? updated : b))
                   }

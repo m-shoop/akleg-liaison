@@ -39,6 +39,13 @@ export async function fetchUpcomingHearings({ legislatureSession = 34 } = {}) {
   return res.json(); // { [bill_id]: "YYYY-MM-DD" }
 }
 
+export async function fetchRecentHearings({ legislatureSession = 34 } = {}) {
+  const params = new URLSearchParams({ legislature_session: legislatureSession });
+  const res = await fetch(`${API}/meetings/recent-bill-hearings?${params}`);
+  if (!res.ok) throw new Error("Failed to fetch recent hearings");
+  return res.json(); // { [bill_id]: "YYYY-MM-DD" }
+}
+
 export async function updateHidden(meetingId, hidden, token) {
   const res = await fetch(`${API}/meetings/${meetingId}/hidden`, {
     method: "PATCH",

@@ -6,14 +6,18 @@
 }
 
 .pageHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 2rem;
   margin-bottom: 2rem;
   padding-bottom: 1.25rem;
   border-bottom: 2px solid var(--color-border);
-  flex-wrap: wrap;
+}
+
+.headerCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .title {
@@ -33,7 +37,6 @@
   gap: 0.2rem;
   font-size: 0.75rem;
   color: var(--color-text-secondary);
-  text-align: right;
 }
 
 .legendItem code {
@@ -71,6 +74,30 @@
   font-family: inherit;
   background: var(--color-surface);
   color: var(--color-text-primary);
+}
+
+.weekShortcuts {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  align-items: center;
+}
+
+.clearDatesBtn {
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1.5px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.clearDatesBtn:hover {
+  border-color: #b33a3a;
+  color: #b33a3a;
 }
 
 .btnRow {

@@ -15,6 +15,7 @@ from app.repositories.job_repository import (
 from app.repositories.audit_log_repository import log_action
 from app.repositories.meeting_repository import (
     get_meeting_by_id,
+    get_recent_hearing_dates,
     get_upcoming_hearing_dates,
     list_meetings,
     update_dps_notes,
@@ -46,14 +47,24 @@ async def _run_scrape_job(
             await db.commit()
 
 
-@router.get("/meetings/upcoming-bill-hearings", response_model=dict[int, date])
+@router.get("/meetings/upcoming-bill-hearings", response_model=dict[int, list[date]])
 async def upcoming_bill_hearings(
     legislature_session: int = Query(34),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return {bill_id: earliest_upcoming_meeting_date} for all tracked bills
-    with an active hearing scheduled today or later."""
+    """Return {bill_id: [upcoming_dates]} (up to 4 per bill) for all bills
+    with active hearings scheduled today or later."""
     return await get_upcoming_hearing_dates(db, legislature_session, date.today())
+
+
+@router.get("/meetings/recent-bill-hearings", response_model=dict[int, list[date]])
+async def recent_bill_hearings(
+    legislature_session: int = Query(34),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return {bill_id: [past_dates]} (up to 3 most recent per bill, asc) for
+    all bills with active hearings before today."""
+    return await get_recent_hearing_dates(db, legislature_session, date.today())
 
 
 @router.get("/meetings", response_model=list[MeetingRead])

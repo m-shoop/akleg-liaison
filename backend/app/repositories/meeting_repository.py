@@ -11,11 +11,12 @@ async def get_upcoming_hearing_dates(
     session: AsyncSession,
     legislature_session: int,
     as_of: date,
-) -> dict[int, date]:
-    """Return {bill_id: earliest_upcoming_meeting_date} for all bills that
-    appear as bill items on active meetings on or after `as_of`."""
+    limit: int = 4,
+) -> dict[int, list[date]]:
+    """Return {bill_id: [upcoming_dates asc]} (up to `limit` per bill) for all
+    bills that appear as bill items on active meetings on or after `as_of`."""
     stmt = (
-        select(AgendaItem.bill_id, func.min(Meeting.meeting_date))
+        select(AgendaItem.bill_id, Meeting.meeting_date)
         .join(Meeting, AgendaItem.meeting_id == Meeting.id)
         .where(
             AgendaItem.bill_id.isnot(None),
@@ -24,10 +25,47 @@ async def get_upcoming_hearing_dates(
             Meeting.legislature_session == legislature_session,
             Meeting.meeting_date >= as_of,
         )
-        .group_by(AgendaItem.bill_id)
+        .distinct()
+        .order_by(AgendaItem.bill_id, Meeting.meeting_date.asc())
     )
     result = await session.execute(stmt)
-    return {row[0]: row[1] for row in result.all()}
+    grouped: dict[int, list[date]] = {}
+    for bill_id, meeting_date in result.all():
+        dates = grouped.setdefault(bill_id, [])
+        if len(dates) < limit:
+            dates.append(meeting_date)
+    return grouped
+
+
+async def get_recent_hearing_dates(
+    session: AsyncSession,
+    legislature_session: int,
+    as_of: date,
+    limit: int = 3,
+) -> dict[int, list[date]]:
+    """Return {bill_id: [past_dates asc]} (up to `limit` most recent per bill,
+    in chronological order) for bills on active meetings strictly before `as_of`."""
+    stmt = (
+        select(AgendaItem.bill_id, Meeting.meeting_date)
+        .join(Meeting, AgendaItem.meeting_id == Meeting.id)
+        .where(
+            AgendaItem.bill_id.isnot(None),
+            AgendaItem.is_bill == True,  # noqa: E712
+            Meeting.is_active == True,  # noqa: E712
+            Meeting.legislature_session == legislature_session,
+            Meeting.meeting_date < as_of,
+        )
+        .distinct()
+        .order_by(AgendaItem.bill_id, Meeting.meeting_date.desc())
+    )
+    result = await session.execute(stmt)
+    grouped: dict[int, list[date]] = {}
+    for bill_id, meeting_date in result.all():
+        dates = grouped.setdefault(bill_id, [])
+        if len(dates) < limit:
+            dates.append(meeting_date)
+    # Reverse each list so dates are in ascending (chronological) order
+    return {bill_id: list(reversed(dates)) for bill_id, dates in grouped.items()}
 
 
 async def upsert_meeting(

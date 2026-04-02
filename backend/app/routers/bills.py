@@ -130,17 +130,22 @@ async def list_bills_route(
 @router.patch("/{bill_id}/tracked", response_model=BillRead)
 async def update_bill_tracked(
     bill_id: int,
+    background_tasks: BackgroundTasks,
     is_tracked: bool = Query(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_editor),
 ):
-    """Set or clear the is_tracked flag on a bill."""
+    """Set or clear the is_tracked flag on a bill. Marking as tracked triggers an immediate sync."""
     bill = await set_bill_tracked(db, bill_id, is_tracked)
     if bill is None:
         raise HTTPException(status_code=404, detail="Bill not found")
     action = "bill_tracked" if is_tracked else "bill_untracked"
     await log_action(db, current_user, action, entity_type="bill", entity_id=bill_id, details={"bill_number": bill.bill_number})
+    if is_tracked:
+        job_id = await create_job(db, job_type="refresh_bill")
     await db.commit()
+    if is_tracked:
+        background_tasks.add_task(_run_refresh_job, job_id, bill.bill_number, bill.session)
     return await _get_bill_or_404(bill_id, db)
 
 

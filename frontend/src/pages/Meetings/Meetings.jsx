@@ -5,14 +5,8 @@ import { fetchMeetings, scrapeMeetings, updateDpsNotes, updateHidden } from "../
 import { useJob } from "../../hooks/useJob";
 import Toast from "../../components/Toast/Toast";
 import { createMeetingsTour } from "../../tours/meetingsTour";
+import { weekBounds, weekBoundsTitle } from "../../utils/weekBounds";
 import styles from "./Meetings.module.css";
-
-function weekBounds() {
-  const today = new Date();
-  const sunday = new Date(today);
-  sunday.setDate(today.getDate() - today.getDay()); // Sunday of this week
-  return sunday.toISOString().slice(0, 10);
-}
 
 function fmt(isoDate) {
   return new Date(isoDate + "T00:00:00").toLocaleDateString("en-US", {
@@ -256,8 +250,8 @@ function MeetingCard({ meeting, isFirst, globalExpanded, showHidden, onNotesSave
 export default function Meetings() {
   const { isEditor, token } = useAuth();
   const [searchParams] = useSearchParams();
-  const [startDate, setStartDate] = useState(() => searchParams.get("start") || weekBounds());
-  const [endDate, setEndDate] = useState(() => searchParams.get("end") || "");
+  const [startDate, setStartDate] = useState(() => searchParams.get("start") || weekBounds().start);
+  const [endDate, setEndDate] = useState(() => searchParams.get("end") || weekBounds().end);
   const [allMeetings, setAllMeetings] = useState(null);
   const [loading, setLoading] = useState(false);
   const [scrapeJobId, setScrapeJobId] = useState(null);
@@ -325,7 +319,6 @@ export default function Meetings() {
 
   // Derive visible meetings from allMeetings based on showInactive / showHidden
   const hasInactive = allMeetings?.some((m) => !m.is_active) ?? false;
-  const hasHidden = allMeetings?.some((m) => m.hidden) ?? false;
   const meetings = allMeetings
     ? allMeetings
         .filter((m) => showInactive || m.is_active)
@@ -373,7 +366,7 @@ export default function Meetings() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
-        <div>
+        <div className={styles.headerCol}>
           <h1 className={styles.title}>Hearing Schedule</h1>
           {meetings !== null && (
             <p className={styles.subtitle}>
@@ -402,16 +395,52 @@ export default function Meetings() {
               />
             </label>
           </div>
+          <div className={styles.weekShortcuts}>
+            <button
+              className={styles.loadBtn}
+              onClick={() => { const b = weekBounds(-1); setStartDate(b.start); setEndDate(b.end); }}
+              title={weekBoundsTitle(-1)}
+            >
+              Last Week
+            </button>
+            <button
+              className={styles.loadBtn}
+              onClick={() => { const b = weekBounds(0); setStartDate(b.start); setEndDate(b.end); }}
+              title={weekBoundsTitle(0)}
+            >
+              This Week
+            </button>
+            <button
+              className={styles.loadBtn}
+              onClick={() => { const b = weekBounds(1); setStartDate(b.start); setEndDate(b.end); }}
+              title={weekBoundsTitle(1)}
+            >
+              Next Week
+            </button>
+            {(startDate || endDate) && (
+              <button
+                className={styles.clearDatesBtn}
+                onClick={() => { setStartDate(""); setEndDate(""); }}
+              >
+                Clear Dates
+              </button>
+            )}
+          </div>
         </div>
-        <div id="tour-legend" className={styles.legend}>
-          <span className={styles.legendItem}><code>*</code> first hearing in first committee of referral</span>
-          <span className={styles.legendItem}><code>+</code> teleconferenced</span>
-          <span className={styles.legendItem}><code>=</code> previously heard / scheduled</span>
-        </div>
-        <div className={styles.controls}>
+        <div className={styles.headerCol}>
+          <div id="tour-legend" className={styles.legend}>
+            <span className={styles.legendItem}><code>*</code> first hearing in first committee of referral</span>
+            <span className={styles.legendItem}><code>+</code> teleconferenced</span>
+            <span className={styles.legendItem}><code>=</code> previously heard / scheduled</span>
+          </div>
           <div id="tour-controls" className={styles.btnRow}>
             {isEditor && (
-              <button className={styles.scrapeBtn} onClick={handleScrape} disabled={!!scrapeJobId || !endDate}>
+              <button
+                className={styles.scrapeBtn}
+                onClick={handleScrape}
+                disabled={!!scrapeJobId || !startDate || !endDate}
+                title={(!startDate || !endDate) ? "Select both a From and To date to refresh hearings" : undefined}
+              >
                 {scrapeJobId ? "Refreshing" : "Refresh hearings from akleg.gov"}
               </button>
             )}
@@ -434,7 +463,7 @@ export default function Meetings() {
                 {showInactive ? "Hide inactive" : "Show inactive"}
               </button>
             )}
-            {(hasHidden || showHidden) && isEditor && (
+            {isEditor && (
               <div className={styles.toggleGroup}>
                 <button
                   className={`${styles.toggleOption} ${!showHidden ? styles.toggleSelected : ""}`}

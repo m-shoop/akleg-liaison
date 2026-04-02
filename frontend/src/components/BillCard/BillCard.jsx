@@ -6,20 +6,42 @@ import BillTags from "../BillTags/BillTags";
 import OutcomesTable from "../OutcomesTable/OutcomesTable";
 import styles from "./BillCard.module.css";
 
-function sundayOfWeek(isoDate) {
+function weekOf(isoDate) {
   const d = new Date(isoDate + "T00:00:00");
-  d.setDate(d.getDate() - d.getDay());
-  return d.toISOString().slice(0, 10);
+  const sunday = new Date(d);
+  sunday.setDate(d.getDate() - d.getDay());
+  const saturday = new Date(sunday);
+  saturday.setDate(sunday.getDate() + 6);
+  return {
+    start: sunday.toISOString().slice(0, 10),
+    end: saturday.toISOString().slice(0, 10),
+  };
 }
 
-
-function fmtHearingDate(isoDate) {
-  return new Date(isoDate + "T00:00:00").toLocaleDateString("en-US", {
-    month: "short", day: "numeric",
-  });
+function hearingLink(billNumber, isoDate) {
+  const { start, end } = weekOf(isoDate);
+  return `/meetings?search=${encodeURIComponent(billNumber)}&start=${start}&end=${end}&show_hidden=1`;
 }
 
-export default function BillCard({ bill, showDescription, selectedOutcomes, showKeywords = false, abbreviated = false, nextHearingDate = null, onRefreshed: _onRefreshed, onTrackingChanged }) {
+function committeeLink(status) {
+  const match = status?.match(/^\(([HS])\)(.+)/);
+  if (!match) return null;
+  return `https://www.akleg.gov/basis/Committee/Details/34?code=${match[1]}${match[2].trim()}`;
+}
+
+function CalendarIcon({ isoDate, billNumber }) {
+  const d = new Date(isoDate + "T00:00:00");
+  const weekday = d.toLocaleDateString("en-US", { weekday: "short" });
+  const monthDay = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return (
+    <Link to={hearingLink(billNumber, isoDate)} className={`${styles.calIcon} ${styles.calIconUpcoming}`}>
+      <span className={styles.calIconTop}>{weekday}</span>
+      <span className={styles.calIconBottom}>{monthDay}</span>
+    </Link>
+  );
+}
+
+export default function BillCard({ bill, showDescription, selectedOutcomes, showKeywords = false, abbreviated = false, upcomingHearingDates = [], onRefreshed: _onRefreshed, onTrackingChanged }) {
   const { isEditor, token } = useAuth();
   const [tracking, setTracking] = useState(false);
   const [error, setError] = useState(null);
@@ -68,7 +90,13 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, show
       </div>
 
       <div className={styles.metaRow}>
-        <span className={styles.status}>{bill.status ?? "Unknown"}</span>
+        {committeeLink(bill.status) ? (
+          <a href={committeeLink(bill.status)} target="_blank" rel="noreferrer" className={styles.status}>
+            {bill.status}
+          </a>
+        ) : (
+          <span className={styles.status}>{bill.status ?? "Unknown"}</span>
+        )}
         <span className={styles.introduced}>Introduced {introduced}</span>
         {isEditor && (
           <button
@@ -84,34 +112,39 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, show
 
       {error && <p className={styles.error}>{error}</p>}
 
-      {nextHearingDate && (
-        <Link
-          to={`/meetings?search=${encodeURIComponent(bill.bill_number)}&start=${sundayOfWeek(nextHearingDate)}&show_hidden=1`}
-          className={styles.hearingBadge}
-        >
-          Next Hearing: {fmtHearingDate(nextHearingDate)}
-        </Link>
-      )}
-
-      <OutcomesTable
-        events={bill.events}
-        showDescription={showDescription}
-        selectedOutcomes={selectedOutcomes}
-        abbreviated={abbreviated}
-      />
+      <div className={styles.outcomesSection}>
+        <OutcomesTable
+          events={bill.events}
+          showDescription={showDescription}
+          selectedOutcomes={selectedOutcomes}
+          abbreviated={abbreviated}
+        />
+      </div>
       <div className={styles.bottomRow}>
-        <BillTags bill={bill} />
-        {showKeywords && bill.keywords?.length > 0 && (
-          <div className={styles.keywords}>
-            {bill.keywords.map((s) =>
-              s.url ? (
-                <a key={s.keyword} href={s.url} target="_blank" rel="noreferrer" className={styles.keywordPill}>
-                  {s.keyword}
-                </a>
-              ) : (
-                <span key={s.keyword} className={styles.keywordPill}>{s.keyword}</span>
-              )
-            )}
+        <div className={styles.bottomLeft}>
+          <BillTags bill={bill} />
+          {showKeywords && bill.keywords?.length > 0 && (
+            <div className={styles.keywords}>
+              {bill.keywords.map((s) =>
+                s.url ? (
+                  <a key={s.keyword} href={s.url} target="_blank" rel="noreferrer" className={styles.keywordPill}>
+                    {s.keyword}
+                  </a>
+                ) : (
+                  <span key={s.keyword} className={styles.keywordPill}>{s.keyword}</span>
+                )
+              )}
+            </div>
+          )}
+        </div>
+        {upcomingHearingDates.length > 0 && (
+          <div className={styles.hearingsSection}>
+            <div className={styles.hearingsTitle}>Upcoming Hearings</div>
+            <div className={styles.hearingsRow}>
+              {upcomingHearingDates.map((d) => (
+                <CalendarIcon key={d} isoDate={d} billNumber={bill.bill_number} />
+              ))}
+            </div>
           </div>
         )}
       </div>

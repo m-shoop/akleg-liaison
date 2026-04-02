@@ -425,6 +425,66 @@
   margin-top: 0.25rem;
 }
 
+.weekShortcuts {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+}
+
+.clearDatesBtn {
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  border: 1.5px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.clearDatesBtn:hover {
+  border-color: #b33a3a;
+  color: #b33a3a;
+}
+
+.weekShortcutBtn {
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  border: 1.5px solid var(--color-rainy-sky);
+  background: transparent;
+  color: var(--color-rainy-sky);
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.weekShortcutBtn:hover {
+  background-color: var(--color-rainy-sky);
+  color: var(--color-text-on-dark);
+}
+
+.hearingFilterRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.hearingFilterLabel {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.toggleDisabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 @media print {
   .printDateNotice {
     display: none;
