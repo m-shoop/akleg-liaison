@@ -1,3 +1,32 @@
+/* ── AI legend ──────────────────────────────────────────────── */
+
+.aiLegend {
+  margin: 0 0 1rem;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  text-align: right;
+}
+
+@media print {
+  .aiLegend {
+    display: none;
+  }
+}
+
+.aiLegendPrint {
+  display: none;
+}
+
+@media print {
+  .aiLegendPrint {
+    display: block;
+    font-size: 0.6rem;
+    color: #555;
+    margin: 0 0 0.25rem;
+    text-align: right;
+  }
+}
+
 /* ── Report header ─────────────────────────────────────────── */
 
 .reportHeaderToggleRow {
@@ -460,7 +489,8 @@
   transition: background-color 0.15s, color 0.15s;
 }
 
-.weekShortcutBtn:hover {
+.weekShortcutBtn:hover,
+.weekShortcutBtnActive {
   background-color: var(--color-rainy-sky);
   color: var(--color-text-on-dark);
 }

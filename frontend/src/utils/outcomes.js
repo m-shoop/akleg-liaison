@@ -59,8 +59,6 @@ const ABBREVIATIONS = {
   referred_to_committee:   "Ref.",
   rules_to_calendar:       "Rules→Cal",
   amended:                 "Amd.",
-  tabled:                  "Tabled",
-  died_in_committee:       "Died",
   signed_into_law:         "Signed",
   vetoed:                  "Vetoed",
   pocket_vetoed:           "P.Veto",

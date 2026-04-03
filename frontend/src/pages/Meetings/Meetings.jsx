@@ -5,7 +5,7 @@ import { fetchMeetings, scrapeMeetings, updateDpsNotes, updateHidden } from "../
 import { useJob } from "../../hooks/useJob";
 import Toast from "../../components/Toast/Toast";
 import { createMeetingsTour } from "../../tours/meetingsTour";
-import { weekBounds, weekBoundsTitle } from "../../utils/weekBounds";
+import { todayJuneau, weekBounds, weekBoundsTitle } from "../../utils/weekBounds";
 import styles from "./Meetings.module.css";
 
 function fmt(isoDate) {
@@ -363,6 +363,13 @@ export default function Meetings() {
       }, {})
     : {};
 
+  const today = todayJuneau();
+  const isToday = startDate === today && endDate === today;
+  const activeWeek = [-1, 0, 1].find((o) => {
+    const b = weekBounds(o);
+    return startDate === b.start && endDate === b.end;
+  }) ?? null;
+
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
@@ -397,21 +404,27 @@ export default function Meetings() {
           </div>
           <div className={styles.weekShortcuts}>
             <button
-              className={styles.loadBtn}
+              className={`${styles.loadBtn} ${isToday ? styles.loadBtnActive : ""}`}
+              onClick={() => { setStartDate(today); setEndDate(today); }}
+            >
+              Today
+            </button>
+            <button
+              className={`${styles.loadBtn} ${activeWeek === -1 ? styles.loadBtnActive : ""}`}
               onClick={() => { const b = weekBounds(-1); setStartDate(b.start); setEndDate(b.end); }}
               title={weekBoundsTitle(-1)}
             >
               Last Week
             </button>
             <button
-              className={styles.loadBtn}
+              className={`${styles.loadBtn} ${activeWeek === 0 ? styles.loadBtnActive : ""}`}
               onClick={() => { const b = weekBounds(0); setStartDate(b.start); setEndDate(b.end); }}
               title={weekBoundsTitle(0)}
             >
               This Week
             </button>
             <button
-              className={styles.loadBtn}
+              className={`${styles.loadBtn} ${activeWeek === 1 ? styles.loadBtnActive : ""}`}
               onClick={() => { const b = weekBounds(1); setStartDate(b.start); setEndDate(b.end); }}
               title={weekBoundsTitle(1)}
             >

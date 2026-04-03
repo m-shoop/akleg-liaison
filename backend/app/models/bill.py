@@ -37,8 +37,6 @@ class OutcomeType(str, enum.Enum):
     # Committee outcomes
     HEARD_AND_HELD = "heard_and_held"
     MOVED_OUT_OF_COMMITTEE = "moved_out_of_committee"
-    TABLED = "tabled"
-    DIED_IN_COMMITTEE = "died_in_committee"
 
     # Floor / introduction outcomes
     READ_ON_FLOOR = "read_on_floor"

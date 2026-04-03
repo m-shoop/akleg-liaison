@@ -179,8 +179,23 @@ a.keywordPill:hover {
   text-underline-offset: 2px;
 }
 
-.outcomesSection {
+.outcomesWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   margin-top: 0.35rem;
+}
+
+.aiIndicator {
+  font-size: 1rem;
+  flex-shrink: 0;
+  cursor: default;
+  align-self: center;
+}
+
+.outcomesSection {
+  flex: 1;
+  min-width: 0;
   border: 1px solid var(--color-border);
   border-radius: 4px;
   overflow: hidden;

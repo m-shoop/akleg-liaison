@@ -4,6 +4,7 @@ import { setTracked } from "../../api/bills";
 import { useAuth } from "../../context/AuthContext";
 import BillTags from "../BillTags/BillTags";
 import OutcomesTable from "../OutcomesTable/OutcomesTable";
+import { flattenOutcomes } from "../../utils/outcomes";
 import styles from "./BillCard.module.css";
 
 function weekOf(isoDate) {
@@ -45,6 +46,9 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, show
   const { isEditor, token } = useAuth();
   const [tracking, setTracking] = useState(false);
   const [error, setError] = useState(null);
+
+  const visibleOutcomes = flattenOutcomes(bill.events).filter((r) => selectedOutcomes.has(r.outcome_type));
+  const hasAiOutcomes = bill.events.some((e) => e.outcomes.some((o) => o.ai_generated));
 
   const lastSynced = bill.last_sync
     ? new Date(bill.last_sync).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
@@ -119,14 +123,26 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, show
 
       {error && <p className={styles.error}>{error}</p>}
 
-      <div className={styles.outcomesSection}>
-        <OutcomesTable
-          events={bill.events}
-          showDescription={showDescription}
-          selectedOutcomes={selectedOutcomes}
-          abbreviated={abbreviated}
-        />
-      </div>
+      {visibleOutcomes.length > 0 && (
+        <div className={styles.outcomesWrapper}>
+          {hasAiOutcomes && (
+            <span
+              className={styles.aiIndicator}
+              title="AI-generated — may contain inaccuracies"
+            >
+              ✨
+            </span>
+          )}
+          <div className={styles.outcomesSection}>
+            <OutcomesTable
+              events={bill.events}
+              showDescription={showDescription}
+              selectedOutcomes={selectedOutcomes}
+              abbreviated={abbreviated}
+            />
+          </div>
+        </div>
+      )}
       <div className={styles.bottomRow}>
         <div className={styles.bottomLeft}>
           <BillTags bill={bill} />

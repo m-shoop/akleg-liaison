@@ -105,11 +105,6 @@
   gap: 0.5rem;
 }
 
-.loadBtnActive {
-  background-color: var(--color-rainy-sky);
-  color: var(--color-text-on-dark);
-}
-
 .toggleGroup {
   display: flex;
   border-radius: 4px;
@@ -156,7 +151,8 @@
 }
 
 .loadBtn:hover:not(:disabled),
-.scrapeBtn:hover:not(:disabled) {
+.scrapeBtn:hover:not(:disabled),
+.loadBtnActive {
   background-color: var(--color-rainy-sky);
   color: var(--color-text-on-dark);
 }

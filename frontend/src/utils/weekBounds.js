@@ -4,6 +4,10 @@ export function fmtLongDate(isoDate) {
   return str.replace(/\d+$/, (n) => ordinal(Number(n)));
 }
 
+export function todayJuneau() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Juneau" });
+}
+
 export function weekBounds(offsetWeeks = 0) {
   const today = new Date();
   const sunday = new Date(today);

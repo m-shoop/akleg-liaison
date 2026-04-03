@@ -8,7 +8,7 @@ import OutcomeFilter from "../../components/OutcomeFilter/OutcomeFilter";
 import Toast from "../../components/Toast/Toast";
 import { createBillsTour } from "../../tours/billsTour";
 import { DEFAULT_SELECTED } from "../../utils/outcomeTypes";
-import { weekBounds, weekBoundsTitle } from "../../utils/weekBounds";
+import { todayJuneau, weekBounds, weekBoundsTitle } from "../../utils/weekBounds";
 import styles from "./Home.module.css";
 
 function fmtDate(isoDate) {
@@ -31,15 +31,18 @@ function fmtDateRange(startIso, endIso) {
   if (!startIso || !endIso) return "";
   const s = new Date(startIso + "T00:00:00");
   const e = new Date(endIso + "T00:00:00");
+  if (startIso === endIso) {
+    return `${_MONTHS[s.getMonth()]} ${s.getDate()}, ${s.getFullYear()}`;
+  }
   if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${_MONTHS[s.getMonth()]} ${s.getDate()}-${e.getDate()}, ${s.getFullYear()}`;
+    return `${_MONTHS[s.getMonth()]} ${s.getDate()}\u2013${e.getDate()}, ${s.getFullYear()}`;
   }
   return `${_MONTHS[s.getMonth()]} ${s.getDate()} \u2013 ${_MONTHS[e.getMonth()]} ${e.getDate()}, ${e.getFullYear()}`;
 }
 
 function fmtUpdated(isoDate) {
   const d = new Date(isoDate + "T00:00:00");
-  return `${d.getMonth() + 1}-${d.getDate()}-${d.getFullYear()}`;
+  return `${_MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
 const DEFAULT_HEADER_BODY =
@@ -83,15 +86,12 @@ export default function Home() {
   const [headerIncluded, setHeaderIncluded] = useState(
     () => localStorage.getItem("rh_included") === "true"
   );
-  const [headerUpdated, setHeaderUpdated] = useState(
-    () => localStorage.getItem("rh_updated") || new Date().toISOString().slice(0, 10)
-  );
+  const [headerUpdated, setHeaderUpdated] = useState(todayJuneau);
   const [headerBody, setHeaderBody] = useState(
     () => localStorage.getItem("rh_body") || DEFAULT_HEADER_BODY
   );
   const contentRef = useRef(null);
 
-  useEffect(() => { localStorage.setItem("rh_updated", headerUpdated); }, [headerUpdated]);
   useEffect(() => { localStorage.setItem("rh_body", headerBody); }, [headerBody]);
   useEffect(() => { localStorage.setItem("rh_included", headerIncluded); }, [headerIncluded]);
 
@@ -197,6 +197,13 @@ export default function Home() {
       handlePrint();
     }
   }, [pendingPrint, handlePrint]);
+
+  const today = todayJuneau();
+  const isToday = printStartDate === today && printEndDate === today;
+  const activeWeek = [-1, 0, 1].find((o) => {
+    const b = weekBounds(o);
+    return printStartDate === b.start && printEndDate === b.end;
+  }) ?? null;
 
   async function exportPDF() {
     if (printStartDate && printEndDate) {
@@ -325,21 +332,27 @@ export default function Home() {
             </div>
             <div className={styles.weekShortcuts}>
               <button
-                className={styles.weekShortcutBtn}
+                className={`${styles.weekShortcutBtn} ${isToday ? styles.weekShortcutBtnActive : ""}`}
+                onClick={() => { setPrintStartDate(today); setPrintEndDate(today); }}
+              >
+                Today
+              </button>
+              <button
+                className={`${styles.weekShortcutBtn} ${activeWeek === -1 ? styles.weekShortcutBtnActive : ""}`}
                 onClick={() => { const b = weekBounds(-1); setPrintStartDate(b.start); setPrintEndDate(b.end); }}
                 title={weekBoundsTitle(-1)}
               >
                 Last Week
               </button>
               <button
-                className={styles.weekShortcutBtn}
+                className={`${styles.weekShortcutBtn} ${activeWeek === 0 ? styles.weekShortcutBtnActive : ""}`}
                 onClick={() => { const b = weekBounds(0); setPrintStartDate(b.start); setPrintEndDate(b.end); }}
                 title={weekBoundsTitle(0)}
               >
                 This Week
               </button>
               <button
-                className={styles.weekShortcutBtn}
+                className={`${styles.weekShortcutBtn} ${activeWeek === 1 ? styles.weekShortcutBtnActive : ""}`}
                 onClick={() => { const b = weekBounds(1); setPrintStartDate(b.start); setPrintEndDate(b.end); }}
                 title={weekBoundsTitle(1)}
               >
@@ -382,6 +395,12 @@ export default function Home() {
           </div>
         </div>
       </div>
+      <p className={styles.aiLegend}>
+        This is a research tool and not an official legislative record.
+      </p>
+      <p className={styles.aiLegend}>
+        ✨ Content marked with this symbol is AI-generated and may contain false information. Please review for accuracy.
+      </p>
 
       {loading && <p className={styles.notice}>Loading bills…</p>}
       {error   && <p className={styles.error}>Error: {error}</p>}
@@ -487,6 +506,10 @@ export default function Home() {
             <div className={styles.printSectionDivider} />
           </div>
         )}
+
+        <p className={styles.aiLegendPrint}>
+          ✨ Content marked with this symbol is AI-generated and may contain false information. Please review for accuracy.
+        </p>
 
         <div className={styles.printHeader}>
           <h1 className={styles.printTitle}>Legislative Measures</h1>

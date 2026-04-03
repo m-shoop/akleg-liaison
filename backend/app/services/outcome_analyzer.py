@@ -103,7 +103,8 @@ Enum guidance:
 (first, second, or third reading). Do not use "read_first_time", \
 "read_second_time", or "read_third_time" — those are not valid values.
 - Use "other" for any action that does not clearly match another enum value \
-(e.g. advanced to third reading, engrossment, effective date notes).
+(e.g. advanced to third reading, engrossment, effective date notes, a motion \
+to table an amendment, or a bill dying in committee).
 - For "referred_to_committee", the committee field must be the DESTINATION \
 committee named in the referral sentence — never the committee that wrote \
 the report. The reporting committee and the destination committee are always \

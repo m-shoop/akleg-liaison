@@ -8,8 +8,6 @@ export const OUTCOME_TYPES = [
     outcomes: [
       { value: "heard_and_held",          label: "Heard and Held" },
       { value: "moved_out_of_committee",  label: "Moved Out of Committee" },
-      { value: "tabled",                  label: "Tabled" },
-      { value: "died_in_committee",       label: "Died in Committee" },
     ],
   },
   {
