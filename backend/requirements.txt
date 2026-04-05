@@ -13,3 +13,4 @@ mistralai==1.2.5
 python-jose[cryptography]==3.3.0
 python-multipart==0.0.22
 bcrypt==4.0.1
+pdfplumber==0.11.4

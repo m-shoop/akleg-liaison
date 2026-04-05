@@ -179,6 +179,21 @@ a.keywordPill:hover {
   text-underline-offset: 2px;
 }
 
+.sectionTitle {
+  font-size: 0.48rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  margin: 0.3rem 0 0.1rem;
+}
+
+@media print {
+  .noPrint {
+    display: none;
+  }
+}
+
 .outcomesWrapper {
   display: flex;
   align-items: center;

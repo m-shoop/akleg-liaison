@@ -105,6 +105,9 @@ class Bill(Base):
     keywords: Mapped[list["BillKeyword"]] = relationship(
         back_populates="bill", cascade="all, delete-orphan", order_by="BillKeyword.keyword"
     )
+    fiscal_notes: Mapped[list["FiscalNote"]] = relationship(  # type: ignore[name-defined]
+        "FiscalNote", back_populates="bill", cascade="all, delete-orphan"
+    )
 
 
 # ---------------------------------------------------------------------------

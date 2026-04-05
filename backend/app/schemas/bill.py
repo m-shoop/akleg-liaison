@@ -3,6 +3,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict
 
 from app.models.bill import Chamber, EventType, OutcomeType
+from app.schemas.fiscal_note import FiscalNoteRead
 from app.schemas.tag import TagRead
 
 
@@ -69,6 +70,7 @@ class BillRead(BaseModel):
     events: list[BillEventRead]
     tags: list[TagRead]
     keywords: list[BillKeywordRead]
+    fiscal_notes: list[FiscalNoteRead]
 
 
 class BillFetchRequest(BaseModel):

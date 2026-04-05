@@ -1,0 +1,204 @@
+/* Hidden on screen — only rendered when printing */
+.printMeetingsSection {
+  display: none;
+}
+
+@media print {
+  .printMeetingsSection {
+    display: block;
+    margin-bottom: 1.5rem;
+  }
+
+  .printSectionHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 2px solid #333;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.35rem;
+  }
+
+  .printSectionTitle {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: black;
+  }
+
+  .printSectionMeta {
+    font-size: 0.8rem;
+    color: #555;
+  }
+
+  .printDayBlock {
+    margin-bottom: 0.75rem;
+  }
+
+  .printDayHeading {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #666;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 0.3rem;
+    padding-bottom: 0.15rem;
+  }
+
+  .printDayMeetings {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .printMeetingCard {
+    border: 1.5px solid #aaa;
+    border-left: 3px solid #aaa;
+    border-radius: 3px;
+    padding: 0.3rem 0.5rem;
+    page-break-inside: avoid;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .printMeetingMain {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .printMeetingDate {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #666;
+    margin-bottom: 0.1rem;
+  }
+
+  .printHouse {
+    border-color: #5ba3c9;
+    border-left-color: #5ba3c9;
+  }
+
+  .printSenate {
+    border-color: #4a7fb5;
+    border-left-color: #4a7fb5;
+  }
+
+  .printMeetingHeader {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    font-size: 0.75rem;
+    margin-bottom: 0.15rem;
+  }
+
+  .printChamberBadge {
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 0.05rem 0.25rem;
+    border-radius: 2px;
+    background: #eee;
+    color: #333;
+  }
+
+  .printMeetingName {
+    font-weight: 600;
+    color: #1a3a2a;
+  }
+
+  .printMeetingType {
+    color: #666;
+    font-size: 0.7rem;
+  }
+
+  .printMeetingLoc {
+    color: #666;
+    font-size: 0.7rem;
+    margin-left: auto;
+  }
+
+  .printDpsNotes {
+    width: 160px;
+    flex-shrink: 0;
+    border-left: 1px solid #ddd;
+    padding: 0 0.5rem;
+    font-style: italic;
+    color: #444;
+    font-size: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .printAgendaTable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.7rem;
+  }
+
+  .printAgendaTable tr {
+    border-top: 0.5px solid #eee;
+  }
+
+  .printAgendaTable td {
+    padding: 0.08rem 0.4rem;
+    vertical-align: top;
+  }
+
+  .printBillNum {
+    font-weight: 600;
+    color: #1a3a2a;
+    white-space: nowrap;
+    width: 60px;
+  }
+
+  .printBillDesc {
+    /* takes remaining space */
+  }
+
+  .printTeleconf {
+    font-size: 0.62rem;
+    color: #666;
+    white-space: nowrap;
+  }
+
+  .printNotePrefix {
+    font-family: monospace;
+    color: #666;
+    width: 60px;
+  }
+
+  .printNoteContent {
+    color: #555;
+    font-style: italic;
+  }
+
+  .printSectionDivider {
+    border-top: 2px solid #333;
+    margin: 1rem 0 1.5rem;
+  }
+
+  .printEmpty {
+    color: #666;
+    font-size: 0.85rem;
+    margin: 0.5rem 0;
+  }
+
+  .printLastSynced {
+    font-size: 0.6rem;
+    color: #999;
+    text-align: right;
+    margin: 0.1rem 0 0;
+  }
+
+  .printMeetingsSection a {
+    color: inherit;
+    text-decoration: underline;
+  }
+}

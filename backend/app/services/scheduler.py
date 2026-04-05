@@ -24,12 +24,15 @@ from zoneinfo import ZoneInfo
 from app.database import AsyncSessionLocal
 from app.services.bill_scraper import scrape_bill_list
 from app.services.bill_sync import sync_bill_for_scheduler
+from app.services.fiscal_note_sync import sync_all_fiscal_notes
 from app.services.meeting_scraper import scrape_and_store_meetings
 
 logger = logging.getLogger(__name__)
 
 _JUNEAU_TZ = ZoneInfo("America/Anchorage")
-_BILL_SYNC_TIMES = [(4, 5), (16, 5)]  # 4:05 AM and 4:05 PM Juneau
+_BILL_SYNC_TIMES = [(4, 5), (16, 5)]    # 4:05 AM and 4:05 PM Juneau
+_HEARING_SYNC_TIMES = [(4, 5), (16, 5)] # 4:05 AM and 4:05 PM Juneau
+_FISCAL_NOTE_SYNC_TIME = (4, 0)         # 4:00 AM Juneau (daily)
 _LEGISLATURE_SESSION = 34
 
 
@@ -46,15 +49,27 @@ def _seconds_until_next_bill_sync() -> float:
     return (next_run - now).total_seconds()
 
 
-def _seconds_until_next_hearing_sync() -> float:
-    """Return seconds until the next Thursday 4:05 PM Juneau time."""
+def _seconds_until_next_fiscal_sync() -> float:
+    """Return seconds until the next 4:00 AM Juneau time."""
     now = datetime.now(_JUNEAU_TZ)
-    # weekday(): Monday=0 … Thursday=3 … Sunday=6
-    days_ahead = (3 - now.weekday()) % 7
-    candidate = now.replace(hour=16, minute=5, second=0, microsecond=0) + timedelta(days=days_ahead)
+    hour, minute = _FISCAL_NOTE_SYNC_TIME
+    candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if candidate <= now:
-        candidate += timedelta(days=7)
+        candidate += timedelta(days=1)
     return (candidate - now).total_seconds()
+
+
+def _seconds_until_next_hearing_sync() -> float:
+    """Return seconds until the next scheduled hearing sync time in Juneau time."""
+    now = datetime.now(_JUNEAU_TZ)
+    candidates = []
+    for hour, minute in _HEARING_SYNC_TIMES:
+        candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if candidate <= now:
+            candidate += timedelta(days=1)
+        candidates.append(candidate)
+    next_run = min(candidates)
+    return (next_run - now).total_seconds()
 
 
 def _hearing_sync_date_range() -> tuple[date, date]:
@@ -119,10 +134,36 @@ async def scheduler_loop() -> None:
         await _sync_all_bills()
 
 
+async def _sync_fiscal_notes() -> None:
+    """Fetch and persist fiscal notes for all known bills."""
+    logger.info("[scheduler] Starting fiscal note sync.")
+    try:
+        async with AsyncSessionLocal() as db:
+            await sync_all_fiscal_notes(db)
+        logger.info("[scheduler] Fiscal note sync complete.")
+    except Exception as exc:
+        logger.warning("[scheduler] Error during fiscal note sync: %s", exc)
+
+
+async def fiscal_note_scheduler_loop() -> None:
+    """
+    Fiscal note sync loop. Runs daily at 4:00 AM Juneau time.
+    Designed to run as a fire-and-forget asyncio.Task.
+    """
+    while True:
+        wait = _seconds_until_next_fiscal_sync()
+        next_run = datetime.now(_JUNEAU_TZ) + timedelta(seconds=wait)
+        logger.info(
+            "[scheduler] Next fiscal note sync at %s.",
+            next_run.strftime("%Y-%m-%d %H:%M %Z"),
+        )
+        await asyncio.sleep(wait)
+        await _sync_fiscal_notes()
+
+
 async def hearing_scheduler_loop() -> None:
     """
-    Hearing sync loop. Waits until the next Thursday 4:05 PM Juneau, then
-    syncs committee meeting hearings for the following week (Sunday–Saturday).
+    Hearing sync loop. Runs at 4:05 AM and 4:05 PM Juneau time daily.
     Designed to run as a fire-and-forget asyncio.Task.
     """
     while True:

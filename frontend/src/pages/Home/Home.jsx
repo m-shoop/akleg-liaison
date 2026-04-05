@@ -5,63 +5,14 @@ import { fetchBills } from "../../api/bills";
 import { fetchMeetings, fetchUpcomingHearings } from "../../api/meetings";
 import BillCard from "../../components/BillCard/BillCard";
 import OutcomeFilter from "../../components/OutcomeFilter/OutcomeFilter";
+import PrintMeetingsSection from "../../components/PrintMeetingsSection/PrintMeetingsSection";
+import ReportHeaderEditor from "../../components/ReportHeaderEditor/ReportHeaderEditor";
+import SyncSchedule from "../../components/SyncSchedule/SyncSchedule";
 import Toast from "../../components/Toast/Toast";
 import { createBillsTour } from "../../tours/billsTour";
 import { DEFAULT_SELECTED } from "../../utils/outcomeTypes";
 import { todayJuneau, weekBounds, weekBoundsTitle } from "../../utils/weekBounds";
 import styles from "./Home.module.css";
-
-function fmtDate(isoDate) {
-  return new Date(isoDate + "T00:00:00").toLocaleDateString("en-US", {
-    weekday: "short", month: "short", day: "numeric",
-  });
-}
-
-function fmtTime(timeStr) {
-  if (!timeStr) return "";
-  const [h, m] = timeStr.split(":").map(Number);
-  const ampm = h >= 12 ? "PM" : "AM";
-  const hour = h % 12 || 12;
-  return `${hour}:${String(m).padStart(2, "0")} ${ampm}`;
-}
-
-const _MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-
-function fmtDateRange(startIso, endIso) {
-  if (!startIso || !endIso) return "";
-  const s = new Date(startIso + "T00:00:00");
-  const e = new Date(endIso + "T00:00:00");
-  if (startIso === endIso) {
-    return `${_MONTHS[s.getMonth()]} ${s.getDate()}, ${s.getFullYear()}`;
-  }
-  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${_MONTHS[s.getMonth()]} ${s.getDate()}\u2013${e.getDate()}, ${s.getFullYear()}`;
-  }
-  return `${_MONTHS[s.getMonth()]} ${s.getDate()} \u2013 ${_MONTHS[e.getMonth()]} ${e.getDate()}, ${e.getFullYear()}`;
-}
-
-function fmtUpdated(isoDate) {
-  const d = new Date(isoDate + "T00:00:00");
-  return `${_MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-}
-
-const DEFAULT_HEADER_BODY =
-`Call from Juneau: 586-9085
-Call from Anchorage: 563-9085
-Anywhere else (toll free): 844-586-9085
-
-Let the operator know which committee hearing you need to be connected to, as a testifier.
-Please also use the chat feature in MS Teams so we can send each other notes during the hearing.
-
-Hearings will be teleconferenced and/or streamed live at www.AKL.tv. *Remember there is a considerable delay while streaming so be sure to rely on your copy of the slide deck and refer to slide #'s when speaking.`;
-
-function groupByDate(meetings) {
-  return meetings.reduce((acc, m) => {
-    if (!acc[m.meeting_date]) acc[m.meeting_date] = [];
-    acc[m.meeting_date].push(m);
-    return acc;
-  }, {});
-}
 
 export default function Home() {
   const location = useLocation();
@@ -82,18 +33,7 @@ export default function Home() {
   const [pendingPrint, setPendingPrint] = useState(false);
   const [filterToHearings, setFilterToHearings] = useState(false);
   const [hearingBillIds, setHearingBillIds] = useState(null);
-  const [headerOpen, setHeaderOpen] = useState(false);
-  const [headerIncluded, setHeaderIncluded] = useState(
-    () => localStorage.getItem("rh_included") === "true"
-  );
-  const [headerUpdated, setHeaderUpdated] = useState(todayJuneau);
-  const [headerBody, setHeaderBody] = useState(
-    () => localStorage.getItem("rh_body") || DEFAULT_HEADER_BODY
-  );
   const contentRef = useRef(null);
-
-  useEffect(() => { localStorage.setItem("rh_body", headerBody); }, [headerBody]);
-  useEffect(() => { localStorage.setItem("rh_included", headerIncluded); }, [headerIncluded]);
 
   // Auto-off when either date is cleared
   useEffect(() => {
@@ -402,6 +342,12 @@ export default function Home() {
         ✨ Content marked with this symbol is AI-generated and may contain false information. Please review for accuracy.
       </p>
 
+      <SyncSchedule entries={[
+        { label: "Bills & Legislative Outcomes", frequency: "Daily at 4:05 AM and 4:05 PM (Juneau time)" },
+        { label: "Fiscal Notes",                 frequency: "Daily at 4:00 AM (Juneau time)" },
+        { label: "Hearings",                     frequency: "Daily at 4:05 AM and 4:05 PM (Juneau time)" },
+      ]} />
+
       {loading && <p className={styles.notice}>Loading bills…</p>}
       {error   && <p className={styles.error}>Error: {error}</p>}
       <Toast message={toast?.message} type={toast?.type} onDismiss={() => setToast(null)} />
@@ -411,101 +357,8 @@ export default function Home() {
       )}
 
       <div ref={contentRef}>
-        {headerIncluded && (
-          <div className={styles.printReportHeader}>
-            <p className={styles.printRhTitle}>Legislative Committee Hearing Schedule</p>
-            <p className={styles.printRhSubtitle}>Department of Public Safety (DPS)</p>
-            {fmtDateRange(printStartDate, printEndDate) && (
-              <p className={styles.printRhMeta}>{fmtDateRange(printStartDate, printEndDate)}</p>
-            )}
-            <p className={styles.printRhMeta}>Updated {fmtUpdated(headerUpdated)}</p>
-            <p className={styles.printRhBody}>{headerBody}</p>
-          </div>
-        )}
-        {printMeetings !== null && (
-          <div className={styles.printMeetingsSection}>
-            <div className={styles.printSectionHeader}>
-              <span className={styles.printSectionTitle}>Committee Hearings</span>
-              {printStartDate && printEndDate && (
-                <span className={styles.printSectionMeta}>
-                  {fmtDate(printStartDate)} – {fmtDate(printEndDate)}
-                </span>
-              )}
-            </div>
-            {printMeetings.filter((m) => !m.hidden).length === 0 ? (
-              <p className={styles.printEmpty}>No meetings found for this date range.</p>
-            ) : (
-              Object.keys(groupByDate(printMeetings.filter((m) => !m.hidden))).sort().map((dateKey) => (
-                <div key={dateKey} className={styles.printDayBlock}>
-                  <div className={styles.printDayHeading}>{fmtDate(dateKey)}</div>
-                  <div className={styles.printDayMeetings}>
-                    {groupByDate(printMeetings.filter((m) => !m.hidden))[dateKey].map((m) => (
-                      <div key={m.id}>
-                      <div
-                        className={`${styles.printMeetingCard} ${m.chamber === "H" ? styles.printHouse : styles.printSenate}`}
-                      >
-                        <div className={styles.printMeetingMain}>
-                          <div className={styles.printMeetingDate}>
-                            <span>{fmtDate(m.meeting_date)}</span>
-                            {m.meeting_time && <span>{fmtTime(m.meeting_time)}</span>}
-                          </div>
-                          <div className={styles.printMeetingHeader}>
-                            <span className={styles.printChamberBadge}>{m.chamber}</span>
-                            {m.committee_url ? (
-                              <a href={m.committee_url} className={styles.printMeetingName}>{m.committee_name}</a>
-                            ) : (
-                              <span className={styles.printMeetingName}>{m.committee_name}</span>
-                            )}
-                            <span className={styles.printMeetingType}>{m.committee_type}</span>
-                            {m.location && (
-                              <span className={styles.printMeetingLoc}>{m.location}</span>
-                            )}
-                          </div>
-                          {m.agenda_items.length > 0 && (
-                            <table className={styles.printAgendaTable}>
-                              <tbody>
-                                {m.agenda_items.map((item) =>
-                                  item.is_bill ? (
-                                    <tr key={item.id}>
-                                      <td className={styles.printBillNum}>
-                                        {item.prefix && `${item.prefix} `}
-                                        {item.url ? (
-                                          <a href={item.url}>{item.bill_number}</a>
-                                        ) : (
-                                          item.bill_number
-                                        )}
-                                      </td>
-                                      <td className={styles.printBillDesc}>{item.content}</td>
-                                      <td className={styles.printTeleconf}>{item.is_teleconferenced ? "TC" : ""}</td>
-                                    </tr>
-                                  ) : (
-                                    <tr key={item.id}>
-                                      <td className={styles.printNotePrefix}>{item.prefix ?? ""}</td>
-                                      <td className={styles.printNoteContent}>{item.content}</td>
-                                      <td className={styles.printTeleconf}>{item.is_teleconferenced ? "TC" : ""}</td>
-                                    </tr>
-                                  )
-                                )}
-                              </tbody>
-                            </table>
-                          )}
-                        </div>
-                        <div className={styles.printDpsNotes}>{m.dps_notes ?? ""}</div>
-                      </div>
-                      {m.last_sync && (
-                        <p className={styles.printLastSynced}>
-                          Synced {new Date(m.last_sync).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                        </p>
-                      )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))
-            )}
-            <div className={styles.printSectionDivider} />
-          </div>
-        )}
+        <ReportHeaderEditor printStartDate={printStartDate} printEndDate={printEndDate} />
+        <PrintMeetingsSection meetings={printMeetings} startDate={printStartDate} endDate={printEndDate} />
 
         <p className={styles.aiLegendPrint}>
           ✨ Content marked with this symbol is AI-generated and may contain false information. Please review for accuracy.
@@ -518,58 +371,6 @@ export default function Home() {
             {sortedBills.length !== 1 ? "s" : ""} · Report generated {reportDate}
           </p>
         </div>
-
-        <div id="tour-report-header" className={`${styles.reportHeaderToggleRow} ${!headerIncluded ? styles.reportHeaderExcluded : ""}`}>
-          <button className={styles.reportHeaderToggle} onClick={() => setHeaderOpen((v) => !v)}>
-            {headerOpen ? "▾ Hide report header" : "▸ Report header"}
-          </button>
-        </div>
-
-        {headerOpen && (
-          <div className={`${styles.reportHeader} ${!headerIncluded ? styles.reportHeaderExcluded : ""}`}>
-            <label className={styles.rhIncludeLabel}>
-              <input
-                type="checkbox"
-                checked={headerIncluded}
-                onChange={(e) => {
-                  setHeaderIncluded(e.target.checked);
-                  if (!e.target.checked) setHeaderOpen(false);
-                }}
-              />
-              Include in PDF
-            </label>
-            <div className={styles.reportHeaderPreview}>
-              <p className={styles.rhTitle}>Legislative Committee Hearing Schedule</p>
-              <p className={styles.rhSubtitle}>Department of Public Safety (DPS)</p>
-              {fmtDateRange(printStartDate, printEndDate) && (
-                <p className={styles.rhMeta}>{fmtDateRange(printStartDate, printEndDate)}</p>
-              )}
-              <p className={styles.rhMeta}>Updated {fmtUpdated(headerUpdated)}</p>
-              <p className={styles.rhBody}>{headerBody}</p>
-            </div>
-            <div className={styles.reportHeaderControls}>
-              <label className={styles.rhControlLabel}>
-                Updated date
-                <input
-                  type="date"
-                  value={headerUpdated}
-                  onChange={(e) => setHeaderUpdated(e.target.value)}
-                  className={styles.rhDateInput}
-                />
-              </label>
-              <label className={styles.rhControlLabel}>
-                Body text
-                <textarea
-                  className={styles.rhTextarea}
-                  value={headerBody}
-                  onChange={(e) => setHeaderBody(e.target.value)}
-                  rows={8}
-                />
-              </label>
-              <p className={styles.rhNote}>Date range is pulled from the meeting date fields in the print controls above.</p>
-            </div>
-          </div>
-        )}
 
         {sideBySide ? (
           <div className={styles.sideBySideGrid}>

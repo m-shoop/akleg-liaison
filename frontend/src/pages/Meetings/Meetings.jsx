@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { fetchMeetings, scrapeMeetings, updateDpsNotes, updateHidden } from "../../api/meetings";
+import { fetchMeetings, scrapeMeetings } from "../../api/meetings";
 import { useJob } from "../../hooks/useJob";
+import SyncSchedule from "../../components/SyncSchedule/SyncSchedule";
 import Toast from "../../components/Toast/Toast";
+import MeetingCard from "../../components/MeetingCard/MeetingCard";
 import { createMeetingsTour } from "../../tours/meetingsTour";
 import { todayJuneau, weekBounds, weekBoundsTitle } from "../../utils/weekBounds";
 import styles from "./Meetings.module.css";
@@ -14,237 +16,6 @@ function fmt(isoDate) {
     month: "short",
     day: "numeric",
   });
-}
-
-function fmtTime(timeStr) {
-  if (!timeStr) return "";
-  const [h, m] = timeStr.split(":").map(Number);
-  const ampm = h >= 12 ? "PM" : "AM";
-  const hour = h % 12 || 12;
-  return `${hour}:${String(m).padStart(2, "0")} ${ampm}`;
-}
-
-function exportToCalendar(meeting) {
-  const chamberLabel = meeting.chamber === "H" ? "House" : "Senate";
-  const summary = `${chamberLabel} ${meeting.committee_name} ${meeting.committee_type}`;
-  const dateStr = meeting.meeting_date.replace(/-/g, "");
-
-  let dtStart, dtEnd;
-  if (meeting.meeting_time) {
-    const [h, m] = meeting.meeting_time.split(":").map(Number);
-    const start = new Date(2000, 0, 1, h, m);
-    const end = new Date(start.getTime() + 60 * 60 * 1000);
-    const pad = (n) => String(n).padStart(2, "0");
-    dtStart = `TZID=America/Anchorage:${dateStr}T${pad(start.getHours())}${pad(start.getMinutes())}00`;
-    dtEnd   = `TZID=America/Anchorage:${dateStr}T${pad(end.getHours())}${pad(end.getMinutes())}00`;
-  } else {
-    dtStart = dateStr;
-    dtEnd   = dateStr;
-  }
-
-  // Build description: notes first, then agenda items
-  const descLines = [];
-  if (meeting.dps_notes) {
-    descLines.push(`Notes: ${meeting.dps_notes}`);
-    descLines.push("");
-  }
-  meeting.agenda_items.forEach((item) => {
-    const prefix = item.prefix ? `${item.prefix} ` : "";
-    if (item.is_bill) {
-      descLines.push(`${prefix}${item.bill_number} — ${item.content}`);
-    } else {
-      descLines.push(`${prefix}${item.content}`);
-    }
-  });
-
-  const escape = (s) => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,");
-  const description = escape(descLines.join("\n")).replace(/\n/g, "\\n");
-
-  const ics = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Leg Up//Meeting Export//EN",
-    "BEGIN:VEVENT",
-    `DTSTART;${dtStart}`,
-    `DTEND;${dtEnd}`,
-    `SUMMARY:${escape(summary)}`,
-    `DESCRIPTION:${description}`,
-    `LOCATION:${escape(meeting.location ?? "")}`,
-    "END:VEVENT",
-    "END:VCALENDAR",
-  ].join("\r\n");
-
-  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${meeting.committee_name.toLowerCase().replace(/\s+/g, "-")}-${meeting.meeting_date}.ics`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function MeetingCard({ meeting, isFirst, globalExpanded, showHidden, onNotesSaved, onHiddenChanged }) {
-  const { isLoggedIn, isEditor, token } = useAuth();
-  const [notes, setNotes] = useState(meeting.dps_notes ?? "");
-  const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const [hidingBusy, setHidingBusy] = useState(false);
-  const [expanded, setExpanded] = useState(globalExpanded);
-
-  useEffect(() => {
-    setExpanded(globalExpanded);
-  }, [globalExpanded]);
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await updateDpsNotes(meeting.id, notes || null, token);
-      setDirty(false);
-      onNotesSaved();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleToggleHidden() {
-    setHidingBusy(true);
-    try {
-      const updated = await updateHidden(meeting.id, !meeting.hidden, token);
-      onHiddenChanged(updated);
-    } finally {
-      setHidingBusy(false);
-    }
-  }
-
-  const chamberLabel = meeting.chamber === "H" ? "House" : "Senate";
-  const inactive = !meeting.is_active;
-  const lastSynced = meeting.last_sync
-    ? new Date(meeting.last_sync).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    : null;
-
-  return (
-    <article id={isFirst ? "tour-first-meeting" : undefined} className={`${styles.card} ${meeting.chamber === "H" ? styles.house : styles.senate} ${inactive ? styles.inactive : ""} ${meeting.hidden ? styles.hiddenMeeting : ""}`}>
-      <div className={styles.cardMain}>
-        {inactive && (
-          <div className={styles.inactiveBanner}>Deactivated — this meeting was removed from the schedule</div>
-        )}
-        {meeting.has_inactive_notes_sibling && (
-          <div className={styles.warningBanner}>
-            A prior version of this meeting has notes — toggle "Show inactive" to view or clear them
-          </div>
-        )}
-        <div className={styles.cardDate}>
-          <span>{fmt(meeting.meeting_date)}</span>
-          <div className={styles.cardDateRight}>
-            {meeting.meeting_time && <span>{fmtTime(meeting.meeting_time)}</span>}
-            <button className={styles.calBtn} onClick={() => exportToCalendar(meeting)} title="Export to Outlook calendar">
-              + Calendar
-            </button>
-          </div>
-        </div>
-        <div className={styles.cardHeader}>
-          <span className={styles.chamberBadge}>{meeting.chamber}</span>
-          {meeting.committee_url ? (
-            <a href={meeting.committee_url} target="_blank" rel="noreferrer" className={styles.committeeName}>
-              {meeting.committee_name}
-            </a>
-          ) : (
-            <span className={styles.committeeName}>{meeting.committee_name}</span>
-          )}
-          <span className={styles.committeeType}>{meeting.committee_type}</span>
-          {meeting.location && (
-            <span className={styles.location}>{meeting.location}</span>
-          )}
-        </div>
-
-        {meeting.agenda_items.length > 0 && (
-          <button
-            className={styles.agendaToggle}
-            onClick={() => setExpanded((v) => !v)}
-          >
-            {expanded ? "▾ Hide agenda" : `▸ Show agenda (${meeting.agenda_items.filter(i => i.is_bill).length} bill${meeting.agenda_items.filter(i => i.is_bill).length !== 1 ? "s" : ""})`}
-          </button>
-        )}
-        {expanded && meeting.agenda_items.length > 0 && (
-          <table className={styles.agendaTable}>
-            <tbody>
-              {meeting.agenda_items.map((item) =>
-                item.is_bill ? (
-                  <tr key={item.id} className={styles.billRow}>
-                    <td className={styles.billNum}>
-                      {item.prefix && <span className={styles.prefix}>{item.prefix} </span>}
-                      {item.url ? (
-                        <a href={item.url} target="_blank" rel="noreferrer" className={styles.billLink}>
-                          {item.bill_number}
-                        </a>
-                      ) : (
-                        item.bill_number
-                      )}
-                    </td>
-                    <td className={styles.billDesc}>{item.content}</td>
-                  </tr>
-                ) : (
-                  <tr key={item.id} className={styles.noteRow}>
-                    <td className={styles.notePrefix}>{item.prefix ?? ""}</td>
-                    <td className={styles.noteCell}>
-                      {item.url ? (
-                        <a href={item.url} target="_blank" rel="noreferrer" className={styles.noteLink}>
-                          {item.content}
-                        </a>
-                      ) : (
-                        item.content
-                      )}
-                    </td>
-                  </tr>
-                )
-              )}
-            </tbody>
-          </table>
-        )}
-        {lastSynced && <p className={styles.lastSynced}>Synced {lastSynced}</p>}
-      </div>
-
-      {isLoggedIn && (
-      <div className={styles.dpsRow}>
-        <label className={styles.dpsLabel}>Notes</label>
-        {isEditor ? (
-          <>
-            <textarea
-              className={styles.dpsInput}
-              value={notes}
-              placeholder={`Notes for ${chamberLabel} ${meeting.committee_name} meeting`}
-              onChange={(e) => { setNotes(e.target.value); setDirty(true); }}
-            />
-            {dirty && (
-              <button className={styles.saveBtn} onClick={handleSave} disabled={saving}>
-                {saving ? "Saving…" : "Save"}
-              </button>
-            )}
-          </>
-        ) : (
-          <p className={styles.dpsReadOnly}>{notes || ""}</p>
-        )}
-      </div>
-      )}
-
-      {isEditor && (
-        <div className={styles.hideRow}>
-          <label className={styles.dpsLabel}>Visibility</label>
-          {meeting.hidden && showHidden && (
-            <p className={styles.hiddenNote}>Hidden from view and PDF</p>
-          )}
-          <button
-            className={`${styles.hideBtn} ${meeting.hidden ? styles.hideBtnActive : ""}`}
-            onClick={handleToggleHidden}
-            disabled={hidingBusy}
-            title={meeting.hidden ? "Unhide this hearing" : "Hide this hearing and remove it from the PDF export."}
-          >
-            {hidingBusy ? "…" : meeting.hidden ? "Unhide" : "Hide"}
-          </button>
-        </div>
-      )}
-    </article>
-  );
 }
 
 export default function Meetings() {
@@ -514,12 +285,17 @@ export default function Meetings() {
         </button>
       </div>
 
+      <SyncSchedule entries={[
+        { label: "Hearings", frequency: "Daily at 4:05 AM and 4:05 PM (Juneau time)" },
+      ]} />
+
       {hiddenMatchCount > 0 && (
         <p className={styles.notice}>
           {hiddenMatchCount} hidden hearing{hiddenMatchCount !== 1 ? "s" : ""} {hiddenMatchCount !== 1 ? "match" : "matches"} your search — turn on &ldquo;Display hidden&rdquo; to view {hiddenMatchCount !== 1 ? "them" : "it"}.
         </p>
       )}
 
+      {loading && <p className={styles.loading}>Loading hearings…</p>}
       {scrapeJobId && (
         <p className={styles.notice}>Refreshing hearings from akleg.gov — please stay on this page…</p>
       )}

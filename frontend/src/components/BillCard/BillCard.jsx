@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { setTracked } from "../../api/bills";
 import { useAuth } from "../../context/AuthContext";
 import BillTags from "../BillTags/BillTags";
+import FiscalNotesTable from "../FiscalNotesTable/FiscalNotesTable";
 import OutcomesTable from "../OutcomesTable/OutcomesTable";
 import { flattenOutcomes } from "../../utils/outcomes";
 import styles from "./BillCard.module.css";
@@ -124,15 +125,18 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, show
       {error && <p className={styles.error}>{error}</p>}
 
       {visibleOutcomes.length > 0 && (
-        <div className={styles.outcomesWrapper}>
-          {hasAiOutcomes && (
-            <span
-              className={styles.aiIndicator}
-              title="AI-generated — may contain inaccuracies"
-            >
-              ✨
-            </span>
-          )}
+        <>
+          <p className={styles.sectionTitle}>
+            Legislative Outcomes
+            {hasAiOutcomes && (
+              <span
+                className={styles.aiIndicator}
+                title="AI-generated — may contain inaccuracies"
+              >
+                {" "}✨
+              </span>
+            )}
+          </p>
           <div className={styles.outcomesSection}>
             <OutcomesTable
               events={bill.events}
@@ -141,7 +145,16 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, show
               abbreviated={abbreviated}
             />
           </div>
-        </div>
+        </>
+      )}
+
+      {bill.fiscal_notes?.some((n) => n.is_active) && (
+        <>
+          <p className={styles.sectionTitle}>Active Fiscal Notes</p>
+          <div className={styles.outcomesSection}>
+            <FiscalNotesTable fiscalNotes={bill.fiscal_notes} />
+          </div>
+        </>
       )}
       <div className={styles.bottomRow}>
         <div className={styles.bottomLeft}>

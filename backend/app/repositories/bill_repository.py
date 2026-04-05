@@ -19,6 +19,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.bill import Bill, BillEvent, BillEventOutcome, BillSponsor, BillKeyword
+from app.models.fiscal_note import FiscalNote
 from app.services.bill_scraper import ScrapedBill, ScrapedEvent
 from app.services.outcome_analyzer import ScrapedOutcome
 
@@ -177,6 +178,7 @@ async def get_bill_by_id(
             selectinload(Bill.events).selectinload(BillEvent.outcomes),
             selectinload(Bill.tags),
             selectinload(Bill.keywords),
+            selectinload(Bill.fiscal_notes),
         )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
@@ -198,6 +200,7 @@ async def list_bills(
             selectinload(Bill.events).selectinload(BillEvent.outcomes),
             selectinload(Bill.tags),
             selectinload(Bill.keywords),
+            selectinload(Bill.fiscal_notes),
         )
         .order_by(Bill.session.desc(), Bill.bill_number)
     )
