@@ -57,14 +57,24 @@ async def _get_event_or_404(event_id: int, db: AsyncSession):
 # ---------------------------------------------------------------------------
 
 async def _run_refresh_job(job_id, bill_number: str, session: int) -> None:
-    """Background task: re-scrapes a bill in its own DB session."""
+    """Background task: re-scrapes a bill and syncs its fiscal notes."""
+    import httpx
+
     from app.database import AsyncSessionLocal
+    from app.services.fiscal_note_sync import load_allnotes_entries, sync_fiscal_notes_for_bill
+
+    allnotes_entries = await load_allnotes_entries()
 
     async with AsyncSessionLocal() as db:
         await set_job_running(db, job_id)
         await db.commit()
         try:
             bill_id = await sync_refresh_bill(db, bill_number, session)
+            if allnotes_entries:
+                async with httpx.AsyncClient() as client:
+                    await sync_fiscal_notes_for_bill(
+                        db, bill_id, bill_number, allnotes_entries, client
+                    )
             await set_job_complete(db, job_id, {"bill_id": bill_id})
             await db.commit()
         except Exception as exc:

@@ -3,6 +3,8 @@ import { useLocation } from "react-router-dom";
 import { useReactToPrint } from "react-to-print";
 import { fetchBills } from "../../api/bills";
 import { fetchMeetings, fetchUpcomingHearings } from "../../api/meetings";
+import { fetchTags } from "../../api/tags";
+import { useAuth } from "../../context/AuthContext";
 import BillCard from "../../components/BillCard/BillCard";
 import OutcomeFilter from "../../components/OutcomeFilter/OutcomeFilter";
 import PrintMeetingsSection from "../../components/PrintMeetingsSection/PrintMeetingsSection";
@@ -16,8 +18,10 @@ import styles from "./Home.module.css";
 
 export default function Home() {
   const location = useLocation();
+  const { isEditor } = useAuth();
   const [toast, setToast] = useState(location.state?.toast ? { message: location.state.toast, type: "success" } : null);
   const [bills, setBills] = useState([]);
+  const [allTags, setAllTags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showDescription, setShowDescription] = useState(false);
@@ -60,6 +64,12 @@ export default function Home() {
       })
       .catch(() => setHearingBillIds(new Set()));
   }, [filterToHearings, printStartDate, printEndDate]);
+
+  useEffect(() => {
+    if (isEditor) {
+      fetchTags().then(setAllTags).catch(() => {});
+    }
+  }, [isEditor]);
 
   useEffect(() => {
     setLoading(true);
@@ -342,13 +352,7 @@ export default function Home() {
         ✨ Content marked with this symbol is AI-generated and may contain false information. Please review for accuracy.
       </p>
 
-      <SyncSchedule entries={[
-        { label: "Bills & Legislative Outcomes", frequency: "Daily at 4:05 AM and 4:05 PM (Juneau time)" },
-        { label: "Fiscal Notes",                 frequency: "Daily at 4:00 AM (Juneau time)" },
-        { label: "Hearings",                     frequency: "Daily at 4:05 AM and 4:05 PM (Juneau time)" },
-      ]} />
-
-      {loading && <p className={styles.notice}>Loading bills…</p>}
+      {loading && <p className={styles.notice}>Loading measures…</p>}
       {error   && <p className={styles.error}>Error: {error}</p>}
       <Toast message={toast?.message} type={toast?.type} onDismiss={() => setToast(null)} />
 
@@ -389,6 +393,7 @@ export default function Home() {
                         selectedOutcomes={selectedOutcomes}
                         showKeywords={showKeywords}
                         abbreviated={true}
+                        allTags={allTags}
                         upcomingHearingDates={upcomingHearings[bill.id] ?? []}
                         onRefreshed={(updated) =>
                           setBills((prev) => prev.map((b) => b.id === updated.id ? updated : b))
@@ -416,6 +421,7 @@ export default function Home() {
                   showDescription={showDescription}
                   selectedOutcomes={selectedOutcomes}
                   showKeywords={showKeywords}
+                  allTags={allTags}
                   upcomingHearingDates={upcomingHearings[bill.id] ?? []}
                   recentHearingDates={recentHearings[bill.id] ?? []}
                   onRefreshed={(updated) =>
@@ -434,6 +440,11 @@ export default function Home() {
           </ul>
         )}
       </div>
+      <SyncSchedule entries={[
+        { label: "Bills, Legislative Outcomes & Fiscal Notes", frequency: "Daily at 4:05 AM and 4:05 PM (Juneau time)" },
+        { label: "Hearings",                     frequency: "Daily at 4:05 AM and 4:05 PM (Juneau time)" },
+      ]} />
     </div>
+
   );
 }

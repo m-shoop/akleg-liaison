@@ -285,10 +285,6 @@ export default function Meetings() {
         </button>
       </div>
 
-      <SyncSchedule entries={[
-        { label: "Hearings", frequency: "Daily at 4:05 AM and 4:05 PM (Juneau time)" },
-      ]} />
-
       {hiddenMatchCount > 0 && (
         <p className={styles.notice}>
           {hiddenMatchCount} hidden hearing{hiddenMatchCount !== 1 ? "s" : ""} {hiddenMatchCount !== 1 ? "match" : "matches"} your search — turn on &ldquo;Display hidden&rdquo; to view {hiddenMatchCount !== 1 ? "them" : "it"}.
@@ -344,6 +340,9 @@ export default function Meetings() {
           );
         });
       })()}
+      <SyncSchedule entries={[
+        { label: "Hearings", frequency: "Daily at 4:05 AM and 4:05 PM (Juneau time)" },
+      ]} />
     </div>
   );
 }

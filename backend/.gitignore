@@ -8,3 +8,4 @@ dist/
 *.egg-info/
 test_scraper.py
 *.dump
+test_fiscal_sync.py

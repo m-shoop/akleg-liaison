@@ -6,6 +6,7 @@ Used by both the HTTP router (manual fetch/refresh) and the background scheduler
 
 import logging
 
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.bill_repository import (
@@ -15,6 +16,7 @@ from app.repositories.bill_repository import (
     upsert_event,
 )
 from app.services.bill_scraper import ScrapedEvent, scrape_bill
+from app.services.fiscal_note_sync import sync_fiscal_notes_for_bill
 from app.services.outcome_analyzer import analyze_event as analyze_event_with_mistral
 
 logger = logging.getLogger(__name__)
@@ -49,13 +51,21 @@ async def refresh_bill(db: AsyncSession, bill_number: str, session: int) -> int:
 
 
 async def sync_bill_for_scheduler(
-    db: AsyncSession, bill_number: str, session: int
+    db: AsyncSession,
+    bill_number: str,
+    session: int,
+    allnotes_entries: list[dict] | None = None,
+    client: httpx.AsyncClient | None = None,
 ) -> None:
     """
     Scheduler scrape: upsert bill metadata, defaulting new bills to untracked.
 
     Bills that already exist in the DB and are untracked are skipped entirely —
-    no web request is made.  Events and outcomes are only processed for tracked bills.
+    no web request is made.  Events, outcomes, and fiscal notes are only
+    processed for tracked bills.
+
+    Pass allnotes_entries (from load_allnotes_entries()) and a shared httpx
+    client to also sync fiscal notes for tracked bills in the same pass.
     """
     is_tracked = await get_bill_tracking_status(db, bill_number, session)
     if is_tracked is False:
@@ -66,3 +76,9 @@ async def sync_bill_for_scheduler(
     bill_id, is_tracked = await upsert_bill(db, scraped, default_tracked=False)
     if is_tracked:
         await analyze_new_events(db, scraped.bill_number, scraped.events, bill_id)
+        if allnotes_entries is not None and client is not None:
+            new_count = await sync_fiscal_notes_for_bill(
+                db, bill_id, bill_number, allnotes_entries, client
+            )
+            if new_count:
+                logger.info("[bill_sync] %s: %d new fiscal note(s).", bill_number, new_count)

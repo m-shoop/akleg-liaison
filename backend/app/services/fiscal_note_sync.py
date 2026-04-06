@@ -1,19 +1,22 @@
 """
-Syncs fiscal notes from legfin.akleg.gov for all bills in the local database.
+Syncs fiscal notes from legfin.akleg.gov.
 
-Algorithm per run:
-  1. Load https://www.legfin.akleg.gov/FiscalNotes/allNotes.php with Playwright
-     to get the list of all bills that have fiscal notes, along with their
-     billVersion and committee params for the API call.
-  2. For each bill entry found, look up the bill in our database.
-  3. If found, call allNotesBill.php (the reverse-engineered PHP endpoint) to
-     get the list of fiscal notes for that bill.
-  4. Parse the response HTML for fiscalNote.php links.
-  5. For each link, upsert into fiscal_notes:
-     - New notes: fetch the PDF, parse fn_department / fn_identifier / control_code.
-     - Existing notes: update is_active=True and last_synced only.
-  6. Mark any previously-known notes that did NOT appear this run as is_active=False.
-  7. Log a system audit entry per bill processed.
+Two entry points:
+
+  load_allnotes_entries()
+      Load allNotes.php once via Playwright and return all bill entries
+      (bill_url_id, bill_version, committee).  Call once per sync cycle
+      and pass the result to sync_fiscal_notes_for_bill() for each bill.
+
+  sync_fiscal_notes_for_bill(db, bill_id, bill_number, allnotes_entries, client)
+      Sync all fiscal notes for a single bill using pre-loaded entries.
+      Per-note algorithm:
+        - fn_department, fn_appropriation, fn_allocation are parsed directly
+          from the allNotesBill.php HTML and updated on every sync.
+        - fn_identifier, control_code, publish_date come from the PDF and are
+          only fetched when the note is new or still missing its identifier.
+      Marks notes that no longer appear in this run as is_active=False.
+      Logs a system audit entry for the bill.
 """
 
 import asyncio
@@ -24,12 +27,10 @@ import re
 from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 from playwright.async_api import async_playwright
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.bill import Bill
 from app.repositories.audit_log_repository import log_system_action
 from app.repositories.fiscal_note_repository import deactivate_missing_notes, upsert_fiscal_note
 
@@ -47,6 +48,12 @@ _LEGISLATURE_SESSION = 34
 def _url_id_to_bill_number(url_id: str) -> str:
     """Convert URL-format bill ID "HB____1" to DB format "HB 1"."""
     return " ".join(url_id.replace("_", " ").split())
+
+
+def _bill_number_to_url_id(bill_number: str) -> str:
+    """Convert DB format "HB 1" to URL format "HB____1" (number right-justified in 5 chars)."""
+    prefix, number = bill_number.split()
+    return prefix + number.rjust(5, "_")
 
 
 def _parse_select_bill_calls(html: str) -> list[dict]:
@@ -73,7 +80,14 @@ def _parse_fiscal_note_links(html: str) -> list[dict]:
     """
     Parse the HTML fragment returned by allNotesBill.php.
 
-    Returns a list of dicts with keys: url (full), session_id (sid param).
+    Returns a list of dicts with keys:
+      url, session_id, fn_department, fn_appropriation, fn_allocation.
+
+    Department, appropriation, and allocation are read from the HTML structure
+    by walking backwards from each fiscalNote.php link:
+      - <b> tag                          → department
+      - text with 4 leading &nbsp; chars → appropriation
+      - text with 8 leading &nbsp; chars → allocation
     """
     soup = BeautifulSoup(html, "html.parser")
     notes = []
@@ -82,19 +96,45 @@ def _parse_fiscal_note_links(html: str) -> list[dict]:
         full_url = urljoin(_BASE_URL, href)
         params = parse_qs(urlparse(href).query)
         sid = params.get("sid", [None])[0]
-        if sid:
-            notes.append({"url": full_url, "session_id": sid})
+        if not sid:
+            continue
+
+        fn_department = None
+        fn_appropriation = None
+        fn_allocation = None
+
+        for sibling in a_tag.previous_siblings:
+            if fn_department and fn_appropriation and fn_allocation:
+                break
+            if getattr(sibling, "name", None) == "b":
+                if fn_department is None:
+                    fn_department = sibling.get_text(strip=True)
+            elif isinstance(sibling, NavigableString):
+                leading = len(sibling) - len(sibling.lstrip("\xa0"))
+                text = sibling.strip("\xa0").strip()
+                if not text:
+                    continue
+                if leading >= 8 and fn_allocation is None:
+                    fn_allocation = text
+                elif leading >= 4 and fn_appropriation is None:
+                    fn_appropriation = text
+
+        notes.append({
+            "url": full_url,
+            "session_id": sid,
+            "fn_department": fn_department,
+            "fn_appropriation": fn_appropriation,
+            "fn_allocation": fn_allocation,
+        })
     return notes
 
 
 def _parse_text_fields(text: str) -> dict:
     """
-    Extract fn_department, fn_identifier, control_code, and publish_date
-    from the plain text of a fiscal note PDF.
+    Extract fn_identifier, control_code, and publish_date from the plain text
+    of a fiscal note PDF.  fn_department is now sourced from the HTML listing
+    and is no longer parsed here.
     """
-    dept_match = re.search(r"Department:\s+(.+)", text)
-    fn_department = dept_match.group(1).strip() if dept_match else None
-
     id_match = re.search(r"Identifier:\s+(\S+)", text)
     fn_identifier = id_match.group(1).strip() if id_match else None
 
@@ -109,7 +149,6 @@ def _parse_text_fields(text: str) -> dict:
         publish_date = datetime.strptime(date_match.group(1), "%m/%d/%Y").date()
 
     return {
-        "fn_department": fn_department,
         "fn_identifier": fn_identifier,
         "control_code": control_code,
         "publish_date": publish_date,
@@ -119,7 +158,7 @@ def _parse_text_fields(text: str) -> dict:
 def _parse_pdf_fields(pdf_bytes: bytes) -> dict:
     """
     Synchronous helper — run in a thread pool via asyncio.to_thread().
-    Extracts fn_department, fn_identifier, control_code, publish_date from a fiscal note PDF.
+    Extracts fn_identifier, control_code, and publish_date from a fiscal note PDF.
     """
     import pdfplumber
 
@@ -160,10 +199,23 @@ async def _fetch_bill_note_links(
 
 
 async def _fetch_pdf(client: httpx.AsyncClient, url: str) -> bytes | None:
-    """Fetch a fiscal note PDF and return raw bytes, or None on failure."""
+    """
+    Fetch a fiscal note PDF and return raw bytes, or None on failure.
+
+    Validates that the response is actually a PDF before returning — the PHP
+    server occasionally returns an HTML error page with a 200 status, which
+    would cause pdfplumber to raise when it tries to parse it.
+    """
     try:
         resp = await client.get(url, timeout=60, follow_redirects=True)
         resp.raise_for_status()
+        if not resp.content.startswith(b"%PDF"):
+            logger.warning(
+                "[fiscal_note_sync] Non-PDF response for %s (content-type: %s)",
+                url,
+                resp.headers.get("content-type", "unknown"),
+            )
+            return None
         return resp.content
     except Exception as exc:
         logger.warning("[fiscal_note_sync] Failed to fetch PDF %s: %s", url, exc)
@@ -173,13 +225,14 @@ async def _fetch_pdf(client: httpx.AsyncClient, url: str) -> bytes | None:
 async def _sync_bill_fiscal_notes(
     db: AsyncSession,
     client: httpx.AsyncClient,
-    bill: Bill,
+    bill_id: int,
+    bill_number: str,
     bill_url_id: str,
     bill_version: str,
     committee: str,
 ) -> int:
     """
-    Sync all fiscal notes for a single bill.
+    Sync all fiscal notes for a single bill version/committee entry.
     Returns the number of new notes inserted.
     """
     note_links = await _fetch_bill_note_links(client, bill_url_id, bill_version, committee)
@@ -190,96 +243,51 @@ async def _sync_bill_fiscal_notes(
     new_count = 0
 
     for note in note_links:
-        pdf_fields: dict = {}
-        fiscal_note_id, is_new = await upsert_fiscal_note(
+        fiscal_note_id, is_new, existing_identifier = await upsert_fiscal_note(
             db,
-            bill_id=bill.id,
+            bill_id=bill_id,
             session_id=note["session_id"],
             url=note["url"],
+            fn_department=note.get("fn_department"),
+            fn_appropriation=note.get("fn_appropriation"),
+            fn_allocation=note.get("fn_allocation"),
         )
 
-        if is_new:
+        if is_new or existing_identifier is None:
+            await asyncio.sleep(1.5)
             pdf_bytes = await _fetch_pdf(client, note["url"])
             if pdf_bytes:
-                pdf_fields = await asyncio.to_thread(_parse_pdf_fields, pdf_bytes)
-                # Update the row with the parsed PDF data
-                from app.models.fiscal_note import FiscalNote
-                from sqlalchemy import update
-                await db.execute(
-                    update(FiscalNote)
-                    .where(FiscalNote.id == fiscal_note_id)
-                    .values(**pdf_fields)
-                )
+                try:
+                    pdf_fields = await asyncio.to_thread(_parse_pdf_fields, pdf_bytes)
+                    from app.models.fiscal_note import FiscalNote
+                    from sqlalchemy import update
+                    await db.execute(
+                        update(FiscalNote)
+                        .where(FiscalNote.id == fiscal_note_id)
+                        .values(**pdf_fields)
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "[fiscal_note_sync] Failed to parse PDF %s: %s", note["url"], exc
+                    )
+        if is_new:
             new_count += 1
 
-    await deactivate_missing_notes(db, bill.id, active_session_ids)
+    await deactivate_missing_notes(db, bill_id, active_session_ids)
 
     await log_system_action(
         db,
         action="fiscal_notes_synced",
         entity_type="bill",
-        entity_id=bill.id,
+        entity_id=bill_id,
         details={
-            "bill_number": bill.bill_number,
+            "bill_number": bill_number,
             "notes_found": len(note_links),
             "new_notes": new_count,
         },
     )
 
     return new_count
-
-
-async def sync_all_fiscal_notes(db: AsyncSession) -> None:
-    """
-    Entry point for the scheduled fiscal note sync.
-    Loads allNotes.php via Playwright, then fetches notes for each known bill.
-    """
-    logger.info("[fiscal_note_sync] Starting fiscal note sync.")
-
-    # Step 1: load allNotes.php to get all bill entries
-    html = await _fetch_all_notes_html()
-    if not html:
-        logger.warning("[fiscal_note_sync] Could not load allNotes.php — aborting.")
-        return
-
-    entries = _parse_select_bill_calls(html)
-    logger.info("[fiscal_note_sync] Found %d bill entries on allNotes.php.", len(entries))
-
-    # Step 2: sync each entry that has a matching bill in our DB
-    async with httpx.AsyncClient() as client:
-        for entry in entries:
-            bill_number = _url_id_to_bill_number(entry["bill_url_id"])
-            result = await db.execute(
-                select(Bill).where(
-                    Bill.bill_number == bill_number,
-                    Bill.session == _LEGISLATURE_SESSION,
-                )
-            )
-            bill = result.scalar_one_or_none()
-            if bill is None:
-                continue
-
-            try:
-                new_count = await _sync_bill_fiscal_notes(
-                    db,
-                    client,
-                    bill,
-                    entry["bill_url_id"],
-                    entry["bill_version"],
-                    entry["committee"],
-                )
-                await db.commit()
-                if new_count:
-                    logger.info(
-                        "[fiscal_note_sync] %s: %d new note(s).", bill_number, new_count
-                    )
-            except Exception as exc:
-                await db.rollback()
-                logger.warning(
-                    "[fiscal_note_sync] Error syncing %s: %s", bill_number, exc
-                )
-
-    logger.info("[fiscal_note_sync] Fiscal note sync complete.")
 
 
 async def _fetch_all_notes_html() -> str | None:
@@ -297,3 +305,58 @@ async def _fetch_all_notes_html() -> str | None:
     except Exception as exc:
         logger.warning("[fiscal_note_sync] Playwright error loading allNotes.php: %s", exc)
         return None
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+async def load_allnotes_entries() -> list[dict] | None:
+    """
+    Load allNotes.php via Playwright and return all parsed bill entries.
+
+    Each entry is a dict with keys: bill_url_id, bill_version, committee.
+    Returns None if the page could not be loaded.  Call once per sync cycle
+    and pass the result to sync_fiscal_notes_for_bill() for each bill.
+    """
+    html = await _fetch_all_notes_html()
+    if not html:
+        logger.warning("[fiscal_note_sync] Could not load allNotes.php.")
+        return None
+    entries = _parse_select_bill_calls(html)
+    logger.info("[fiscal_note_sync] allNotes.php: %d bill entries found.", len(entries))
+    return entries
+
+
+async def sync_fiscal_notes_for_bill(
+    db: AsyncSession,
+    bill_id: int,
+    bill_number: str,
+    allnotes_entries: list[dict],
+    client: httpx.AsyncClient,
+) -> int:
+    """
+    Sync all fiscal notes for a single bill using pre-loaded allNotes entries.
+
+    Filters allnotes_entries to entries matching bill_number, then calls
+    allNotesBill.php for each matching version/committee combination.
+    Returns the total number of new notes inserted across all entries.
+    """
+    bill_url_id = _bill_number_to_url_id(bill_number)
+    bill_entries = [e for e in allnotes_entries if e["bill_url_id"] == bill_url_id]
+    if not bill_entries:
+        return 0
+
+    new_total = 0
+    for entry in bill_entries:
+        new_count = await _sync_bill_fiscal_notes(
+            db,
+            client,
+            bill_id,
+            bill_number,
+            entry["bill_url_id"],
+            entry["bill_version"],
+            entry["committee"],
+        )
+        new_total += new_count
+    return new_total

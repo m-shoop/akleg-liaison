@@ -10,6 +10,8 @@ class FiscalNoteRead(BaseModel):
     url: str
     session_id: str
     fn_department: str | None
+    fn_appropriation: str | None
+    fn_allocation: str | None
     is_active: bool
     control_code: str | None
     fn_identifier: str | None

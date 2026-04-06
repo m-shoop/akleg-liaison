@@ -43,7 +43,7 @@ function CalendarIcon({ isoDate, billNumber }) {
   );
 }
 
-export default function BillCard({ bill, showDescription, selectedOutcomes, showKeywords = false, abbreviated = false, upcomingHearingDates = [], onRefreshed: _onRefreshed, onTrackingChanged }) {
+export default function BillCard({ bill, showDescription, selectedOutcomes, showKeywords = false, abbreviated = false, allTags = [], upcomingHearingDates = [], onRefreshed: _onRefreshed, onTrackingChanged }) {
   const { isEditor, token } = useAuth();
   const [tracking, setTracking] = useState(false);
   const [error, setError] = useState(null);
@@ -148,7 +148,7 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, show
         </>
       )}
 
-      {bill.fiscal_notes?.some((n) => n.is_active) && (
+      {isEditor && bill.fiscal_notes?.some((n) => n.is_active) && (
         <>
           <p className={styles.sectionTitle}>Active Fiscal Notes</p>
           <div className={styles.outcomesSection}>
@@ -158,7 +158,7 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, show
       )}
       <div className={styles.bottomRow}>
         <div className={styles.bottomLeft}>
-          <BillTags bill={bill} />
+          <BillTags bill={bill} allTags={allTags} />
           {showKeywords && bill.keywords?.length > 0 && (
             <div className={styles.keywords}>
               {bill.keywords.map((s) =>

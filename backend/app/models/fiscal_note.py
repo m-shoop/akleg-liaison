@@ -20,6 +20,8 @@ class FiscalNote(Base):
     # sid from the fiscalNote.php URL — stable server-side identifier
     session_id: Mapped[str] = mapped_column(String(100), nullable=False)
     fn_department: Mapped[str | None] = mapped_column(String(500))
+    fn_appropriation: Mapped[str | None] = mapped_column(String(500))
+    fn_allocation: Mapped[str | None] = mapped_column(String(500))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     control_code: Mapped[str | None] = mapped_column(String(50))
     fn_identifier: Mapped[str | None] = mapped_column(String(100))

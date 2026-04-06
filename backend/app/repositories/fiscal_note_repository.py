@@ -14,16 +14,24 @@ async def upsert_fiscal_note(
     session_id: str,
     url: str,
     fn_department: str | None = None,
+    fn_appropriation: str | None = None,
+    fn_allocation: str | None = None,
     control_code: str | None = None,
     fn_identifier: str | None = None,
-) -> tuple[int, bool]:
+) -> tuple[int, bool, str | None]:
     """
     Insert or update a FiscalNote row keyed on (bill_id, session_id).
 
-    Returns (fiscal_note_id, is_new).  For existing rows the PDF-derived fields
-    (fn_department, control_code, fn_identifier) are NOT overwritten — they are
-    only set on initial insert, since re-fetching the PDF every day is expensive.
-    last_synced and is_active are always updated.
+    Returns (fiscal_note_id, is_new, existing_fn_identifier).
+
+    HTML-derived fields (fn_department, fn_appropriation, fn_allocation) are
+    updated on every sync since they come for free from the listing page.
+    PDF-derived fields (fn_identifier, control_code, publish_date) are only
+    written on initial insert and left unchanged on conflict — the caller
+    re-fetches the PDF separately when fn_identifier is still None.
+
+    existing_fn_identifier is the fn_identifier already in the DB; None means
+    the PDF was never successfully parsed and should be retried.
     """
     now = datetime.now(timezone.utc)
     stmt = (
@@ -33,6 +41,8 @@ async def upsert_fiscal_note(
             session_id=session_id,
             url=url,
             fn_department=fn_department,
+            fn_appropriation=fn_appropriation,
+            fn_allocation=fn_allocation,
             control_code=control_code,
             fn_identifier=fn_identifier,
             is_active=True,
@@ -44,16 +54,21 @@ async def upsert_fiscal_note(
                 is_active=True,
                 last_synced=now,
                 url=url,
-                # PDF-derived fields left unchanged on update
+                # HTML-derived fields: update every sync
+                fn_department=fn_department,
+                fn_appropriation=fn_appropriation,
+                fn_allocation=fn_allocation,
+                # PDF-derived fields (fn_identifier, control_code, publish_date)
+                # are left unchanged — re-fetched by the caller when still None
             ),
         )
-        .returning(FiscalNote.id, FiscalNote.creation_timestamp)
+        .returning(FiscalNote.id, FiscalNote.creation_timestamp, FiscalNote.fn_identifier)
     )
     result = await db.execute(stmt)
     row = result.one()
     # is_new when creation_timestamp is very close to now (just inserted)
     is_new = (now - row.creation_timestamp.replace(tzinfo=timezone.utc)).total_seconds() < 5
-    return row.id, is_new
+    return row.id, is_new, row.fn_identifier
 
 
 async def deactivate_missing_notes(

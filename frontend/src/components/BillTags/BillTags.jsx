@@ -1,23 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { addTagToBill, fetchTags, removeTagFromBill } from "../../api/tags";
+import { addTagToBill, removeTagFromBill } from "../../api/tags";
 import styles from "./BillTags.module.css";
 
-export default function BillTags({ bill }) {
+export default function BillTags({ bill, allTags = [] }) {
   const { isLoggedIn, isEditor, token } = useAuth();
   const [tags, setTags] = useState(bill.tags ?? []);
-  const [allTags, setAllTags] = useState([]);
   const [inputValue, setInputValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const inputRef = useRef(null);
-
-  useEffect(() => {
-    if (isEditor) {
-      fetchTags().then(setAllTags).catch(() => {});
-    }
-  }, [isEditor]);
 
   const suggestions = inputValue.trim()
     ? allTags.filter(

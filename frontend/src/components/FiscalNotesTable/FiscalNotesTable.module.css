@@ -38,6 +38,14 @@
   /* takes remaining width */
 }
 
+.colAppropriation {
+  /* takes remaining width */
+}
+
+.colAllocation {
+  /* takes remaining width */
+}
+
 .colCode {
   width: 72px;
   white-space: nowrap;

@@ -9,6 +9,7 @@ from datetime import date
 import pytest
 
 from app.services.fiscal_note_sync import (
+    _bill_number_to_url_id,
     _parse_fiscal_note_links,
     _parse_select_bill_calls,
     _parse_text_fields,
@@ -35,6 +36,32 @@ class TestUrlIdToBillNumber:
 
     def test_no_padding(self):
         assert _url_id_to_bill_number("HB1") == "HB1"
+
+
+# ---------------------------------------------------------------------------
+# _bill_number_to_url_id
+# ---------------------------------------------------------------------------
+
+class TestBillNumberToUrlId:
+    def test_house_bill_single_digit(self):
+        assert _bill_number_to_url_id("HB 1") == "HB____1"
+
+    def test_house_bill_two_digits(self):
+        assert _bill_number_to_url_id("HB 12") == "HB___12"
+
+    def test_house_bill_three_digits(self):
+        assert _bill_number_to_url_id("HB 123") == "HB__123"
+
+    def test_senate_bill_single_digit(self):
+        assert _bill_number_to_url_id("SB 2") == "SB____2"
+
+    def test_senate_bill_two_digits(self):
+        assert _bill_number_to_url_id("SB 45") == "SB___45"
+
+    def test_roundtrip(self):
+        """Converting to URL ID and back should return the original bill number."""
+        for bill_number in ("HB 1", "HB 12", "HB 123", "SB 2", "SB 45"):
+            assert _url_id_to_bill_number(_bill_number_to_url_id(bill_number)) == bill_number
 
 
 # ---------------------------------------------------------------------------
@@ -89,37 +116,68 @@ class TestParseSelectBillCalls:
 # _parse_fiscal_note_links
 # ---------------------------------------------------------------------------
 
-_ALL_NOTES_BILL_HTML = """
-&nbsp;&nbsp;<b>Department of Administration</b>
-<br>
-&nbsp;&nbsp;&nbsp;&nbsp;Centralized Administrative Services<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Finance<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="fiscalNote.php?q=&billID=HB____1&billVersion=N&compNum=59&session=34&sid=722474188" target="_blank">View Note</a>
-<br>
-&nbsp;&nbsp;<b>Department of Commerce, Community and Economic Development</b>
-<br>
-&nbsp;&nbsp;&nbsp;&nbsp;Community and Regional Affairs<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="fiscalNote.php?q=&billID=HB____1&billVersion=N&compNum=2612&session=34&sid=1161209894" target="_blank">View Note</a>
-"""
+# Representative allNotesBill.php HTML fragment.
+# Two departments; the second has two appropriation/allocation pairs under it
+# (the Department of Health pattern from the real site).
+_ALL_NOTES_BILL_HTML = (
+    "&nbsp;&nbsp;<b>Department of Administration</b><br>"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Centralized Administrative Services<br>"
+    "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Finance<br>"
+    "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
+    '<a href="fiscalNote.php?q=&amp;billID=HB____1&amp;billVersion=N&amp;compNum=59&amp;session=34&amp;sid=722474188" target="_blank">View Note</a>'
+    "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>"
+    "&nbsp;&nbsp;<b>Department of Health</b><br>"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Behavioral Health<br>"
+    "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Behavioral Health Administration<br>"
+    "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
+    '<a href="fiscalNote.php?q=&amp;billID=HB____1&amp;billVersion=N&amp;compNum=2614&amp;session=34&amp;sid=1977336702" target="_blank">View Note</a>'
+    "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Health Care Services<br>"
+    "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Medical Assistance Administration<br>"
+    "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
+    '<a href="fiscalNote.php?q=&amp;billID=HB____1&amp;billVersion=N&amp;compNum=242&amp;session=34&amp;sid=815775190" target="_blank">View Note</a>'
+    "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>"
+)
 
 
 class TestParseFiscalNoteLinks:
-    def test_returns_both_links(self):
+    def test_returns_all_links(self):
         links = _parse_fiscal_note_links(_ALL_NOTES_BILL_HTML)
-        assert len(links) == 2
+        assert len(links) == 3
 
     def test_first_link_sid(self):
         links = _parse_fiscal_note_links(_ALL_NOTES_BILL_HTML)
         assert links[0]["session_id"] == "722474188"
 
-    def test_second_link_sid(self):
-        links = _parse_fiscal_note_links(_ALL_NOTES_BILL_HTML)
-        assert links[1]["session_id"] == "1161209894"
-
     def test_url_is_absolute(self):
         links = _parse_fiscal_note_links(_ALL_NOTES_BILL_HTML)
         assert links[0]["url"].startswith("https://")
         assert "fiscalNote.php" in links[0]["url"]
+
+    def test_first_link_department(self):
+        links = _parse_fiscal_note_links(_ALL_NOTES_BILL_HTML)
+        assert links[0]["fn_department"] == "Department of Administration"
+
+    def test_first_link_appropriation(self):
+        links = _parse_fiscal_note_links(_ALL_NOTES_BILL_HTML)
+        assert links[0]["fn_appropriation"] == "Centralized Administrative Services"
+
+    def test_first_link_allocation(self):
+        links = _parse_fiscal_note_links(_ALL_NOTES_BILL_HTML)
+        assert links[0]["fn_allocation"] == "Finance"
+
+    def test_second_link_same_department_different_appropriation(self):
+        """Two notes under the same department pick up the correct appropriation each."""
+        links = _parse_fiscal_note_links(_ALL_NOTES_BILL_HTML)
+        assert links[1]["fn_department"] == "Department of Health"
+        assert links[1]["fn_appropriation"] == "Behavioral Health"
+        assert links[1]["fn_allocation"] == "Behavioral Health Administration"
+
+    def test_third_link_same_department_different_appropriation(self):
+        links = _parse_fiscal_note_links(_ALL_NOTES_BILL_HTML)
+        assert links[2]["fn_department"] == "Department of Health"
+        assert links[2]["fn_appropriation"] == "Health Care Services"
+        assert links[2]["fn_allocation"] == "Medical Assistance Administration"
 
     def test_empty_response(self):
         assert _parse_fiscal_note_links("") == []
@@ -166,12 +224,7 @@ Printed 4/5/2026  Page 1 of 2  Control Code: firstCC
 Printed 4/5/2026  Page 2 of 2  Control Code: lastCC
 """
 
-
 class TestParseTextFields:
-    def test_fn_department(self):
-        result = _parse_text_fields(_PDF_TEXT)
-        assert result["fn_department"] == "Department of Education and Early Development"
-
     def test_fn_identifier(self):
         result = _parse_text_fields(_PDF_TEXT)
         assert result["fn_identifier"] == "HB012-EED-CN-3-07-26"
@@ -194,7 +247,6 @@ class TestParseTextFields:
 
     def test_missing_fields_return_none(self):
         result = _parse_text_fields("Nothing useful here.")
-        assert result["fn_department"] is None
         assert result["fn_identifier"] is None
         assert result["control_code"] is None
         assert result["publish_date"] is None

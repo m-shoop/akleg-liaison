@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
 from app.routers import auth, bills, jobs, meetings, tags
-from app.services.scheduler import fiscal_note_scheduler_loop, hearing_scheduler_loop, scheduler_loop
+from app.services.scheduler import hearing_scheduler_loop, scheduler_loop
 
 logging.basicConfig(level=logging.INFO)
 
@@ -17,12 +17,10 @@ async def lifespan(app: FastAPI):
     # Start background schedulers
     bill_task = asyncio.create_task(scheduler_loop())
     hearing_task = asyncio.create_task(hearing_scheduler_loop())
-    fiscal_note_task = asyncio.create_task(fiscal_note_scheduler_loop())
     yield
     bill_task.cancel()
     hearing_task.cancel()
-    fiscal_note_task.cancel()
-    for task in (bill_task, hearing_task, fiscal_note_task):
+    for task in (bill_task, hearing_task):
         try:
             await task
         except asyncio.CancelledError:
