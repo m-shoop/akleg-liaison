@@ -28,7 +28,6 @@ export default function FiscalNotesTable({ fiscalNotes }) {
           <th className={styles.colIdentifier}>Identifier</th>
           <th className={styles.colDepartment}>Department</th>
           <th className={styles.colAppropriation}>Appropriation</th>
-          <th className={styles.colAllocation}>Allocation</th>
           <th className={styles.colCode}>Control Code</th>
         </tr>
       </thead>
@@ -51,7 +50,6 @@ export default function FiscalNotesTable({ fiscalNotes }) {
             </td>
             <td className={styles.colDepartment}>{note.fn_department ?? "—"}</td>
             <td className={styles.colAppropriation}>{note.fn_appropriation ?? "—"}</td>
-            <td className={styles.colAllocation}>{note.fn_allocation ?? "—"}</td>
             <td className={styles.colCode}>{note.control_code ?? "—"}</td>
           </tr>
         ))}
