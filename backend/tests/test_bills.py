@@ -151,3 +151,26 @@ async def test_refresh_nonexistent_bill_returns_404(client: AsyncClient, uid: st
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# fiscal_notes_query_failed field
+# ---------------------------------------------------------------------------
+
+async def test_bill_fiscal_notes_query_failed_false_by_default(client: AsyncClient, db, uid: str):
+    bill_id = await _seed_bill(db, uid)
+
+    resp = await client.get(f"/bills/{bill_id}")
+    assert resp.status_code == 200
+    assert resp.json()["fiscal_notes_query_failed"] is False
+
+
+async def test_bill_fiscal_notes_query_failed_true_when_record_exists(client: AsyncClient, db, uid: str):
+    from app.models.fiscal_note_query_failed import FiscalNoteQueryFailed
+    bill_id = await _seed_bill(db, uid)
+    db.add(FiscalNoteQueryFailed(bill_id=bill_id))
+    await db.commit()
+
+    resp = await client.get(f"/bills/{bill_id}")
+    assert resp.status_code == 200
+    assert resp.json()["fiscal_notes_query_failed"] is True

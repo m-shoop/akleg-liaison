@@ -1,11 +1,12 @@
 from datetime import datetime, timezone
 from typing import Sequence
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fiscal_note import FiscalNote
+from app.models.fiscal_note_query_failed import FiscalNoteQueryFailed
 
 
 async def get_note_by_session_id(
@@ -121,6 +122,27 @@ async def deactivate_missing_notes(
         .values(is_active=False)
     )
     await db.execute(stmt)
+
+
+async def upsert_fiscal_note_query_failed(db: AsyncSession, bill_id: int) -> None:
+    """Record (or refresh) a query failure for a bill. Safe to call on repeated failures."""
+    now = datetime.now(timezone.utc)
+    stmt = (
+        insert(FiscalNoteQueryFailed)
+        .values(bill_id=bill_id, failed_at=now)
+        .on_conflict_do_update(
+            index_elements=[FiscalNoteQueryFailed.bill_id],
+            set_=dict(failed_at=now),
+        )
+    )
+    await db.execute(stmt)
+
+
+async def delete_fiscal_note_query_failed(db: AsyncSession, bill_id: int) -> None:
+    """Clear a query failure record for a bill after a successful sync."""
+    await db.execute(
+        delete(FiscalNoteQueryFailed).where(FiscalNoteQueryFailed.bill_id == bill_id)
+    )
 
 
 async def get_fiscal_notes_for_bill(

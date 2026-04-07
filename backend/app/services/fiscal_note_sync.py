@@ -34,8 +34,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.audit_log_repository import log_system_action
 from app.repositories.fiscal_note_repository import (
     deactivate_missing_notes,
+    delete_fiscal_note_query_failed,
     get_note_by_session_id,
     update_note_html_fields,
+    upsert_fiscal_note_query_failed,
     upsert_note_by_identifier,
 )
 
@@ -235,10 +237,13 @@ async def _sync_bill_fiscal_notes(
     bill_url_id: str,
     bill_version: str,
     committee: str,
-) -> int:
+) -> tuple[int, bool]:
     """
     Sync all fiscal notes for a single bill version/committee entry.
-    Returns the number of new notes inserted.
+    Returns (new_notes_inserted, had_failure).
+
+    had_failure is True if any note in the listing could not be fully retrieved
+    (PDF fetch failed, parse error, or no identifier found in the PDF).
 
     Per-note algorithm:
       1. Cheap path: if this session_id is already in the DB and fn_identifier is
@@ -249,10 +254,11 @@ async def _sync_bill_fiscal_notes(
     """
     note_links = await _fetch_bill_note_links(client, bill_url_id, bill_version, committee)
     if not note_links:
-        return 0
+        return 0, False
 
     active_fn_identifiers: list[str] = []
     new_count = 0
+    had_failure = False
 
     for note in note_links:
         # Cheap path: session_id unchanged and identifier already parsed.
@@ -275,12 +281,14 @@ async def _sync_bill_fiscal_notes(
         pdf_bytes = await _fetch_pdf(client, note["url"])
         if not pdf_bytes:
             logger.warning("[fiscal_note_sync] Could not fetch PDF for %s, skipping.", note["url"])
+            had_failure = True
             continue
 
         try:
             pdf_fields = await asyncio.to_thread(_parse_pdf_fields, pdf_bytes)
         except Exception as exc:
             logger.warning("[fiscal_note_sync] Failed to parse PDF %s: %s", note["url"], exc)
+            had_failure = True
             continue
 
         fn_identifier = pdf_fields.get("fn_identifier")
@@ -288,6 +296,7 @@ async def _sync_bill_fiscal_notes(
             logger.warning(
                 "[fiscal_note_sync] No fn_identifier parsed from %s, skipping.", note["url"]
             )
+            had_failure = True
             continue
 
         _, is_new = await upsert_note_by_identifier(
@@ -317,10 +326,11 @@ async def _sync_bill_fiscal_notes(
             "bill_number": bill_number,
             "notes_found": len(note_links),
             "new_notes": new_count,
+            "had_failure": had_failure,
         },
     )
 
-    return new_count
+    return new_count, had_failure
 
 
 async def _fetch_all_notes_html() -> str | None:
@@ -381,8 +391,9 @@ async def sync_fiscal_notes_for_bill(
         return 0
 
     new_total = 0
+    any_failure = False
     for entry in bill_entries:
-        new_count = await _sync_bill_fiscal_notes(
+        new_count, had_failure = await _sync_bill_fiscal_notes(
             db,
             client,
             bill_id,
@@ -392,4 +403,12 @@ async def sync_fiscal_notes_for_bill(
             entry["committee"],
         )
         new_total += new_count
+        if had_failure:
+            any_failure = True
+
+    if any_failure:
+        await upsert_fiscal_note_query_failed(db, bill_id)
+    else:
+        await delete_fiscal_note_query_failed(db, bill_id)
+
     return new_total

@@ -179,6 +179,7 @@ async def get_bill_by_id(
             selectinload(Bill.tags),
             selectinload(Bill.keywords),
             selectinload(Bill.fiscal_notes),
+            selectinload(Bill.fiscal_notes_query_failed_record),
         )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
@@ -201,6 +202,7 @@ async def list_bills(
             selectinload(Bill.tags),
             selectinload(Bill.keywords),
             selectinload(Bill.fiscal_notes),
+            selectinload(Bill.fiscal_notes_query_failed_record),
         )
         .order_by(Bill.session.desc(), Bill.bill_number)
     )

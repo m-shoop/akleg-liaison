@@ -108,6 +108,13 @@ class Bill(Base):
     fiscal_notes: Mapped[list["FiscalNote"]] = relationship(  # type: ignore[name-defined]
         "FiscalNote", back_populates="bill", cascade="all, delete-orphan"
     )
+    fiscal_notes_query_failed_record: Mapped["FiscalNoteQueryFailed | None"] = relationship(  # type: ignore[name-defined]
+        "FiscalNoteQueryFailed", back_populates="bill", uselist=False, cascade="all, delete-orphan"
+    )
+
+    @property
+    def fiscal_notes_query_failed(self) -> bool:
+        return self.fiscal_notes_query_failed_record is not None
 
 
 # ---------------------------------------------------------------------------

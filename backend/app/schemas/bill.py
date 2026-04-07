@@ -71,6 +71,7 @@ class BillRead(BaseModel):
     tags: list[TagRead]
     keywords: list[BillKeywordRead]
     fiscal_notes: list[FiscalNoteRead]
+    fiscal_notes_query_failed: bool
 
 
 class BillFetchRequest(BaseModel):

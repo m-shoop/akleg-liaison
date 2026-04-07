@@ -7,6 +7,7 @@ from app.models.bill import (
     EventType,
     OutcomeType,
 )
+from app.models.fiscal_note_query_failed import FiscalNoteQueryFailed
 from app.models.meeting import AgendaItem, Meeting
 from app.models.tag import BillTag, Tag
 from app.models.user import User
@@ -19,6 +20,7 @@ __all__ = [
     "Chamber",
     "EventType",
     "OutcomeType",
+    "FiscalNoteQueryFailed",
     "Tag",
     "BillTag",
     "User",
