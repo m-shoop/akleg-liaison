@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useReactToPrint } from "react-to-print";
 import { fetchBills } from "../../api/bills";
@@ -6,6 +6,7 @@ import { fetchMeetings, fetchUpcomingHearings } from "../../api/meetings";
 import { fetchTags } from "../../api/tags";
 import { useAuth } from "../../context/AuthContext";
 import BillCard from "../../components/BillCard/BillCard";
+import FiscalDeptFilter from "../../components/FiscalDeptFilter/FiscalDeptFilter";
 import OutcomeFilter from "../../components/OutcomeFilter/OutcomeFilter";
 import PrintMeetingsSection from "../../components/PrintMeetingsSection/PrintMeetingsSection";
 import ReportHeaderEditor from "../../components/ReportHeaderEditor/ReportHeaderEditor";
@@ -26,6 +27,17 @@ export default function Home() {
   const [error, setError] = useState(null);
   const [showDescription, setShowDescription] = useState(false);
   const [selectedOutcomes, setSelectedOutcomes] = useState(DEFAULT_SELECTED);
+  const [selectedDepts, setSelectedDepts] = useState(new Set(["Department of Public Safety"]));
+
+  const allDepts = useMemo(() => {
+    const depts = new Set();
+    bills.forEach((b) =>
+      (b.fiscal_notes ?? []).forEach((n) => {
+        if (n.is_active && n.fn_department) depts.add(n.fn_department);
+      })
+    );
+    return depts;
+  }, [bills]);
   const [showUntracked, setShowUntracked] = useState(false);
   const [sideBySide, setSideBySide] = useState(true);
   const [showKeywords, setShowKeywords] = useState(false);
@@ -205,6 +217,13 @@ export default function Home() {
                 onChange={setSelectedOutcomes}
               />
             </div>
+            {isEditor && (
+              <FiscalDeptFilter
+                allDepts={allDepts}
+                selected={selectedDepts}
+                onChange={setSelectedDepts}
+              />
+            )}
             <div id="tour-toggle-descriptions" className={styles.toggleGroup}>
               <button
                 className={`${styles.toggleOption} ${!showDescription ? styles.toggleSelected : ""}`}
@@ -391,6 +410,7 @@ export default function Home() {
                         bill={bill}
                         showDescription={showDescription}
                         selectedOutcomes={selectedOutcomes}
+                        selectedDepts={selectedDepts}
                         showKeywords={showKeywords}
                         abbreviated={true}
                         allTags={allTags}
@@ -420,10 +440,10 @@ export default function Home() {
                   bill={bill}
                   showDescription={showDescription}
                   selectedOutcomes={selectedOutcomes}
+                  selectedDepts={selectedDepts}
                   showKeywords={showKeywords}
                   allTags={allTags}
                   upcomingHearingDates={upcomingHearings[bill.id] ?? []}
-                  recentHearingDates={recentHearings[bill.id] ?? []}
                   onRefreshed={(updated) =>
                     setBills((prev) => prev.map((b) => b.id === updated.id ? updated : b))
                   }

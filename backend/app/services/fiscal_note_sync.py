@@ -32,7 +32,12 @@ from playwright.async_api import async_playwright
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.audit_log_repository import log_system_action
-from app.repositories.fiscal_note_repository import deactivate_missing_notes, upsert_fiscal_note
+from app.repositories.fiscal_note_repository import (
+    deactivate_missing_notes,
+    get_note_by_session_id,
+    update_note_html_fields,
+    upsert_note_by_identifier,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -234,46 +239,74 @@ async def _sync_bill_fiscal_notes(
     """
     Sync all fiscal notes for a single bill version/committee entry.
     Returns the number of new notes inserted.
+
+    Per-note algorithm:
+      1. Cheap path: if this session_id is already in the DB and fn_identifier is
+         known, just refresh the HTML-derived fields — no PDF fetch needed.
+      2. Otherwise fetch the PDF to obtain fn_identifier, then upsert keyed on
+         (bill_id, fn_identifier). This handles both truly new notes and notes
+         whose session_id changed since the last sync.
     """
     note_links = await _fetch_bill_note_links(client, bill_url_id, bill_version, committee)
     if not note_links:
         return 0
 
-    active_session_ids = [n["session_id"] for n in note_links]
+    active_fn_identifiers: list[str] = []
     new_count = 0
 
     for note in note_links:
-        fiscal_note_id, is_new, existing_identifier = await upsert_fiscal_note(
+        # Cheap path: session_id unchanged and identifier already parsed.
+        existing = await get_note_by_session_id(db, bill_id, note["session_id"])
+        if existing and existing.fn_identifier:
+            await update_note_html_fields(
+                db,
+                existing.id,
+                note["url"],
+                note.get("fn_department"),
+                note.get("fn_appropriation"),
+                note.get("fn_allocation"),
+            )
+            active_fn_identifiers.append(existing.fn_identifier)
+            continue
+
+        # Session_id not recognized, or existing row still missing fn_identifier:
+        # fetch the PDF to obtain a stable identifier.
+        await asyncio.sleep(1.5)
+        pdf_bytes = await _fetch_pdf(client, note["url"])
+        if not pdf_bytes:
+            logger.warning("[fiscal_note_sync] Could not fetch PDF for %s, skipping.", note["url"])
+            continue
+
+        try:
+            pdf_fields = await asyncio.to_thread(_parse_pdf_fields, pdf_bytes)
+        except Exception as exc:
+            logger.warning("[fiscal_note_sync] Failed to parse PDF %s: %s", note["url"], exc)
+            continue
+
+        fn_identifier = pdf_fields.get("fn_identifier")
+        if not fn_identifier:
+            logger.warning(
+                "[fiscal_note_sync] No fn_identifier parsed from %s, skipping.", note["url"]
+            )
+            continue
+
+        _, is_new = await upsert_note_by_identifier(
             db,
             bill_id=bill_id,
+            fn_identifier=fn_identifier,
             session_id=note["session_id"],
             url=note["url"],
             fn_department=note.get("fn_department"),
             fn_appropriation=note.get("fn_appropriation"),
             fn_allocation=note.get("fn_allocation"),
+            control_code=pdf_fields.get("control_code"),
+            publish_date=pdf_fields.get("publish_date"),
         )
-
-        if is_new or existing_identifier is None:
-            await asyncio.sleep(1.5)
-            pdf_bytes = await _fetch_pdf(client, note["url"])
-            if pdf_bytes:
-                try:
-                    pdf_fields = await asyncio.to_thread(_parse_pdf_fields, pdf_bytes)
-                    from app.models.fiscal_note import FiscalNote
-                    from sqlalchemy import update
-                    await db.execute(
-                        update(FiscalNote)
-                        .where(FiscalNote.id == fiscal_note_id)
-                        .values(**pdf_fields)
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "[fiscal_note_sync] Failed to parse PDF %s: %s", note["url"], exc
-                    )
+        active_fn_identifiers.append(fn_identifier)
         if is_new:
             new_count += 1
 
-    await deactivate_missing_notes(db, bill_id, active_session_ids)
+    await deactivate_missing_notes(db, bill_id, active_fn_identifiers)
 
     await log_system_action(
         db,

@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -9,7 +9,15 @@ from app.database import Base
 class FiscalNote(Base):
     __tablename__ = "fiscal_notes"
     __table_args__ = (
-        UniqueConstraint("bill_id", "session_id", name="uq_fiscal_note_bill_session"),
+        # Partial unique index: enforces one row per (bill_id, fn_identifier) only
+        # where fn_identifier is known. Rows still awaiting PDF parse are excluded.
+        Index(
+            "uq_fiscal_note_bill_identifier",
+            "bill_id",
+            "fn_identifier",
+            unique=True,
+            postgresql_where=text("fn_identifier IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

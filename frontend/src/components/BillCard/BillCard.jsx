@@ -43,20 +43,23 @@ function CalendarIcon({ isoDate, billNumber }) {
   );
 }
 
-export default function BillCard({ bill, showDescription, selectedOutcomes, showKeywords = false, abbreviated = false, allTags = [], upcomingHearingDates = [], onRefreshed: _onRefreshed, onTrackingChanged }) {
+export default function BillCard({ bill, showDescription, selectedOutcomes, selectedDepts = null, showKeywords = false, abbreviated = false, allTags = [], upcomingHearingDates = [], onRefreshed: _onRefreshed, onTrackingChanged }) {
   const { isEditor, token } = useAuth();
   const [tracking, setTracking] = useState(false);
   const [error, setError] = useState(null);
 
   const visibleOutcomes = flattenOutcomes(bill.events).filter((r) => selectedOutcomes.has(r.outcome_type));
   const hasAiOutcomes = bill.events.some((e) => e.outcomes.some((o) => o.ai_generated));
+  const hasVisibleFiscalNotes = bill.fiscal_notes?.some(
+    (n) => n.is_active && (selectedDepts === null || selectedDepts.has(n.fn_department))
+  );
 
   const lastSynced = bill.last_sync
     ? new Date(bill.last_sync).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : null;
 
   const introduced = bill.introduced_date
-    ? new Date(bill.introduced_date).toLocaleDateString("en-US", {
+    ? new Date(bill.introduced_date + "T00:00:00").toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
         year: "numeric",
@@ -148,11 +151,11 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, show
         </>
       )}
 
-      {isEditor && bill.fiscal_notes?.some((n) => n.is_active) && (
+      {isEditor && hasVisibleFiscalNotes && (
         <>
           <p className={styles.sectionTitle}>Active Fiscal Notes</p>
           <div className={styles.outcomesSection}>
-            <FiscalNotesTable fiscalNotes={bill.fiscal_notes} />
+            <FiscalNotesTable fiscalNotes={bill.fiscal_notes} selectedDepts={selectedDepts} />
           </div>
         </>
       )}
