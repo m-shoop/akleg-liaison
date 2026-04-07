@@ -151,7 +151,12 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, sele
         </>
       )}
 
-      {isEditor && hasVisibleFiscalNotes && (
+      {bill.fiscal_notes_query_failed ? (
+        <>
+          <p className={styles.sectionTitle}>Active Fiscal Notes</p>
+          <p className={styles.fiscalNotesWarning}>Failed to retrieve fiscal notes on most recent query</p>
+        </>
+      ) : hasVisibleFiscalNotes && (
         <>
           <p className={styles.sectionTitle}>Active Fiscal Notes</p>
           <div className={styles.outcomesSection}>

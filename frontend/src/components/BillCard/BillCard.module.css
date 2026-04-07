@@ -136,6 +136,13 @@ a.status:hover {
   color: #b33a3a;
 }
 
+.fiscalNotesWarning {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+  margin: 0;
+}
+
 .bottomRow {
   display: flex;
   align-items: flex-start;

@@ -217,7 +217,7 @@ export default function Home() {
                 onChange={setSelectedOutcomes}
               />
             </div>
-            {isEditor && (
+            {(
               <FiscalDeptFilter
                 allDepts={allDepts}
                 selected={selectedDepts}
