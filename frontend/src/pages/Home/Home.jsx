@@ -19,7 +19,7 @@ import styles from "./Home.module.css";
 
 export default function Home() {
   const location = useLocation();
-  const { isEditor } = useAuth();
+  const { can, token } = useAuth();
   const [toast, setToast] = useState(location.state?.toast ? { message: location.state.toast, type: "success" } : null);
   const [bills, setBills] = useState([]);
   const [allTags, setAllTags] = useState([]);
@@ -64,7 +64,7 @@ export default function Home() {
       setHearingBillIds(null);
       return;
     }
-    fetchMeetings({ startDate: printStartDate, endDate: printEndDate })
+    fetchMeetings({ startDate: printStartDate, endDate: printEndDate, token })
       .then((meetings) => {
         const ids = new Set(
           meetings
@@ -78,15 +78,15 @@ export default function Home() {
   }, [filterToHearings, printStartDate, printEndDate]);
 
   useEffect(() => {
-    if (isEditor) {
-      fetchTags().then(setAllTags).catch(() => {});
+    if (can("bill-tags:view")) {
+      fetchTags(token).then(setAllTags).catch(() => {});
     }
-  }, [isEditor]);
+  }, [can]);
 
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      fetchBills({ includeUntracked: showUntracked }),
+      fetchBills({ includeUntracked: showUntracked, token }),
       fetchUpcomingHearings(),
     ])
       .then(([billsData, upcomingData]) => {
@@ -181,7 +181,7 @@ export default function Home() {
 
   async function exportPDF() {
     if (printStartDate && printEndDate) {
-      const data = await fetchMeetings({ startDate: printStartDate, endDate: printEndDate });
+      const data = await fetchMeetings({ startDate: printStartDate, endDate: printEndDate, token });
       setPrintMeetings(data);
       setPendingPrint(true);
     } else {

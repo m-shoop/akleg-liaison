@@ -6,9 +6,8 @@ logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user, require_editor
+from app.dependencies import CurrentUser, get_optional_current_user, require_permission
 from app.models.bill import BillEventOutcome
-from app.models.user import User
 from app.repositories.bill_repository import (
     get_bill_by_id,
     get_event_by_id,
@@ -52,6 +51,11 @@ async def _get_event_or_404(event_id: int, db: AsyncSession):
     return event
 
 
+def _strip_tags(bill_read: BillRead) -> BillRead:
+    bill_read.tags = []
+    return bill_read
+
+
 # ---------------------------------------------------------------------------
 # Bills
 # ---------------------------------------------------------------------------
@@ -87,12 +91,12 @@ async def refresh_bill(
     bill_id: int,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_editor),
+    current_user: CurrentUser = Depends(require_permission("bill:query")),
 ):
     """Enqueue a bill re-scrape and return immediately. Poll GET /jobs/{id} for status."""
     bill = await _get_bill_or_404(bill_id, db)
     job_id = await create_job(db, job_type="refresh_bill")
-    await log_action(db, current_user, "bill_queried", entity_type="bill", entity_id=bill_id, details={"bill_number": bill.bill_number})
+    await log_action(db, current_user.user, "bill_queried", entity_type="bill", entity_id=bill_id, details={"bill_number": bill.bill_number})
     await db.commit()
     background_tasks.add_task(_run_refresh_job, job_id, bill.bill_number, bill.session)
     job = await get_job(db, job_id)
@@ -119,7 +123,7 @@ async def _run_fetch_all(session: int) -> None:
 @router.post("/fetch-all", status_code=202)
 async def fetch_all_bills(
     background_tasks: BackgroundTasks,
-    _: User = Depends(require_editor),
+    _: CurrentUser = Depends(require_permission("bill:query")),
 ):
     """
     Scrape every bill listed on akleg.gov for session 34, upsert them all,
@@ -133,8 +137,15 @@ async def fetch_all_bills(
 async def list_bills_route(
     db: AsyncSession = Depends(get_db),
     include_untracked: bool = Query(False),
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
 ):
-    return await list_bills(db, include_untracked=include_untracked)
+    bills = await list_bills(db, include_untracked=include_untracked)
+    can_view_tags = current_user is not None and current_user.can("bill-tags:view")
+    bills_read = [BillRead.model_validate(b) for b in bills]
+    if not can_view_tags:
+        for b in bills_read:
+            b.tags = []
+    return bills_read
 
 
 @router.patch("/{bill_id}/tracked", response_model=BillRead)
@@ -143,25 +154,34 @@ async def update_bill_tracked(
     background_tasks: BackgroundTasks,
     is_tracked: bool = Query(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_editor),
+    current_user: CurrentUser = Depends(require_permission("bill:track")),
 ):
     """Set or clear the is_tracked flag on a bill. Marking as tracked triggers an immediate sync."""
     bill = await set_bill_tracked(db, bill_id, is_tracked)
     if bill is None:
         raise HTTPException(status_code=404, detail="Bill not found")
     action = "bill_tracked" if is_tracked else "bill_untracked"
-    await log_action(db, current_user, action, entity_type="bill", entity_id=bill_id, details={"bill_number": bill.bill_number})
+    await log_action(db, current_user.user, action, entity_type="bill", entity_id=bill_id, details={"bill_number": bill.bill_number})
     if is_tracked:
         job_id = await create_job(db, job_type="refresh_bill")
     await db.commit()
     if is_tracked:
         background_tasks.add_task(_run_refresh_job, job_id, bill.bill_number, bill.session)
-    return await _get_bill_or_404(bill_id, db)
+    bill_read = BillRead.model_validate(await _get_bill_or_404(bill_id, db))
+    return bill_read
 
 
 @router.get("/{bill_id}", response_model=BillRead)
-async def get_bill(bill_id: int, db: AsyncSession = Depends(get_db)):
-    return await _get_bill_or_404(bill_id, db)
+async def get_bill(
+    bill_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
+):
+    bill = await _get_bill_or_404(bill_id, db)
+    bill_read = BillRead.model_validate(bill)
+    if current_user is None or not current_user.can("bill-tags:view"):
+        bill_read.tags = []
+    return bill_read
 
 
 # ---------------------------------------------------------------------------

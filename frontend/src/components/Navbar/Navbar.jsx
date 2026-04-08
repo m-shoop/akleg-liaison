@@ -3,7 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import styles from "./Navbar.module.css";
 
 export default function Navbar() {
-  const { isLoggedIn, isEditor, username, logout } = useAuth();
+  const { isLoggedIn, can, username, logout } = useAuth();
   const navigate = useNavigate();
 
   function handleLogout() {
@@ -65,7 +65,7 @@ export default function Navbar() {
               </li>
             </ul>
           </li>
-          {isEditor && (
+          {can("bill:query") && (
             <li>
               <NavLink
                 to="/query-bill"

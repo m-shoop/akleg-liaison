@@ -5,6 +5,12 @@ from httpx import AsyncClient
 
 from tests.conftest import REGISTRATION_KEY, login_user, register_user
 
+VIEWER_PERMISSIONS = {"hearing-notes:view", "bill-tags:view", "hearing:export-ics"}
+ADMIN_ONLY_PERMISSIONS = {
+    "bill:track", "hearing:query", "bill:query", "hearing:hide",
+    "hearing-notes:edit", "bill-tags:edit",
+}
+
 
 async def test_register_viewer(client: AsyncClient, uid: str):
     resp = await client.post("/auth/register", json={
@@ -58,7 +64,7 @@ async def test_register_invalid_role(client: AsyncClient, uid: str):
     assert resp.status_code == 422
 
 
-async def test_login_success_returns_token_and_role(client: AsyncClient, uid: str):
+async def test_login_viewer_gets_correct_permissions(client: AsyncClient, uid: str):
     username = f"frank_{uid}"
     await register_user(client, username, "mypassword", role="viewer")
     resp = await client.post(
@@ -70,10 +76,12 @@ async def test_login_success_returns_token_and_role(client: AsyncClient, uid: st
     body = resp.json()
     assert "access_token" in body
     assert body["token_type"] == "bearer"
-    assert body["role"] == "viewer"
+    assert "permissions" in body
+    perms = set(body["permissions"])
+    assert VIEWER_PERMISSIONS == perms
 
 
-async def test_login_admin_role_returned(client: AsyncClient, uid: str):
+async def test_login_admin_gets_all_permissions(client: AsyncClient, uid: str):
     username = f"grace_{uid}"
     await register_user(client, username, "mypassword", role="admin")
     resp = await client.post(
@@ -82,7 +90,9 @@ async def test_login_admin_role_returned(client: AsyncClient, uid: str):
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     assert resp.status_code == 200
-    assert resp.json()["role"] == "admin"
+    perms = set(resp.json()["permissions"])
+    assert VIEWER_PERMISSIONS.issubset(perms)
+    assert ADMIN_ONLY_PERMISSIONS.issubset(perms)
 
 
 async def test_login_wrong_password(client: AsyncClient, uid: str):

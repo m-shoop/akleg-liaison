@@ -2,8 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import require_editor
-from app.models.user import User
+from app.dependencies import CurrentUser, require_permission
 from app.repositories.audit_log_repository import log_action
 from app.repositories.bill_repository import get_bill_by_id
 from app.repositories.tag_repository import (
@@ -24,7 +23,10 @@ router = APIRouter(tags=["tags"])
 # ---------------------------------------------------------------------------
 
 @router.get("/tags", response_model=list[TagRead])
-async def list_all_tags(db: AsyncSession = Depends(get_db)):
+async def list_all_tags(
+    db: AsyncSession = Depends(get_db),
+    _: CurrentUser = Depends(require_permission("bill-tags:view")),
+):
     return await list_tags(db)
 
 
@@ -33,7 +35,7 @@ async def update_tag(
     tag_id: int,
     body: TagUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_editor),
+    _: CurrentUser = Depends(require_permission("bill-tags:edit")),
 ):
     """Toggle a tag's global is_active flag."""
     tag = await set_tag_active(db, tag_id, body.is_active)
@@ -53,7 +55,7 @@ async def add_tag_to_bill(
     bill_id: int,
     body: TagCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_editor),
+    current_user: CurrentUser = Depends(require_permission("bill-tags:edit")),
 ):
     """
     Add a tag (by label) to a bill.
@@ -70,7 +72,7 @@ async def add_tag_to_bill(
 
     tag = await get_or_create_tag(db, label)
     await add_bill_tag(db, bill_id, tag.id)
-    await log_action(db, current_user, "tag_added", entity_type="bill", entity_id=bill_id, details={"bill_number": bill.bill_number, "tag": label})
+    await log_action(db, current_user.user, "tag_added", entity_type="bill", entity_id=bill_id, details={"bill_number": bill.bill_number, "tag": label})
     await db.commit()
     await db.refresh(tag)
     return tag
@@ -81,7 +83,7 @@ async def remove_tag_from_bill(
     bill_id: int,
     tag_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_editor),
+    current_user: CurrentUser = Depends(require_permission("bill-tags:edit")),
 ):
     """Remove a tag from a bill (deletes the bill_tags row)."""
     bill = await get_bill_by_id(db, bill_id)
@@ -93,5 +95,5 @@ async def remove_tag_from_bill(
         raise HTTPException(status_code=404, detail="Tag not found")
 
     await remove_bill_tag(db, bill_id, tag_id)
-    await log_action(db, current_user, "tag_removed", entity_type="bill", entity_id=bill_id, details={"bill_number": bill.bill_number, "tag": tag.label})
+    await log_action(db, current_user.user, "tag_removed", entity_type="bill", entity_id=bill_id, details={"bill_number": bill.bill_number, "tag": tag.label})
     await db.commit()

@@ -49,7 +49,7 @@ function alaskaLocalToUtc(dateStr, timeStr) {
   return new Date(candidate.getTime() + diffMs);
 }
 
-function exportToCalendar(meeting) {
+function exportToCalendar(meeting, notes) {
   const chamberLabel = meeting.chamber === "H" ? "House" : "Senate";
   const summary = `${chamberLabel} ${meeting.committee_name} ${meeting.committee_type}`;
   const dateStr = meeting.meeting_date.replace(/-/g, "");
@@ -73,9 +73,9 @@ function exportToCalendar(meeting) {
 
   // Build description
   const descLines = [];
-  if (meeting.dps_notes) {
+  if (notes) {
     descLines.push("Department of Public Safety Notes:");
-    descLines.push(meeting.dps_notes);
+    descLines.push(notes);
     descLines.push("--");
   }
   descLines.push("Hearing Schedule:");
@@ -115,7 +115,7 @@ function exportToCalendar(meeting) {
 }
 
 export default function MeetingCard({ meeting, isFirst, globalExpanded, showHidden, onNotesSaved, onHiddenChanged }) {
-  const { isLoggedIn, isEditor, token } = useAuth();
+  const { can, token } = useAuth();
   const [notes, setNotes] = useState(meeting.dps_notes ?? "");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -168,8 +168,8 @@ export default function MeetingCard({ meeting, isFirst, globalExpanded, showHidd
           <span>{fmt(meeting.meeting_date)}</span>
           <div className={styles.cardDateRight}>
             {meeting.meeting_time && <span>{fmtTime(meeting.meeting_time)}</span>}
-            {isLoggedIn && (
-              <button className={styles.calBtn} onClick={() => exportToCalendar(meeting)} title="Export to Outlook calendar">
+            {can("hearing:export-ics") && (
+              <button className={styles.calBtn} onClick={() => exportToCalendar(meeting, notes)} title="Export to Outlook calendar">
                 + Calendar
               </button>
             )}
@@ -237,10 +237,10 @@ export default function MeetingCard({ meeting, isFirst, globalExpanded, showHidd
         {lastSynced && <p className={styles.lastSynced}>Synced {lastSynced}</p>}
       </div>
 
-      {isLoggedIn && (
+      {can("hearing-notes:view") && (
       <div className={styles.dpsRow}>
         <label className={styles.dpsLabel}>Notes</label>
-        {isEditor ? (
+        {can("hearing-notes:edit") ? (
           <>
             <textarea
               className={styles.dpsInput}
@@ -260,7 +260,7 @@ export default function MeetingCard({ meeting, isFirst, globalExpanded, showHidd
       </div>
       )}
 
-      {isEditor && (
+      {can("hearing:hide") && (
         <div className={styles.hideRow}>
           <label className={styles.dpsLabel}>Visibility</label>
           {meeting.hidden && showHidden && (

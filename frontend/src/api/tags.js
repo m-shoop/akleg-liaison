@@ -6,8 +6,8 @@ function authHeaders(token) {
   return { Authorization: `Bearer ${token}` };
 }
 
-export async function fetchTags() {
-  const res = await apiFetch(`${BASE}/tags`);
+export async function fetchTags(token) {
+  const res = await apiFetch(`${BASE}/tags`, { headers: authHeaders(token) });
   if (!res.ok) throw new Error(`Failed to fetch tags: ${res.status}`);
   return res.json();
 }

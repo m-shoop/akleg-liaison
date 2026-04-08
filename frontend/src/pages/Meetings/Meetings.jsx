@@ -19,7 +19,7 @@ function fmt(isoDate) {
 }
 
 export default function Meetings() {
-  const { isEditor, isLoggedIn, token } = useAuth();
+  const { can, isLoggedIn, token } = useAuth();
   const [searchParams] = useSearchParams();
   const [startDate, setStartDate] = useState(() => searchParams.get("start") || weekBounds().start);
   const [endDate, setEndDate] = useState(() => searchParams.get("end") || weekBounds().end);
@@ -61,7 +61,7 @@ export default function Meetings() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchMeetings({ startDate, endDate, includeInactive: true });
+      const data = await fetchMeetings({ startDate, endDate, includeInactive: true, token });
       setAllMeetings(data);
     } catch (e) {
       setError(e.message);
@@ -218,7 +218,7 @@ export default function Meetings() {
             <span className={styles.legendItem}><code>=</code> previously heard / scheduled</span>
           </div>
           <div id="tour-controls" className={styles.btnRow}>
-            {isEditor && (
+            {can("hearing:query") && (
               <button
                 className={styles.scrapeBtn}
                 onClick={handleScrape}
@@ -247,7 +247,7 @@ export default function Meetings() {
                 {showInactive ? "Hide inactive" : "Show inactive"}
               </button>
             )}
-            {isEditor && (
+            {can("hearing:hide") && (
               <div className={styles.toggleGroup}>
                 <button
                   className={`${styles.toggleOption} ${!showHidden ? styles.toggleSelected : ""}`}
@@ -278,7 +278,7 @@ export default function Meetings() {
         />
         <button
           className={styles.helpBtn}
-          onClick={() => createMeetingsTour({ isEditor, isLoggedIn }).drive()}
+          onClick={() => createMeetingsTour({ isEditor: can("hearing:query"), isLoggedIn }).drive()}
           title="Tour the Meetings page"
         >
           ?
@@ -305,7 +305,7 @@ export default function Meetings() {
       {meetings !== null && meetings.length === 0 && (
         <p className={styles.notice}>
           No meetings found for this date range.
-          {isEditor && ' Use "Refresh hearings from akleg.gov" to import them.'}
+          {can("hearing:query") && ' Use "Refresh hearings from akleg.gov" to import them.'}
         </p>
       )}
       {meetings !== null && meetings.length > 0 && filteredMeetings.length === 0 && (

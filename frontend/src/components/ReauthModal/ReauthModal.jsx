@@ -34,7 +34,7 @@ export default function ReauthModal() {
     setBusy(true);
     try {
       const data = await loginRequest(username, password);
-      login(data.access_token, username, data.role);
+      login(data.access_token, username, data.permissions);
       setVisible(false);
       setPassword("");
       window.dispatchEvent(new CustomEvent("reauth-complete", { detail: { token: data.access_token } }));

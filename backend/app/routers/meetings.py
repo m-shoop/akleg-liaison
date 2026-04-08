@@ -4,8 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal, get_db
-from app.dependencies import get_optional_current_user, require_editor
-from app.models.user import User
+from app.dependencies import CurrentUser, get_optional_current_user, require_permission
 from app.repositories.job_repository import (
     create_job,
     set_job_complete,
@@ -74,10 +73,11 @@ async def get_meetings(
     legislature_session: int = Query(34),
     include_inactive: bool = Query(False),
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(get_optional_current_user),
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
 ):
     meetings = await list_meetings(db, start_date, end_date, legislature_session, include_inactive)
-    if current_user is None:
+    can_view_notes = current_user is not None and current_user.can("hearing-notes:view")
+    if not can_view_notes:
         for m in meetings:
             m.dps_notes = None
     return meetings
@@ -88,7 +88,7 @@ async def scrape_meetings(
     body: MeetingScrapeRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_editor),
+    _: CurrentUser = Depends(require_permission("hearing:query")),
 ):
     """Enqueue a scrape job and return immediately. Poll GET /jobs/{id} for status."""
     job_id = await create_job(db, job_type="scrape_meetings")
@@ -106,13 +106,13 @@ async def patch_hidden(
     meeting_id: int,
     body: MeetingHiddenUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_editor),
+    current_user: CurrentUser = Depends(require_permission("hearing:hide")),
 ):
     existing = await get_meeting_by_id(db, meeting_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Meeting not found")
     meeting = await update_hidden(db, meeting_id, body.hidden)
-    await log_action(db, current_user, "meeting_hidden_updated", entity_type="meeting", entity_id=meeting_id, details={"hidden": body.hidden, "committee": existing.committee_name, "meeting_date": str(existing.meeting_date)})
+    await log_action(db, current_user.user, "meeting_hidden_updated", entity_type="meeting", entity_id=meeting_id, details={"hidden": body.hidden, "committee": existing.committee_name, "meeting_date": str(existing.meeting_date)})
     await db.commit()
     await db.refresh(meeting)
     return meeting
@@ -123,14 +123,14 @@ async def patch_dps_notes(
     meeting_id: int,
     body: MeetingDpsNotesUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_editor),
+    current_user: CurrentUser = Depends(require_permission("hearing-notes:edit")),
 ):
     existing = await get_meeting_by_id(db, meeting_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Meeting not found")
     old_notes = existing.dps_notes
     meeting = await update_dps_notes(db, meeting_id, body.dps_notes)
-    await log_action(db, current_user, "meeting_notes_updated", entity_type="meeting", entity_id=meeting_id, details={"old_notes": old_notes, "new_notes": body.dps_notes, "committee": existing.committee_name, "meeting_date": str(existing.meeting_date)})
+    await log_action(db, current_user.user, "meeting_notes_updated", entity_type="meeting", entity_id=meeting_id, details={"old_notes": old_notes, "new_notes": body.dps_notes, "committee": existing.committee_name, "meeting_date": str(existing.meeting_date)})
     await db.commit()
     await db.refresh(meeting)
     return meeting

@@ -4,7 +4,7 @@ import { addTagToBill, removeTagFromBill } from "../../api/tags";
 import styles from "./BillTags.module.css";
 
 export default function BillTags({ bill, allTags = [] }) {
-  const { isLoggedIn, isEditor, token } = useAuth();
+  const { can, token } = useAuth();
   const [tags, setTags] = useState(bill.tags ?? []);
   const [inputValue, setInputValue] = useState("");
   const [busy, setBusy] = useState(false);
@@ -67,7 +67,7 @@ export default function BillTags({ bill, allTags = [] }) {
     }
   }
 
-  if (!isLoggedIn) return null;
+  if (!can("bill-tags:view")) return null;
 
   return (
     <div className={styles.container}>
@@ -75,7 +75,7 @@ export default function BillTags({ bill, allTags = [] }) {
         {tags.filter((tag) => tag.is_active).map((tag) => (
           <span key={tag.id} className={styles.pill}>
             <span className={styles.pillLabel}>{tag.label}</span>
-            {isEditor && (
+            {can("bill-tags:edit") && (
               <button
                 className={styles.pillRemove}
                 onClick={() => handleRemove(tag.id)}
@@ -89,7 +89,7 @@ export default function BillTags({ bill, allTags = [] }) {
           </span>
         ))}
 
-        {isEditor && (
+        {can("bill-tags:edit") && (
           <div className={styles.addWrapper}>
             <form onSubmit={(e) => { e.preventDefault(); addTag(highlightedIndex >= 0 ? suggestions[highlightedIndex].label : inputValue); }} className={styles.addForm}>
               <input

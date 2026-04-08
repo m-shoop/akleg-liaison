@@ -44,7 +44,7 @@ function CalendarIcon({ isoDate, billNumber }) {
 }
 
 export default function BillCard({ bill, showDescription, selectedOutcomes, selectedDepts = null, showKeywords = false, abbreviated = false, allTags = [], upcomingHearingDates = [], onRefreshed: _onRefreshed, onTrackingChanged }) {
-  const { isEditor, token } = useAuth();
+  const { can, token } = useAuth();
   const [tracking, setTracking] = useState(false);
   const [error, setError] = useState(null);
 
@@ -113,7 +113,7 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, sele
           <span className={styles.status}>{bill.status ?? "Unknown"}</span>
         )}
         <span className={styles.introduced}>Introduced {introduced}</span>
-        {isEditor && (
+        {can("bill:track") && (
           <button
             className={styles.trackBtn}
             onClick={handleToggleTracked}

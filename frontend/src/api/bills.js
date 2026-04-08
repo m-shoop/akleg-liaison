@@ -6,9 +6,10 @@ function authHeaders(token) {
   return { Authorization: `Bearer ${token}` };
 }
 
-export async function fetchBills({ includeUntracked = false } = {}) {
+export async function fetchBills({ includeUntracked = false, token = null } = {}) {
   const url = includeUntracked ? `${BASE}/bills?include_untracked=true` : `${BASE}/bills`;
-  const res = await apiFetch(url);
+  const headers = token ? authHeaders(token) : {};
+  const res = await apiFetch(url, { headers });
   if (!res.ok) throw new Error(`Failed to fetch bills: ${res.status}`);
   return res.json();
 }

@@ -14,20 +14,21 @@ def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
-def create_access_token(username: str) -> str:
+def create_access_token(username: str, permissions: list[str]) -> str:
     expire = datetime.now(timezone.utc) + timedelta(
         minutes=settings.access_token_expire_minutes
     )
-    payload = {"sub": username, "exp": expire}
+    payload = {"sub": username, "exp": expire, "permissions": permissions}
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 
-def decode_token(token: str) -> str:
-    """Returns the username embedded in the token, or raises JWTError."""
+def decode_token(token: str) -> tuple[str, list[str]]:
+    """Returns (username, permissions) from the token, or raises JWTError."""
     payload = jwt.decode(
         token, settings.secret_key, algorithms=[settings.algorithm]
     )
     username: str = payload.get("sub")
     if username is None:
         raise JWTError("Missing subject")
-    return username
+    permissions: list[str] = payload.get("permissions", [])
+    return username, permissions
