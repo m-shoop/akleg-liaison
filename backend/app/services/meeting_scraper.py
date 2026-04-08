@@ -111,15 +111,15 @@ async def fetch_schedule_html(start: date, end: date) -> str:
 # Parse
 # ---------------------------------------------------------------------------
 
-def parse_schedule(html: str, year: int) -> list[ScrapedMeeting]:
+def parse_schedule(html: str, start: date, end: date) -> list[ScrapedMeeting]:
     soup = BeautifulSoup(html, "html.parser")
     table = soup.select_one("#IndexResults2 > div > table")
     if table is None:
         return []
-    return _parse_table(table, year)
+    return _parse_table(table, start, end)
 
 
-def _parse_table(table: Tag, year: int) -> list[ScrapedMeeting]:
+def _parse_table(table: Tag, start: date, end: date) -> list[ScrapedMeeting]:
     meetings: list[ScrapedMeeting] = []
     current: ScrapedMeeting | None = None
 
@@ -146,7 +146,7 @@ def _parse_table(table: Tag, year: int) -> list[ScrapedMeeting]:
             # --- Date / location row ---
             date_text = raw_cells[0].get_text(strip=True)
             location_text = raw_cells[1].get_text(strip=True) if len(raw_cells) > 1 else None
-            parsed_date, parsed_time = _parse_date_time(date_text, year)
+            parsed_date, parsed_time = _parse_date_time(date_text, start, end)
             if parsed_date:
                 current.meeting_date = parsed_date
                 current.meeting_time = parsed_time
@@ -267,8 +267,13 @@ def _parse_header_row(raw_cells: list, m: re.Match) -> ScrapedMeeting:
     )
 
 
-def _parse_date_time(text: str, year: int) -> tuple[date | None, time | None]:
-    """Parse strings like 'May 20 Tuesday 9:00 AM' into (date, time)."""
+def _parse_date_time(text: str, start: date, end: date) -> tuple[date | None, time | None]:
+    """Parse strings like 'May 20 Tuesday 9:00 AM' into (date, time).
+
+    Tries each year from start.year to end.year and returns the first parsed
+    date that falls within [start, end].  This handles year-boundary scrapes
+    (e.g. December 2025 → April 2026) where month names alone are ambiguous.
+    """
     m = _DATE_RE.match(text)
     if not m:
         return None, None
@@ -282,7 +287,16 @@ def _parse_date_time(text: str, year: int) -> tuple[date | None, time | None]:
             hour += 12
         elif ampm.upper() == "AM" and hour == 12:
             hour = 0
-        return date(year, month, day), time(hour, minute)
+        t = time(hour, minute)
+        for year in range(start.year, end.year + 1):
+            try:
+                d = date(year, month, day)
+                if start <= d <= end:
+                    return d, t
+            except ValueError:
+                continue
+        # Fallback: use start.year (meeting outside the requested window)
+        return date(start.year, month, day), t
     except (ValueError, OverflowError):
         return None, None
 
@@ -320,7 +334,7 @@ async def scrape_and_store_meetings(
     )
 
     html = await fetch_schedule_html(start, end)
-    meetings = parse_schedule(html, year=start.year)
+    meetings = parse_schedule(html, start=start, end=end)
 
     saved = 0
     active_ids: set[int] = set()
