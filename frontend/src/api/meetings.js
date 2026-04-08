@@ -2,14 +2,15 @@ import { apiFetch } from "./apiFetch";
 
 const API = "/api";
 
-export async function fetchMeetings({ startDate, endDate, legislatureSession = 34, includeInactive = false }) {
+export async function fetchMeetings({ startDate, endDate, legislatureSession = 34, includeInactive = false }, token) {
   const params = new URLSearchParams({
     start_date: startDate,
     legislature_session: legislatureSession,
     include_inactive: includeInactive,
   });
   if (endDate) params.set("end_date", endDate);
-  const res = await apiFetch(`${API}/meetings?${params}`);
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const res = await apiFetch(`${API}/meetings?${params}`, { headers });
   if (!res.ok) throw new Error("Failed to fetch meetings");
   return res.json();
 }

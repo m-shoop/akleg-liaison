@@ -61,7 +61,7 @@ export default function Meetings() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchMeetings({ startDate, endDate, includeInactive: true });
+      const data = await fetchMeetings({ startDate, endDate, includeInactive: true }, token);
       setAllMeetings(data);
     } catch (e) {
       setError(e.message);
