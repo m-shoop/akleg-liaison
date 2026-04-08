@@ -1,7 +1,7 @@
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
 
-export function createMeetingsTour() {
+export function createMeetingsTour({ isEditor = false, isLoggedIn = false } = {}) {
   return driver({
     showProgress: true,
     steps: [
@@ -21,14 +21,14 @@ export function createMeetingsTour() {
             "Choose the week or date range you want to view. Meetings load automatically when the dates change.",
         },
       },
-      {
+      ...(isEditor ? [{
         element: "#tour-controls",
         popover: {
           title: "Controls",
           description:
-            "Scrape the latest schedule directly from akleg.gov to pick up any changes. Requires login and a To date to be set.",
+            "Scrape the latest schedule directly from akleg.gov to pick up any changes. Requires login and a To date to be set. Use the hidden meetings toggle to show or hide meetings marked as hidden.",
         },
-      },
+      }] : []),
       {
         element: "#tour-expand-agendas",
         popover: {
@@ -37,14 +37,14 @@ export function createMeetingsTour() {
             "Toggle all meeting agendas open or closed at once. You can also expand or collapse individual meetings independently by clicking '▸ Show agenda' on each card.",
         },
       },
-      {
+      ...(isEditor ? [{
         element: "#tour-show-inactive",
         popover: {
           title: "Show Inactive Meetings",
           description:
             "Reveals meetings that were removed from the akleg.gov schedule after a prior scrape. Inactive meetings are shown with a strikethrough and reduced opacity. Only appears when inactive meetings exist in the selected date range.",
         },
-      },
+      }] : []),
       {
         element: "#tour-legend",
         popover: {

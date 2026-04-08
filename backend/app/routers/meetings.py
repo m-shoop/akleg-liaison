@@ -4,7 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal, get_db
-from app.dependencies import require_editor
+from app.dependencies import get_optional_current_user, require_editor
 from app.models.user import User
 from app.repositories.job_repository import (
     create_job,
@@ -74,8 +74,13 @@ async def get_meetings(
     legislature_session: int = Query(34),
     include_inactive: bool = Query(False),
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_optional_current_user),
 ):
-    return await list_meetings(db, start_date, end_date, legislature_session, include_inactive)
+    meetings = await list_meetings(db, start_date, end_date, legislature_session, include_inactive)
+    if current_user is None:
+        for m in meetings:
+            m.dps_notes = None
+    return meetings
 
 
 @router.post("/meetings/scrape", response_model=JobRead, status_code=202)

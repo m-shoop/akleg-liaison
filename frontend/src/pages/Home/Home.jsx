@@ -211,32 +211,46 @@ export default function Home() {
             </div>
           </div>
           <div className={styles.controls}>
-            <div id="tour-filter-outcomes">
+            <div id="tour-filter-outcomes-fiscal-notes" className={styles.togglePair}>
               <OutcomeFilter
                 selected={selectedOutcomes}
                 onChange={setSelectedOutcomes}
               />
-            </div>
-            {(
               <FiscalDeptFilter
                 allDepts={allDepts}
                 selected={selectedDepts}
                 onChange={setSelectedDepts}
               />
-            )}
-            <div id="tour-toggle-descriptions" className={styles.toggleGroup}>
-              <button
-                className={`${styles.toggleOption} ${!showDescription ? styles.toggleSelected : ""}`}
-                onClick={() => setShowDescription(false)}
-              >
-                Hide Descriptions
-              </button>
-              <button
-                className={`${styles.toggleOption} ${showDescription ? styles.toggleSelected : ""}`}
-                onClick={() => setShowDescription(true)}
-              >
-                Show Descriptions
-              </button>
+            </div>
+            <div id="tour-toggle-descriptions-keywords" className={styles.togglePair}>
+              <div className={styles.toggleGroup}>
+                <button
+                  className={`${styles.toggleOption} ${!showDescription ? styles.toggleSelected : ""}`}
+                  onClick={() => setShowDescription(false)}
+                >
+                  Hide Descriptions
+                </button>
+                <button
+                  className={`${styles.toggleOption} ${showDescription ? styles.toggleSelected : ""}`}
+                  onClick={() => setShowDescription(true)}
+                >
+                  Show Descriptions
+                </button>
+              </div>
+              <div className={styles.toggleGroup}>
+                <button
+                  className={`${styles.toggleOption} ${!showKeywords ? styles.toggleSelected : ""}`}
+                  onClick={() => setShowKeywords(false)}
+                >
+                  Hide Keywords
+                </button>
+                <button
+                  className={`${styles.toggleOption} ${showKeywords ? styles.toggleSelected : ""}`}
+                  onClick={() => setShowKeywords(true)}
+                >
+                  Show Keywords
+                </button>
+              </div>
             </div>
             <div id="tour-toggle-untracked" className={styles.toggleGroup}>
               <button
@@ -264,20 +278,6 @@ export default function Home() {
                 onClick={() => setSideBySide(false)}
               >
                 Single Column
-              </button>
-            </div>
-            <div id="tour-toggle-keywords" className={styles.toggleGroup}>
-              <button
-                className={`${styles.toggleOption} ${!showKeywords ? styles.toggleSelected : ""}`}
-                onClick={() => setShowKeywords(false)}
-              >
-                Hide Keywords
-              </button>
-              <button
-                className={`${styles.toggleOption} ${showKeywords ? styles.toggleSelected : ""}`}
-                onClick={() => setShowKeywords(true)}
-              >
-                Show Keywords
               </button>
             </div>
             <div id="tour-export-pdf" className={styles.printRow}>
@@ -343,22 +343,24 @@ export default function Home() {
               className={styles.hearingFilterRow}
               title={(!printStartDate || !printEndDate) ? "Add dates to use this filter" : undefined}
             >
-              <span className={styles.hearingFilterLabel}>Filter to Measures with Hearings on These Dates</span>
-              <div className={`${styles.toggleGroup} ${(!printStartDate || !printEndDate) ? styles.toggleDisabled : ""}`}>
-                <button
-                  className={`${styles.toggleOption} ${!filterToHearings ? styles.toggleSelected : ""}`}
-                  onClick={() => setFilterToHearings(false)}
-                  disabled={!printStartDate || !printEndDate}
-                >
-                  Off
-                </button>
-                <button
-                  className={`${styles.toggleOption} ${filterToHearings ? styles.toggleSelected : ""}`}
-                  onClick={() => setFilterToHearings(true)}
-                  disabled={!printStartDate || !printEndDate}
-                >
-                  On
-                </button>
+              <div id="tour-toggle-filter-bills-with-hearings">
+                <span className={styles.hearingFilterLabel}>Filter to Measures with Hearings on These Dates</span>
+                <div className={`${styles.toggleGroup} ${(!printStartDate || !printEndDate) ? styles.toggleDisabled : ""}`}>
+                  <button
+                    className={`${styles.toggleOption} ${!filterToHearings ? styles.toggleSelected : ""}`}
+                    onClick={() => setFilterToHearings(false)}
+                    disabled={!printStartDate || !printEndDate}
+                  >
+                    Off
+                  </button>
+                  <button
+                    className={`${styles.toggleOption} ${filterToHearings ? styles.toggleSelected : ""}`}
+                    onClick={() => setFilterToHearings(true)}
+                    disabled={!printStartDate || !printEndDate}
+                  >
+                    On
+                  </button>
+                </div>
               </div>
             </div>
           </div>

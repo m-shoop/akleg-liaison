@@ -9,6 +9,7 @@ from app.repositories.user_repository import get_user_by_username
 from app.services.auth_service import decode_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
 async def get_current_user(
@@ -28,6 +29,22 @@ async def get_current_user(
     user = await get_user_by_username(db, username)
     if user is None or not user.is_active:
         raise credentials_exception
+    return user
+
+
+async def get_optional_current_user(
+    token: str | None = Depends(oauth2_scheme_optional),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    if token is None:
+        return None
+    try:
+        username = decode_token(token)
+    except JWTError:
+        return None
+    user = await get_user_by_username(db, username)
+    if user is None or not user.is_active:
+        return None
     return user
 
 

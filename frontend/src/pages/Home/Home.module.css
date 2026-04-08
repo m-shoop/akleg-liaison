@@ -123,6 +123,11 @@
   flex-shrink: 0;
 }
 
+.togglePair {
+  display: flex;
+  gap: 0.35rem;
+}
+
 .toggleGroup {
   display: flex;
   border-radius: 4px;

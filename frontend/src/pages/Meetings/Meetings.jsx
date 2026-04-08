@@ -19,7 +19,7 @@ function fmt(isoDate) {
 }
 
 export default function Meetings() {
-  const { isEditor, token } = useAuth();
+  const { isEditor, isLoggedIn, token } = useAuth();
   const [searchParams] = useSearchParams();
   const [startDate, setStartDate] = useState(() => searchParams.get("start") || weekBounds().start);
   const [endDate, setEndDate] = useState(() => searchParams.get("end") || weekBounds().end);
@@ -237,7 +237,7 @@ export default function Meetings() {
                 {globalExpanded ? "Collapse agendas" : "Expand agendas"}
               </button>
             )}
-            {hasInactive && (
+            {isLoggedIn && hasInactive && (
               <button
                 id="tour-show-inactive"
                 className={`${styles.loadBtn} ${showInactive ? styles.loadBtnActive : ""}`}
@@ -278,7 +278,7 @@ export default function Meetings() {
         />
         <button
           className={styles.helpBtn}
-          onClick={() => createMeetingsTour().drive()}
+          onClick={() => createMeetingsTour({ isEditor, isLoggedIn }).drive()}
           title="Tour the Meetings page"
         >
           ?

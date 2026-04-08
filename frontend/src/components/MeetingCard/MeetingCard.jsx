@@ -168,9 +168,11 @@ export default function MeetingCard({ meeting, isFirst, globalExpanded, showHidd
           <span>{fmt(meeting.meeting_date)}</span>
           <div className={styles.cardDateRight}>
             {meeting.meeting_time && <span>{fmtTime(meeting.meeting_time)}</span>}
-            <button className={styles.calBtn} onClick={() => exportToCalendar(meeting)} title="Export to Outlook calendar">
-              + Calendar
-            </button>
+            {isLoggedIn && (
+              <button className={styles.calBtn} onClick={() => exportToCalendar(meeting)} title="Export to Outlook calendar">
+                + Calendar
+              </button>
+            )}
           </div>
         </div>
         <div className={styles.cardHeader}>
