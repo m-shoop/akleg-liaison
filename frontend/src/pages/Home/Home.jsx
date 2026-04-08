@@ -134,9 +134,21 @@ export default function Home() {
           showDescription ? o.description : null,
         ]);
 
+        const visibleFiscalNotes = (bill.fiscal_notes ?? []).filter(
+          (n) => n.is_active && (selectedDepts === null || selectedDepts.has(n.fn_department))
+        );
+
+        const fiscalNoteFields = visibleFiscalNotes.flatMap((n) => [
+          n.fn_department?.replace("Department of ", ""),
+          n.fn_identifier,
+          n.fn_appropriation,
+          n.fn_allocation,
+          n.control_code,
+        ]);
+
         const keywordFields = showKeywords ? bill.keywords.map((s) => s.keyword) : [];
 
-        const haystack = [bill.bill_number, bill.short_title, bill.status, ...bill.tags.map((t) => t.label), ...outcomeFields, ...keywordFields]
+        const haystack = [bill.bill_number, bill.short_title, bill.status, ...bill.tags.map((t) => t.label), ...outcomeFields, ...keywordFields, ...fiscalNoteFields]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
