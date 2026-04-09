@@ -126,6 +126,16 @@
   opacity: 0.85;
 }
 
+.usernameExpired {
+  opacity: 0.5;
+}
+
+.expiryIcon {
+  margin-right: 0.3rem;
+  font-style: normal;
+  color: #f0b429;
+}
+
 .loginBtn {
   padding: 0.4rem 1.1rem;
   border-radius: 4px;

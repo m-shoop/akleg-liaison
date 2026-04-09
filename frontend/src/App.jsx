@@ -3,6 +3,7 @@ import { AuthProvider } from "./context/AuthContext";
 import Navbar from "./components/Navbar/Navbar";
 import Footer from "./components/Footer/Footer";
 import ReauthModal from "./components/ReauthModal/ReauthModal";
+import SessionExpiredBanner from "./components/SessionExpiredBanner/SessionExpiredBanner";
 import Home from "./pages/Home/Home";
 import Login from "./pages/Login/Login";
 import QueryBill from "./pages/QueryBill/QueryBill";
@@ -14,6 +15,7 @@ export default function App() {
     <AuthProvider>
       <Navbar />
       <main className={styles.main}>
+        <SessionExpiredBanner />
         <Routes>
           <Route path="/"           element={<Home />} />
           <Route path="/login"      element={<Login />} />

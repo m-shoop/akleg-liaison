@@ -58,6 +58,18 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, sele
     ? new Date(bill.last_sync).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : null;
 
+  const lastSyncedFull = bill.last_sync
+    ? new Date(bill.last_sync).toLocaleString("en-US", { 
+      month: "long",
+      day: "numeric",
+      year: "numeric", 
+      hour: "numeric",
+      minute: "2-digit", 
+      timeZone: "America/Anchorage", 
+      timeZoneName: "shortGeneric", 
+    })
+    : null;
+
   const introduced = bill.introduced_date
     ? new Date(bill.introduced_date + "T00:00:00").toLocaleDateString("en-US", {
         month: "short",
@@ -193,7 +205,8 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, sele
         )}
       </div>
       {lastSynced && (
-        <p className={styles.lastSynced}>Synced {lastSynced}</p>
+        <p className={styles.lastSynced}
+          title={lastSyncedFull}>Synced {lastSynced}</p>
       )}
     </article>
   );

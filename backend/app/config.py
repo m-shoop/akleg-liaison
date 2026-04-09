@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     secret_key: str
     registration_key: str
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 240  # 4 hours
+    access_token_expire_minutes: int = 1  # 4 hours
 
 
 settings = Settings()

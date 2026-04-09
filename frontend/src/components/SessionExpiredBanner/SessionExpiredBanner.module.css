@@ -1,0 +1,46 @@
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1.5rem;
+  background-color: #7a4f00;
+  border-bottom: 2px solid #f0b429;
+  color: #fef3c7;
+  font-size: 0.875rem;
+}
+
+.message {
+  flex: 1;
+}
+
+.reauthBtn {
+  padding: 0.3rem 0.9rem;
+  border-radius: 4px;
+  border: 1.5px solid #f0b429;
+  background: transparent;
+  color: #f0b429;
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.reauthBtn:hover {
+  background-color: #f0b429;
+  color: #1c2b22;
+}
+
+.dismissBtn {
+  padding: 0.2rem 0.5rem;
+  background: none;
+  border: none;
+  color: #fef3c7;
+  font-size: 0.85rem;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+  line-height: 1;
+}
+
+.dismissBtn:hover {
+  opacity: 1;
+}

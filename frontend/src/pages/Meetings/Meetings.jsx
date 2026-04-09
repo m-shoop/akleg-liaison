@@ -20,6 +20,7 @@ function fmt(isoDate) {
 
 export default function Meetings() {
   const { isEditor, isLoggedIn, token } = useAuth();
+
   const [searchParams] = useSearchParams();
   const [startDate, setStartDate] = useState(() => searchParams.get("start") || weekBounds().start);
   const [endDate, setEndDate] = useState(() => searchParams.get("end") || weekBounds().end);
@@ -72,7 +73,7 @@ export default function Meetings() {
 
   useEffect(() => {
     loadMeetings();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, token]);
 
   async function handleScrape() {
     setError(null);

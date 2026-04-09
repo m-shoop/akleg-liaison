@@ -146,9 +146,11 @@ export default function Home() {
           n.control_code,
         ]);
 
+        const sponsorFields = bill.sponsors.map((s) => s.name);
+
         const keywordFields = showKeywords ? bill.keywords.map((s) => s.keyword) : [];
 
-        const haystack = [bill.bill_number, bill.short_title, bill.status, ...bill.tags.map((t) => t.label), ...outcomeFields, ...keywordFields, ...fiscalNoteFields]
+        const haystack = [bill.bill_number, bill.short_title, bill.status, ...bill.tags.map((t) => t.label), ...outcomeFields, ...keywordFields, ...fiscalNoteFields, ...sponsorFields]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
