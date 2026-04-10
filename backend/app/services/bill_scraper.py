@@ -164,6 +164,8 @@ def _parse_action_table(table: Tag) -> list[_RawRow]:
         event_date = _parse_date(time_el.get("datetime") or time_el.get_text())
         if event_date is None:
             continue
+        if event_date > date.today():
+            continue
 
         # --- Source URL (from the link in the page/journal cell) ---
         link = cells[1].find("a")

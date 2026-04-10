@@ -126,6 +126,10 @@ export default function MeetingCard({ meeting, isFirst, globalExpanded, showHidd
     setExpanded(globalExpanded);
   }, [globalExpanded]);
 
+  useEffect(() => {
+    if (!dirty) setNotes(meeting.dps_notes ?? "");
+  }, [meeting.dps_notes]);
+
   async function handleSave() {
     setSaving(true);
     try {
@@ -151,6 +155,18 @@ export default function MeetingCard({ meeting, isFirst, globalExpanded, showHidd
   const inactive = !meeting.is_active;
   const lastSynced = meeting.last_sync
     ? new Date(meeting.last_sync).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : null;
+  
+  const lastSyncedFull = meeting.last_sync
+    ? new Date(meeting.last_sync).toLocaleString("en-US", { 
+      month: "long",
+      day: "numeric",
+      year: "numeric", 
+      hour: "numeric",
+      minute: "2-digit", 
+      timeZone: "America/Anchorage", 
+      timeZoneName: "shortGeneric", 
+    })
     : null;
 
   return (
@@ -234,7 +250,8 @@ export default function MeetingCard({ meeting, isFirst, globalExpanded, showHidd
             </tbody>
           </table>
         )}
-        {lastSynced && <p className={styles.lastSynced}>Synced {lastSynced}</p>}
+        {lastSynced && <p className={styles.lastSynced}
+          title={lastSyncedFull}>Synced {lastSynced}</p>}
       </div>
 
       {can("hearing-notes:view") && (

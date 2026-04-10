@@ -17,6 +17,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import with_loader_criteria
 
 from app.models.bill import Bill, BillEvent, BillEventOutcome, BillSponsor, BillKeyword
 from app.models.fiscal_note import FiscalNote
@@ -115,6 +116,7 @@ async def upsert_event(
             constraint="uq_bill_event",
             set_=dict(
                 raw_text=scraped.raw_text,
+                is_active=True,   # re-activate if it had been marked inactive
                 updated_at=func.now(),
                 # analyzed is intentionally NOT reset — once done, stays done
             ),
@@ -146,6 +148,52 @@ async def insert_outcomes(
         .where(BillEvent.id == event_id)
         .values(analyzed=True, updated_at=func.now())
     )
+
+
+async def get_inactive_event_source_urls(
+    session: AsyncSession, bill_id: int
+) -> set[str]:
+    """Return source_urls of currently inactive events for *bill_id*."""
+    result = await session.execute(
+        select(BillEvent.source_url).where(
+            BillEvent.bill_id == bill_id,
+            BillEvent.is_active == False,  # noqa: E712
+        )
+    )
+    return {row[0] for row in result.all()}
+
+
+async def deactivate_stale_events(
+    session: AsyncSession, bill_id: int, active_source_urls: set[str]
+) -> list[dict]:
+    """
+    Mark as inactive any bill_events for *bill_id* whose source_url is no
+    longer present in the latest scrape.  Inactive events (and their outcomes)
+    are hidden from all read queries.
+
+    Returns a list of dicts describing each newly-deactivated event so the
+    caller can write audit log entries.
+    """
+    result = await session.execute(
+        BillEvent.__table__
+        .update()
+        .where(
+            BillEvent.bill_id == bill_id,
+            BillEvent.is_active == True,  # noqa: E712
+            BillEvent.source_url.notin_(active_source_urls),
+        )
+        .values(is_active=False, updated_at=func.now())
+        .returning(
+            BillEvent.__table__.c.id,
+            BillEvent.__table__.c.event_date,
+            BillEvent.__table__.c.source_url,
+            BillEvent.__table__.c.raw_text,
+        )
+    )
+    return [
+        {"id": row[0], "event_date": row[1], "source_url": row[2], "raw_text": row[3]}
+        for row in result.all()
+    ]
 
 
 async def get_bill_tracking_status(
@@ -180,6 +228,7 @@ async def get_bill_by_id(
             selectinload(Bill.keywords),
             selectinload(Bill.fiscal_notes),
             selectinload(Bill.fiscal_notes_query_failed_record),
+            with_loader_criteria(BillEvent, BillEvent.is_active == True),  # noqa: E712
         )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
@@ -203,6 +252,7 @@ async def list_bills(
             selectinload(Bill.keywords),
             selectinload(Bill.fiscal_notes),
             selectinload(Bill.fiscal_notes_query_failed_record),
+            with_loader_criteria(BillEvent, BillEvent.is_active == True),  # noqa: E712
         )
         .order_by(Bill.session.desc(), Bill.bill_number)
     )
@@ -255,11 +305,11 @@ async def get_bill_by_number(
 async def list_events_for_bill(
     session: AsyncSession, bill_id: int
 ) -> list[BillEvent]:
-    """Return all events for a bill ordered by date, with outcomes."""
+    """Return all active events for a bill ordered by date, with outcomes."""
     from sqlalchemy.orm import selectinload
     result = await session.execute(
         select(BillEvent)
-        .where(BillEvent.bill_id == bill_id)
+        .where(BillEvent.bill_id == bill_id, BillEvent.is_active == True)  # noqa: E712
         .order_by(BillEvent.event_date)
         .options(selectinload(BillEvent.outcomes))
     )

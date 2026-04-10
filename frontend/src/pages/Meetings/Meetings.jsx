@@ -19,7 +19,7 @@ function fmt(isoDate) {
 }
 
 export default function Meetings() {
-  const { can, isLoggedIn, token } = useAuth();
+  const { can, isLoggedIn, token, isTokenExpired } = useAuth();
   const [searchParams] = useSearchParams();
   const [startDate, setStartDate] = useState(() => searchParams.get("start") || weekBounds().start);
   const [endDate, setEndDate] = useState(() => searchParams.get("end") || weekBounds().end);
@@ -72,7 +72,13 @@ export default function Meetings() {
 
   useEffect(() => {
     loadMeetings();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, token]);
+
+  useEffect(() => {
+    if (isTokenExpired && allMeetings) {
+      setAllMeetings(prev => prev.map(m => ({ ...m, dps_notes: null })));
+    }
+  }, [isTokenExpired]);
 
   async function handleScrape() {
     setError(null);

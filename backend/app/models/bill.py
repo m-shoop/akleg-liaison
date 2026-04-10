@@ -174,6 +174,9 @@ class BillEvent(Base):
     raw_text: Mapped[str] = mapped_column(Text, nullable=False)
     # True once the Mistral analysis job has run for this event
     analyzed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # False when the event no longer appears in the scraped bill page (e.g. a
+    # scheduled hearing was cancelled before it took place).
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

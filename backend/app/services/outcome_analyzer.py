@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass
 
 import httpx
@@ -24,8 +25,15 @@ from app.config import settings
 from app.models.bill import Chamber, OutcomeType
 from app.services.bill_scraper import ScrapedEvent
 
+MISTRAL_MODEL = "mistral-small-latest"
+
 # Roughly 3 000 tokens of input per page — well within small-model limits
 _MAX_TEXT_CHARS = 12_000
+
+_RETRY_ATTEMPTS = 4
+_RETRY_BASE_DELAY = 2.0   # seconds; doubles each attempt (2, 4, 8, 16)
+
+logger = logging.getLogger(__name__)
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; AKLegLiaisonBot/1.0)"
@@ -155,7 +163,7 @@ async def _fetch_page_text(url: str) -> str:
 def _call_mistral(user_message: str) -> list[ScrapedOutcome]:
     client = Mistral(api_key=settings.mistral_api_key)
     response = client.chat.complete(
-        model="mistral-small-latest",
+        model=MISTRAL_MODEL,
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user",   "content": user_message},
@@ -197,6 +205,7 @@ async def analyze_event(event: ScrapedEvent, bill_number: str) -> list[ScrapedOu
 
     Returns a (possibly empty) list of ScrapedOutcome objects.
     Raises httpx.HTTPError if the source page cannot be fetched.
+    Retries up to _RETRY_ATTEMPTS times on 503 errors with exponential backoff.
     """
     page_text = await _fetch_page_text(event.source_url)
 
@@ -208,4 +217,20 @@ async def analyze_event(event: ScrapedEvent, bill_number: str) -> list[ScrapedOu
         f"--- Source document ---\n{page_text}"
     )
 
-    return await asyncio.to_thread(_call_mistral, user_message)
+    last_exc: Exception | None = None
+    for attempt in range(_RETRY_ATTEMPTS):
+        try:
+            return await asyncio.to_thread(_call_mistral, user_message)
+        except Exception as exc:
+            is_503 = "503" in str(exc) or "Service Unavailable" in str(exc)
+            if not is_503 or attempt == _RETRY_ATTEMPTS - 1:
+                raise
+            delay = _RETRY_BASE_DELAY * (2 ** attempt)
+            logger.warning(
+                "Mistral 503 on attempt %d/%d for event %s — retrying in %.0fs",
+                attempt + 1, _RETRY_ATTEMPTS, event.source_url, delay,
+            )
+            last_exc = exc
+            await asyncio.sleep(delay)
+
+    raise last_exc  # unreachable, satisfies type checker

@@ -82,6 +82,7 @@ async def _run_refresh_job(job_id, bill_number: str, session: int) -> None:
             await set_job_complete(db, job_id, {"bill_id": bill_id})
             await db.commit()
         except Exception as exc:
+            await db.rollback()
             await set_job_failed(db, job_id, str(exc))
             await db.commit()
 

@@ -3,7 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import styles from "./Navbar.module.css";
 
 export default function Navbar() {
-  const { isLoggedIn, can, username, logout } = useAuth();
+  const { isLoggedIn, can, username, logout, isTokenExpired } = useAuth();
   const navigate = useNavigate();
 
   function handleLogout() {
@@ -82,7 +82,10 @@ export default function Navbar() {
         <div className={styles.authArea}>
           {isLoggedIn ? (
             <>
-              <span className={styles.username}>{username}</span>
+              <span className={`${styles.username} ${isTokenExpired ? styles.usernameExpired : ""}`}>
+                {isTokenExpired && <span className={styles.expiryIcon} title="Session expired">⚠</span>}
+                {username}
+              </span>
               <button className={styles.logoutBtn} onClick={handleLogout}>
                 Log out
               </button>
