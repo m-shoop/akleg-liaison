@@ -8,6 +8,11 @@ import Home from "./pages/Home/Home";
 import Login from "./pages/Login/Login";
 import QueryBill from "./pages/QueryBill/QueryBill";
 import Meetings from "./pages/Meetings/Meetings";
+import Requests from "./pages/Requests/Requests";
+import Register from "./pages/Register/Register";
+import ForgotPassword from "./pages/ForgotPassword/ForgotPassword";
+import ActivateToken from "./pages/ActivateToken/ActivateToken";
+import SetPassword from "./pages/SetPassword/SetPassword";
 import styles from "./App.module.css";
 
 export default function App() {
@@ -17,10 +22,15 @@ export default function App() {
       <main className={styles.main}>
         <SessionExpiredBanner />
         <Routes>
-          <Route path="/"           element={<Home />} />
-          <Route path="/login"      element={<Login />} />
-          <Route path="/query-bill" element={<QueryBill />} />
-          <Route path="/meetings"   element={<Meetings />} />
+          <Route path="/"                element={<Home />} />
+          <Route path="/login"           element={<Login />} />
+          <Route path="/register"        element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/activate"        element={<ActivateToken />} />
+          <Route path="/set-password"    element={<SetPassword />} />
+          <Route path="/query-bill"      element={<QueryBill />} />
+          <Route path="/meetings"        element={<Meetings />} />
+          <Route path="/requests"        element={<Requests />} />
         </Routes>
       </main>
       <Footer />

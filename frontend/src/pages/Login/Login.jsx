@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { loginRequest } from "../../api/auth";
 import { useAuth } from "../../context/AuthContext";
 import styles from "./Login.module.css";
@@ -7,19 +7,23 @@ import styles from "./Login.module.css";
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  const [username, setUsername] = useState("");
+  const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError]       = useState(null);
-  const [loading, setLoading]   = useState(false);
+  const [error,    setError]    = useState(null);
+  const [loading,  setLoading]  = useState(false);
+
+  // Show a banner when redirected here after a token expiry from an email link
+  const tokenExpiredType = searchParams.get("tokenExpired"); // "registration" | "password_reset"
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const { access_token, permissions } = await loginRequest(username, password);
-      login(access_token, username, permissions);
+      const { access_token, permissions } = await loginRequest(email, password);
+      login(access_token, email.toLowerCase(), permissions);
       navigate("/");
     } catch (err) {
       setError(err.message);
@@ -34,15 +38,24 @@ export default function Login() {
         <h1 className={styles.title}>Sign in</h1>
         <p className={styles.subtitle}>AK Legislative Liaison</p>
 
+        {tokenExpiredType && (
+          <div className={styles.tokenExpiredBanner} role="alert">
+            {tokenExpiredType === "registration"
+              ? "Your account activation link has expired."
+              : "Your password reset link has expired."}{" "}
+            Please request a new one below.
+          </div>
+        )}
+
         <form className={styles.form} onSubmit={handleSubmit}>
           <label className={styles.label}>
-            Username
+            Email
             <input
               className={styles.input}
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
               required
             />
           </label>
@@ -65,6 +78,19 @@ export default function Login() {
             {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
+
+        <div className={styles.links}>
+          <Link
+            to="/forgot-password"
+            state={{ email }}
+            className={styles.link}
+          >
+            Forgot password?
+          </Link>
+          <Link to="/register" className={styles.link}>
+            Register
+          </Link>
+        </div>
       </div>
     </div>
   );

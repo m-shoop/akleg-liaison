@@ -1,10 +1,17 @@
+import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { fetchHasOpen } from "../../api/workflows";
 import styles from "./Navbar.module.css";
 
 export default function Navbar() {
-  const { isLoggedIn, can, username, logout, isTokenExpired } = useAuth();
+  const { isLoggedIn, can, username, logout, isTokenExpired, token } = useAuth();
   const navigate = useNavigate();
+  const [hasOpenRequests, setHasOpenRequests] = useState(false);
+
+  useEffect(() => {
+    fetchHasOpen(token).then((data) => setHasOpenRequests(data.has_open ?? false));
+  }, [token]);
 
   function handleLogout() {
     logout();
@@ -65,16 +72,38 @@ export default function Navbar() {
               </li>
             </ul>
           </li>
-          {can("bill:query") && (
-            <li>
-              <NavLink
-                to="/query-bill"
-                className={({ isActive }) =>
-                  isActive ? `${styles.link} ${styles.active}` : styles.link
-                }
-              >
-                Query Bill
-              </NavLink>
+          {isLoggedIn && (
+            <li className={styles.dropdown}>
+              <button className={styles.dropdownBtn}>&#9776;</button>
+              <ul className={styles.dropdownMenu}>
+                <li>
+                  <NavLink
+                    to="/requests"
+                    className={({ isActive }) =>
+                      isActive
+                        ? `${styles.dropdownItem} ${styles.dropdownItemActive}`
+                        : styles.dropdownItem
+                    }
+                  >
+                    Requests
+                    {hasOpenRequests && <span className={styles.openBadge} />}
+                  </NavLink>
+                </li>
+                {can("bill:query") && (
+                  <li>
+                    <NavLink
+                      to="/query-bill"
+                      className={({ isActive }) =>
+                        isActive
+                          ? `${styles.dropdownItem} ${styles.dropdownItemActive}`
+                          : styles.dropdownItem
+                      }
+                    >
+                      Query Bill
+                    </NavLink>
+                  </li>
+                )}
+              </ul>
             </li>
           )}
         </ul>

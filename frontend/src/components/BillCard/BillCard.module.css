@@ -110,6 +110,12 @@ a.status:hover {
   cursor: not-allowed;
 }
 
+.trackBtnDenied {
+  border-color: #c0392b;
+  color: #c0392b;
+  opacity: 0.6;
+}
+
 .refreshBtn {
   padding: 0.25rem 0.65rem;
   border-radius: 4px;

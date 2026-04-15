@@ -82,13 +82,13 @@
 .dropdownMenu {
   display: none;
   position: absolute;
-  top: calc(100% + 0.25rem);
+  top: 100%;
   left: 0;
   list-style: none;
   background-color: var(--color-rainforest);
   border: 1px solid var(--color-glacial-water);
   border-radius: 4px;
-  padding: 0.25rem 0;
+  padding: 0.5rem 0 0.25rem;
   min-width: 200px;
   z-index: 200;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
@@ -101,7 +101,7 @@
 
 .dropdownItem {
   display: block;
-  padding: 0.5rem 1rem;
+  padding: 0.65rem 1.25rem;
   font-size: 0.875rem;
   color: var(--color-lichen);
   text-decoration: none;
@@ -112,6 +112,23 @@
 .dropdownItem:hover {
   color: var(--color-text-on-dark);
   background-color: rgba(255, 255, 255, 0.08);
+}
+
+.dropdownItemActive {
+  color: var(--color-text-on-dark);
+  background-color: rgba(168, 200, 192, 0.2);
+}
+
+.openBadge {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--color-lichen);
+  margin-left: 5px;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
 }
 
 .authArea {

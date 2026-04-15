@@ -14,7 +14,7 @@ async def log_action(
 ) -> None:
     entry = AuditLog(
         user_id=user.id,
-        username=user.username,
+        username=user.email,
         action=action,
         entity_type=entity_type,
         entity_id=entity_id,

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { setTracked } from "../../api/bills";
+import { requestBillTracking } from "../../api/workflows";
 import { useAuth } from "../../context/AuthContext";
 import BillTags from "../BillTags/BillTags";
 import FiscalNotesTable from "../FiscalNotesTable/FiscalNotesTable";
@@ -43,9 +44,11 @@ function CalendarIcon({ isoDate, billNumber }) {
   );
 }
 
-export default function BillCard({ bill, showDescription, selectedOutcomes, selectedDepts = null, showKeywords = false, abbreviated = false, allTags = [], upcomingHearingDates = [], onRefreshed: _onRefreshed, onTrackingChanged }) {
+export default function BillCard({ bill, showDescription, selectedOutcomes, selectedDepts = null, showKeywords = false, abbreviated = false, allTags = [], upcomingHearingDates = [], onRefreshed: _onRefreshed, onTrackingChanged, onTrackingRequested }) {
   const { can, token } = useAuth();
   const [tracking, setTracking] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [trackingRequested, setTrackingRequested] = useState(bill.tracking_requested);
   const [error, setError] = useState(null);
 
   const visibleOutcomes = flattenOutcomes(bill.events).filter((r) => selectedOutcomes.has(r.outcome_type));
@@ -88,6 +91,20 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, sele
       setError(err.message);
     } finally {
       setTracking(false);
+    }
+  }
+
+  async function handleRequestTracking() {
+    setError(null);
+    setRequesting(true);
+    try {
+      await requestBillTracking(bill.id, token);
+      setTrackingRequested(true);
+      onTrackingRequested?.(bill.id);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRequesting(false);
     }
   }
 
@@ -134,6 +151,26 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, sele
           >
             {tracking ? "…" : bill.is_tracked ? "Untrack" : "Track"}
           </button>
+        )}
+        {!bill.is_tracked && !can("bill:track") && can("bill:request-tracking") && (
+          bill.user_tracking_request_denied ? (
+            <button
+              className={`${styles.trackBtn} ${styles.trackBtnDenied}`}
+              disabled
+              title="Contact your department's liaison if you have further questions."
+            >
+              Tracking Request Denied
+            </button>
+          ) : (
+            <button
+              className={styles.trackBtn}
+              onClick={handleRequestTracking}
+              disabled={requesting || trackingRequested}
+              title={trackingRequested ? "Tracking already requested" : "Request this bill be tracked"}
+            >
+              {requesting ? "…" : trackingRequested ? "Tracking Requested" : "Request Tracking"}
+            </button>
+          )
         )}
       </div>
 

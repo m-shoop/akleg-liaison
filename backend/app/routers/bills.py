@@ -19,6 +19,11 @@ from app.repositories.bill_repository import (
 )
 from app.repositories.audit_log_repository import log_action
 from app.repositories.job_repository import create_job, get_job, set_job_complete, set_job_failed, set_job_running
+from app.repositories.workflow_repository import (
+    close_open_workflows_for_bill,
+    get_bill_tracking_state,
+)
+from app.models.workflow import WorkflowActionType
 from app.schemas.bill import (
     BillEventOutcomeCreate,
     BillEventOutcomeRead,
@@ -146,6 +151,17 @@ async def list_bills_route(
     if not can_view_tags:
         for b in bills_read:
             b.tags = []
+
+    # Enrich with tracking request state (only for untracked bills)
+    untracked_bill_ids = [b.id for b in bills_read if not b.is_tracked]
+    if untracked_bill_ids:
+        user_id = current_user.user.id if current_user else None
+        tracking_state = await get_bill_tracking_state(db, untracked_bill_ids, user_id)
+        for b in bills_read:
+            if not b.is_tracked and b.id in tracking_state:
+                b.tracking_requested = tracking_state[b.id]["tracking_requested"]
+                b.user_tracking_request_denied = tracking_state[b.id]["user_tracking_request_denied"]
+
     return bills_read
 
 
@@ -165,6 +181,13 @@ async def update_bill_tracked(
     await log_action(db, current_user.user, action, entity_type="bill", entity_id=bill_id, details={"bill_number": bill.bill_number})
     if is_tracked:
         job_id = await create_job(db, job_type="refresh_bill")
+        # Auto-close any pending tracking request workflows for this bill
+        await close_open_workflows_for_bill(
+            db,
+            bill_id=bill_id,
+            action_type=WorkflowActionType.APPROVE_BILL_TRACKING,
+            acting_user_id=current_user.user.id,
+        )
     await db.commit()
     if is_tracked:
         background_tasks.add_task(_run_refresh_job, job_id, bill.bill_number, bill.session)
