@@ -105,6 +105,35 @@
   gap: 0.5rem;
 }
 
+/* View toggle (List / Calendar) — desktop only */
+
+.viewToggle {
+  display: flex;
+  border: 1.5px solid var(--color-rainy-sky);
+  border-radius: 4px;
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+.desktopOnly {
+  /* Hidden on phone and tablet; calendar view is desktop-only */
+}
+
+@media (max-width: 640px) {
+  .desktopOnly {
+    display: none;
+  }
+}
+
+.toggleIcon {
+  width: 13px;
+  height: 13px;
+  vertical-align: middle;
+  margin-right: 0.3rem;
+  flex-shrink: 0;
+}
+
+/* Hide/show-hidden toggle group */
 .toggleGroup {
   display: flex;
   border-radius: 4px;
