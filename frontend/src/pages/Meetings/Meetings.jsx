@@ -21,15 +21,20 @@ function fmt(isoDate) {
 
 export default function Meetings() {
   const { can, isLoggedIn, token, isTokenExpired } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // ─── List view state ───────────────────────────────────────────────────────
-  const [startDate, setStartDate] = useState(() => searchParams.get("start") || weekBounds().start);
-  const [endDate, setEndDate] = useState(() => searchParams.get("end") || weekBounds().end);
+  const [startDate, setStartDate] = useState(() => searchParams.get("start") || sessionStorage.getItem("meetings_startDate") || weekBounds().start);
+  const [endDate, setEndDate] = useState(() => searchParams.get("end") || sessionStorage.getItem("meetings_endDate") || weekBounds().end);
 
   // ─── Calendar view state ───────────────────────────────────────────────────
-  const [activeView, setActiveView] = useState("list");
-  const [calendarStartDate, setCalendarStartDate] = useState(null);
+  const [activeView, setActiveView] = useState(() => {
+    if (searchParams.get("view") === "calendar") return "calendar";
+    return sessionStorage.getItem("meetings_view") === "calendar" ? "calendar" : "list";
+  });
+  const [calendarStartDate, setCalendarStartDate] = useState(() =>
+    searchParams.get("calStart") || sessionStorage.getItem("meetings_calStart") || null
+  );
   const [daysShown, setDaysShown] = useState(3);
 
   // ─── Shared state ─────────────────────────────────────────────────────────
@@ -39,9 +44,12 @@ export default function Meetings() {
   const [toast, setToast] = useState(null);
   const [error, setError] = useState(null);
   const [showInactive, setShowInactive] = useState(false);
-  const [showHidden, setShowHidden] = useState(() => searchParams.get("show_hidden") === "1");
-  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || "");
-  const [globalExpanded, setGlobalExpanded] = useState(false);
+  const [showHidden, setShowHidden] = useState(() => {
+    if (searchParams.get("show_hidden") === "1") return true;
+    return sessionStorage.getItem("meetings_showHidden") === "true";
+  });
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || sessionStorage.getItem("meetings_searchQuery") || "");
+  const [globalExpanded, setGlobalExpanded] = useState(() => sessionStorage.getItem("meetings_globalExpanded") === "true");
   const [collapsedDates, setCollapsedDates] = useState(new Set());
 
   // ─── Derived fetch dates ───────────────────────────────────────────────────
@@ -110,6 +118,54 @@ export default function Meetings() {
       setAllMeetings((prev) => prev.map((m) => ({ ...m, dps_notes: null })));
     }
   }, [isTokenExpired]);
+
+  // ─── Sync view/calendar date to URL + sessionStorage ─────────────────────
+  // URL params survive page refresh and shareable links.
+  // sessionStorage fills in when the user returns via the navbar (bare /meetings URL).
+  useEffect(() => {
+    if (activeView === "calendar") {
+      sessionStorage.setItem("meetings_view", "calendar");
+      if (calendarStartDate) sessionStorage.setItem("meetings_calStart", calendarStartDate);
+      else sessionStorage.removeItem("meetings_calStart");
+    } else {
+      sessionStorage.removeItem("meetings_view");
+      sessionStorage.removeItem("meetings_calStart");
+    }
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (activeView === "calendar") {
+        next.set("view", "calendar");
+        if (calendarStartDate) next.set("calStart", calendarStartDate);
+        else next.delete("calStart");
+      } else {
+        next.delete("view");
+        next.delete("calStart");
+      }
+      return next;
+    }, { replace: true });
+  }, [activeView, calendarStartDate]);
+
+  // ─── Persist Hearings tab settings to sessionStorage ─────────────────────
+  useEffect(() => {
+    if (searchQuery) sessionStorage.setItem("meetings_searchQuery", searchQuery);
+    else sessionStorage.removeItem("meetings_searchQuery");
+    sessionStorage.setItem("meetings_startDate", startDate);
+    sessionStorage.setItem("meetings_endDate", endDate);
+    if (showHidden) sessionStorage.setItem("meetings_showHidden", "true");
+    else sessionStorage.removeItem("meetings_showHidden");
+    if (globalExpanded) sessionStorage.setItem("meetings_globalExpanded", "true");
+    else sessionStorage.removeItem("meetings_globalExpanded");
+  }, [searchQuery, startDate, endDate, showHidden, globalExpanded]);
+
+  function resetToDefaults() {
+    setSearchQuery("");
+    setStartDate(weekBounds().start);
+    setEndDate(weekBounds().end);
+    setShowHidden(false);
+    setGlobalExpanded(false);
+    setActiveView("list");
+    setCalendarStartDate(null);
+  }
 
   // ─── Scrape handler ────────────────────────────────────────────────────────
   async function handleScrape() {
@@ -255,14 +311,23 @@ export default function Meetings() {
                   className={styles.dateInput}
                 />
               </label>
+              <button
+                className={`${styles.loadBtn} ${calendarStartDate === today ? styles.loadBtnActive : ""}`}
+                onClick={() => setCalendarStartDate(today)}
+              >
+                Today
+              </button>
             </div>
           )}
+          <button className={styles.defaultBtn} onClick={resetToDefaults}>
+            Default Settings
+          </button>
         </div>
 
         {/* ── Right column ── */}
         <div className={styles.headerCol}>
           {/* View toggle — desktop only */}
-          <div id="tour-view-toggle" className={`${styles.viewToggle} ${styles.desktopOnly}`}>
+          <div id="tour-view-toggle" className={styles.viewToggle}>
             <button
               className={`${styles.toggleOption} ${activeView === "list" ? styles.toggleSelected : ""}`}
               onClick={() => switchView("list")}
@@ -301,9 +366,15 @@ export default function Meetings() {
                 className={styles.scrapeBtn}
                 onClick={handleScrape}
                 disabled={!!scrapeJobId || !effectiveStart || !effectiveEnd}
-                title={(!effectiveStart || !effectiveEnd) ? "Select dates to refresh hearings" : undefined}
+                title={
+                  scrapeJobId
+                    ? `Refreshing for dates: ${effectiveStart} through ${effectiveEnd}`
+                    : (!effectiveStart || !effectiveEnd)
+                    ? "Select dates to refresh hearings"
+                    : undefined
+                }
               >
-                {scrapeJobId ? "Refreshing" : "Refresh hearings from akleg.gov"}
+                {scrapeJobId ? "Refreshing..." : "Refresh hearings from akleg.gov"}
               </button>
             )}
             {/* Expand agendas — list view only, but state is preserved on switch */}
@@ -316,35 +387,49 @@ export default function Meetings() {
                 {globalExpanded ? "Collapse agendas" : "Expand agendas"}
               </button>
             )}
-            {activeView === "list" && isLoggedIn && hasInactive && (
-              <button
-                id="tour-show-inactive"
-                className={`${styles.loadBtn} ${showInactive ? styles.loadBtnActive : ""}`}
-                onClick={() => setShowInactive((v) => !v)}
-                disabled={loading}
-              >
-                {showInactive ? "Hide inactive" : "Show inactive"}
-              </button>
-            )}
-            {can("hearing:hide") && (
-              <div className={styles.toggleGroup}>
-                <button
-                  className={`${styles.toggleOption} ${!showHidden ? styles.toggleSelected : ""}`}
-                  onClick={() => setShowHidden(false)}
-                >
-                  Hide hidden
-                </button>
-                <button
-                  className={`${styles.toggleOption} ${showHidden ? styles.toggleSelected : ""}`}
-                  onClick={() => setShowHidden(true)}
-                >
-                  Display hidden
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </div>
+
+      {/* Visibility toggles row — own row on desktop, wraps on mobile */}
+      {(isLoggedIn && hasInactive) || can("hearing:hide") ? (
+        <div className={styles.filtersRow}>
+          {isLoggedIn && hasInactive && (
+            <div id="tour-show-inactive" className={styles.toggleGroup}>
+              <button
+                className={`${styles.toggleOption} ${!showInactive ? styles.toggleSelected : ""}`}
+                onClick={() => setShowInactive(false)}
+                disabled={loading}
+              >
+                Hide inactive
+              </button>
+              <button
+                className={`${styles.toggleOption} ${showInactive ? styles.toggleSelected : ""}`}
+                onClick={() => setShowInactive(true)}
+                disabled={loading}
+              >
+                Show inactive
+              </button>
+            </div>
+          )}
+          {can("hearing:hide") && (
+            <div className={styles.toggleGroup}>
+              <button
+                className={`${styles.toggleOption} ${!showHidden ? styles.toggleSelected : ""}`}
+                onClick={() => setShowHidden(false)}
+              >
+                Hide hidden
+              </button>
+              <button
+                className={`${styles.toggleOption} ${showHidden ? styles.toggleSelected : ""}`}
+                onClick={() => setShowHidden(true)}
+              >
+                Display hidden
+              </button>
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {/* Search row */}
       <div className={styles.searchRow}>
@@ -375,15 +460,12 @@ export default function Meetings() {
           hidden&rdquo; to view {hiddenMatchCount !== 1 ? "them" : "it"}.
         </p>
       )}
-      {loading && <p className={styles.loading}>Loading hearings…</p>}
-      {scrapeJobId && (
-        <p className={styles.notice}>Refreshing hearings from akleg.gov — please stay on this page…</p>
-      )}
+      {loading && activeView === "list" && <p className={styles.loading}>Loading hearings…</p>}
       {error && <p className={styles.error}>{error}</p>}
       <Toast message={toast?.message} type={toast?.type} onDismiss={() => setToast(null)} />
 
-      {/* Empty state messages */}
-      {meetings !== null && meetings.length === 0 && (
+      {/* Empty state messages — list view only; calendar view shows this inline */}
+      {activeView === "list" && meetings !== null && meetings.length === 0 && (
         <p className={styles.notice}>
           No meetings found for this date range.
           {can("hearing:query") && ' Use "Refresh hearings from akleg.gov" to import them.'}
@@ -402,7 +484,13 @@ export default function Meetings() {
           onDaysShownChange={setDaysShown}
           onNavigate={setCalendarStartDate}
           isFiltered={!!query}
+          loading={loading}
+          noMeetingsInRange={meetings !== null && meetings.length === 0}
           onMeetingReload={loadMeetings}
+          showHidden={showHidden}
+          onHiddenChanged={(updated) =>
+            setAllMeetings((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))
+          }
         />
       )}
 

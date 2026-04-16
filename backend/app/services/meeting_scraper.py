@@ -388,8 +388,12 @@ async def scrape_and_store_meetings(
 
         saved += 1
 
-    # Deactivate any active meeting in the range not returned by this scrape
-    await deactivate_removed_meetings(db, start, end, legislature_session, active_ids)
+    # Deactivate any active meeting in the range not returned by this scrape.
+    # Guard: if the scrape returned zero meetings the page likely failed to load
+    # (Playwright timeout, changed selectors, etc.).  Deactivating with an empty
+    # active_ids set would wipe every meeting in the range, so skip it.
+    if meetings:
+        await deactivate_removed_meetings(db, start, end, legislature_session, active_ids)
 
     await db.commit()
     return saved

@@ -232,6 +232,19 @@ a.committeeName:hover {
   /* takes remaining space */
 }
 
+.legLink {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-rainforest);
+  opacity: 0.6;
+  transition: opacity 0.12s;
+  vertical-align: middle;
+}
+
+.legLink:hover {
+  opacity: 1;
+}
+
 .teleconf {
   font-size: 0.72rem;
   color: var(--color-text-secondary);
@@ -382,5 +395,31 @@ a.committeeName:hover {
   .lastSynced {
     opacity: 1;
     color: #888;
+  }
+}
+
+@media (max-width: 640px) {
+  .card {
+    flex-direction: column;
+  }
+
+  .dpsRow {
+    width: auto;
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+    padding-left: 0;
+    padding-top: 0.75rem;
+  }
+
+  .hideRow {
+    width: auto;
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+    padding-left: 0;
+    padding-top: 0.75rem;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
 }

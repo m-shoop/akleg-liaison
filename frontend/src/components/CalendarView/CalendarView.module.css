@@ -1,12 +1,12 @@
 /* ─── Navigation ─────────────────────────────────────────────────────────────── */
 
 .calendarWrapper {
-  min-width: 600px;
 }
 
 .calendarNav {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
 }
@@ -26,6 +26,13 @@
 .navBtn:hover {
   background-color: var(--color-rainy-sky);
   color: var(--color-text-on-dark);
+}
+
+.navLoading {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+  margin-left: 0.25rem;
 }
 
 .daysToggle {
@@ -59,16 +66,31 @@
   color: var(--color-text-on-dark);
 }
 
+@media (max-width: 640px) {
+  .daysToggle {
+    display: none;
+  }
+
+  .overlayBox {
+    top: auto;
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    transform: none;
+    width: auto;
+    max-height: 85vh;
+  }
+}
+
 /* ─── Filter banner ───────────────────────────────────────────────────────────── */
 
 .filterBanner {
   background-color: #fff8e1;
   border: 1px solid #f0c040;
   border-radius: 4px;
-  padding: 0.45rem 0.85rem;
-  font-size: 0.85rem;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.78rem;
   color: #7a5c00;
-  margin-bottom: 0.75rem;
 }
 
 /* ─── Calendar outer shell ────────────────────────────────────────────────────── */
@@ -77,14 +99,6 @@
   border: 1.5px solid var(--color-border);
   border-radius: 6px;
   overflow: hidden;
-}
-
-/* ─── Day headers ─────────────────────────────────────────────────────────────── */
-
-.calendarHeaderRow {
-  display: flex;
-  background: var(--color-surface);
-  border-bottom: 2px solid var(--color-border);
 }
 
 .timeSpacer {
@@ -112,9 +126,27 @@
 /* ─── Scrollable body ─────────────────────────────────────────────────────────── */
 
 .calendarScrollArea {
-  display: flex;
+  /* Block container — header is sticky inside, body follows below */
   overflow-y: auto;
   overflow-x: hidden;
+  background: #FAFAF8;
+}
+
+/* ─── Day headers (sticky inside scroll area — guarantees line alignment) ─────── */
+
+.calendarHeaderRow {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  background: #FAFAF8;
+  border-bottom: 2px solid var(--color-border);
+}
+
+/* ─── Time body (gutter + columns, below sticky header) ──────────────────────── */
+
+.calendarBody {
+  display: flex;
 }
 
 /* ─── Time gutter ─────────────────────────────────────────────────────────────── */
@@ -201,6 +233,20 @@
 .meetingBlockSenate {
   background: rgba(90, 110, 127, 0.18);
   border-color: var(--color-rainy-sky);
+}
+
+.meetingBlockInactive {
+  opacity: 0.4;
+  border-color: #ccc !important;
+}
+
+.meetingBlockHidden {
+  opacity: 0.45;
+}
+
+.meetingBlockInactive .blockCommittee {
+  text-decoration: line-through;
+  color: var(--color-text-secondary);
 }
 
 .blockCommittee {
@@ -389,6 +435,21 @@
   font-style: italic;
 }
 
+/* ─── Bill leg link ───────────────────────────────────────────────────────────── */
+
+.legLink {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-rainforest);
+  opacity: 0.6;
+  transition: opacity 0.12s;
+  vertical-align: middle;
+}
+
+.legLink:hover {
+  opacity: 1;
+}
+
 /* ─── Overlay: notes ──────────────────────────────────────────────────────────── */
 
 .overlayNotes {
@@ -441,6 +502,66 @@
 }
 
 .overlaySaveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── Overlay: export + hide ──────────────────────────────────────────────────── */
+
+.overlayCalBtn {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 0.15rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  border: 1px solid var(--color-rainy-sky);
+  background: transparent;
+  color: var(--color-rainy-sky);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.overlayCalBtn:hover {
+  background-color: var(--color-rainy-sky);
+  color: var(--color-text-on-dark);
+}
+
+.overlayHideRow {
+  margin-bottom: 0.75rem;
+}
+
+.overlayHiddenNote {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+  margin: 0 0 0.3rem;
+}
+
+.overlayHideBtn {
+  padding: 0.3rem 0.7rem;
+  border-radius: 4px;
+  border: 1.5px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.overlayHideBtn:hover:not(:disabled) {
+  border-color: var(--color-rainy-sky);
+  color: var(--color-rainy-sky);
+}
+
+.overlayHideBtnActive {
+  border-color: var(--color-rainy-sky);
+  color: var(--color-rainy-sky);
+}
+
+.overlayHideBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

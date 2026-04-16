@@ -25,9 +25,18 @@ export default function Home() {
   const [allTags, setAllTags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showDescription, setShowDescription] = useState(false);
-  const [selectedOutcomes, setSelectedOutcomes] = useState(DEFAULT_SELECTED);
-  const [selectedDepts, setSelectedDepts] = useState(new Set(["Department of Public Safety"]));
+  const [showDescription, setShowDescription] = useState(() => sessionStorage.getItem("leg_showDescription") === "true");
+  const [selectedOutcomes, setSelectedOutcomes] = useState(() => {
+    const stored = sessionStorage.getItem("leg_selectedOutcomes");
+    if (stored) { try { return new Set(JSON.parse(stored)); } catch { /* ignore */ } }
+    return DEFAULT_SELECTED;
+  });
+  const [selectedDepts, setSelectedDepts] = useState(() => {
+    const stored = sessionStorage.getItem("leg_selectedDepts");
+    if (stored === "null") return null;
+    if (stored) { try { return new Set(JSON.parse(stored)); } catch { /* ignore */ } }
+    return new Set(["Department of Public Safety"]);
+  });
 
   const allDepts = useMemo(() => {
     const depts = new Set();
@@ -38,16 +47,17 @@ export default function Home() {
     );
     return depts;
   }, [bills]);
-  const [showUntracked, setShowUntracked] = useState(false);
-  const [sideBySide, setSideBySide] = useState(true);
-  const [showKeywords, setShowKeywords] = useState(false);
-  const [searchQuery, setSearchQuery] = useState(location.state?.search ?? "");
-  const [printStartDate, setPrintStartDate] = useState("");
-  const [printEndDate, setPrintEndDate] = useState("");
+  const [showUntracked, setShowUntracked] = useState(() => sessionStorage.getItem("leg_showUntracked") === "true");
+  const [sideBySide, setSideBySide] = useState(() => sessionStorage.getItem("leg_sideBySide") !== "false");
+  const [showKeywords, setShowKeywords] = useState(() => sessionStorage.getItem("leg_showKeywords") === "true");
+  // location.state?.search (from bill-link navigation) takes priority over stored search
+  const [searchQuery, setSearchQuery] = useState(location.state?.search ?? sessionStorage.getItem("leg_searchQuery") ?? "");
+  const [printStartDate, setPrintStartDate] = useState(() => sessionStorage.getItem("leg_printStartDate") ?? "");
+  const [printEndDate, setPrintEndDate] = useState(() => sessionStorage.getItem("leg_printEndDate") ?? "");
   const [printMeetings, setPrintMeetings] = useState(null);
   const [upcomingHearings, setUpcomingHearings] = useState({});
   const [pendingPrint, setPendingPrint] = useState(false);
-  const [filterToHearings, setFilterToHearings] = useState(false);
+  const [filterToHearings, setFilterToHearings] = useState(() => sessionStorage.getItem("leg_filterToHearings") === "true");
   const [hearingBillIds, setHearingBillIds] = useState(null);
   const contentRef = useRef(null);
 
@@ -57,6 +67,41 @@ export default function Home() {
       setFilterToHearings(false);
     }
   }, [printStartDate, printEndDate]);
+
+  // ─── Persist Legislation tab settings to sessionStorage ───────────────────
+  useEffect(() => {
+    if (searchQuery) sessionStorage.setItem("leg_searchQuery", searchQuery);
+    else sessionStorage.removeItem("leg_searchQuery");
+    if (showDescription) sessionStorage.setItem("leg_showDescription", "true");
+    else sessionStorage.removeItem("leg_showDescription");
+    if (showKeywords) sessionStorage.setItem("leg_showKeywords", "true");
+    else sessionStorage.removeItem("leg_showKeywords");
+    if (showUntracked) sessionStorage.setItem("leg_showUntracked", "true");
+    else sessionStorage.removeItem("leg_showUntracked");
+    if (!sideBySide) sessionStorage.setItem("leg_sideBySide", "false");
+    else sessionStorage.removeItem("leg_sideBySide");
+    if (printStartDate) sessionStorage.setItem("leg_printStartDate", printStartDate);
+    else sessionStorage.removeItem("leg_printStartDate");
+    if (printEndDate) sessionStorage.setItem("leg_printEndDate", printEndDate);
+    else sessionStorage.removeItem("leg_printEndDate");
+    if (filterToHearings) sessionStorage.setItem("leg_filterToHearings", "true");
+    else sessionStorage.removeItem("leg_filterToHearings");
+    sessionStorage.setItem("leg_selectedOutcomes", JSON.stringify([...selectedOutcomes]));
+    sessionStorage.setItem("leg_selectedDepts", selectedDepts === null ? "null" : JSON.stringify([...selectedDepts]));
+  }, [searchQuery, showDescription, showKeywords, showUntracked, sideBySide, printStartDate, printEndDate, filterToHearings, selectedOutcomes, selectedDepts]);
+
+  function resetToDefaults() {
+    setSearchQuery("");
+    setShowDescription(false);
+    setShowKeywords(false);
+    setShowUntracked(false);
+    setSideBySide(true);
+    setPrintStartDate("");
+    setPrintEndDate("");
+    setFilterToHearings(false);
+    setSelectedOutcomes(DEFAULT_SELECTED);
+    setSelectedDepts(new Set(["Department of Public Safety"]));
+  }
 
   // Fetch hearing bill IDs whenever the filter is on and both dates are set
   useEffect(() => {
@@ -223,6 +268,9 @@ export default function Home() {
                 ?
               </button>
             </div>
+            <button className={styles.defaultBtn} onClick={resetToDefaults}>
+              Default Settings
+            </button>
           </div>
           <div className={styles.controls}>
             <div id="tour-filter-outcomes-fiscal-notes" className={styles.togglePair}>
