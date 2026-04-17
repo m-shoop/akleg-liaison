@@ -73,6 +73,12 @@
   padding: 0.5rem 0;
 }
 
+@media (max-width: 640px) {
+  .colDate {
+    display: none;
+  }
+}
+
 @media print {
   .table td {
     border-bottom: none;

@@ -209,30 +209,42 @@
 
 .meetingBlock {
   position: absolute;
-  border-radius: 4px;
+  border-radius: 7px;
   padding: 3px 5px;
   font-size: 0.7rem;
   line-height: 1.35;
   overflow: hidden;
   cursor: pointer;
   z-index: 1;
-  transition: filter 0.1s, z-index 0s;
+  transition: filter 0.1s, box-shadow 0.1s, z-index 0s;
   border: 1.5px solid transparent;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
 }
 
-.meetingBlock:hover {
-  filter: brightness(0.88);
+.meetingBlock:hover,
+.meetingBlockSelected {
   z-index: 2;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.26);
+}
+
+.meetingBlockHouse:hover,
+.meetingBlockHouse.meetingBlockSelected {
+  background: rgba(168, 200, 192, 1);
+}
+
+.meetingBlockSenate:hover,
+.meetingBlockSenate.meetingBlockSelected {
+  background: var(--color-bay-stone);
 }
 
 .meetingBlockHouse {
-  background: rgba(168, 200, 192, 0.38);
+  background: rgba(168, 200, 192, 0.68);
   border-color: var(--color-glacial-water);
 }
 
 .meetingBlockSenate {
-  background: rgba(90, 110, 127, 0.18);
-  border-color: var(--color-rainy-sky);
+  background: color-mix(in srgb, var(--color-bay-stone) 42%, transparent);
+  border-color: var(--color-bay-stone);
 }
 
 .meetingBlockInactive {
@@ -448,6 +460,33 @@
 
 .legLink:hover {
   opacity: 1;
+}
+
+/* ─── Overlay: prior agendas link ────────────────────────────────────────────── */
+
+.overlayPriorAgendasRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.overlayPriorAgendasBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--color-rainy-sky);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+  transition: color 0.12s;
+}
+
+.overlayPriorAgendasBtn:hover {
+  color: var(--color-rainforest);
+  text-decoration-style: solid;
 }
 
 /* ─── Overlay: notes ──────────────────────────────────────────────────────────── */

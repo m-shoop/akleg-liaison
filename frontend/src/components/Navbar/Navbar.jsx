@@ -32,7 +32,7 @@ export default function Navbar() {
           </li>
           <li>
             <NavLink
-              to="/meetings"
+              to="/hearings"
               className={({ isActive }) =>
                 isActive ? `${styles.link} ${styles.active}` : styles.link
               }

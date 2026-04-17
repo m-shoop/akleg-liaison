@@ -2,7 +2,7 @@ import { apiFetch } from "./apiFetch";
 
 const API = "/api";
 
-export async function fetchMeetings({ startDate, endDate, legislatureSession = 34, includeInactive = false, token = null }) {
+export async function fetchHearings({ startDate, endDate, legislatureSession = 34, includeInactive = false, token = null }) {
   const params = new URLSearchParams({
     start_date: startDate,
     legislature_session: legislatureSession,
@@ -10,13 +10,13 @@ export async function fetchMeetings({ startDate, endDate, legislatureSession = 3
   });
   if (endDate) params.set("end_date", endDate);
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
-  const res = await apiFetch(`${API}/meetings?${params}`, { headers });
-  if (!res.ok) throw new Error("Failed to fetch meetings");
+  const res = await apiFetch(`${API}/hearings?${params}`, { headers });
+  if (!res.ok) throw new Error("Failed to fetch hearings");
   return res.json();
 }
 
-export async function scrapeMeetings({ startDate, endDate, legislatureSession = 34 }, token) {
-  const res = await apiFetch(`${API}/meetings/scrape`, {
+export async function scrapeHearings({ startDate, endDate, legislatureSession = 34 }, token) {
+  const res = await apiFetch(`${API}/hearings/scrape`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -37,20 +37,20 @@ export async function scrapeMeetings({ startDate, endDate, legislatureSession = 
 
 export async function fetchUpcomingHearings({ legislatureSession = 34 } = {}) {
   const params = new URLSearchParams({ legislature_session: legislatureSession });
-  const res = await apiFetch(`${API}/meetings/upcoming-bill-hearings?${params}`);
+  const res = await apiFetch(`${API}/hearings/upcoming-bill-hearings?${params}`);
   if (!res.ok) throw new Error("Failed to fetch upcoming hearings");
   return res.json(); // { [bill_id]: "YYYY-MM-DD" }
 }
 
 export async function fetchRecentHearings({ legislatureSession = 34 } = {}) {
   const params = new URLSearchParams({ legislature_session: legislatureSession });
-  const res = await apiFetch(`${API}/meetings/recent-bill-hearings?${params}`);
+  const res = await apiFetch(`${API}/hearings/recent-bill-hearings?${params}`);
   if (!res.ok) throw new Error("Failed to fetch recent hearings");
   return res.json(); // { [bill_id]: "YYYY-MM-DD" }
 }
 
-export async function updateHidden(meetingId, hidden, token) {
-  const res = await apiFetch(`${API}/meetings/${meetingId}/hidden`, {
+export async function updateHidden(hearingId, hidden, token) {
+  const res = await apiFetch(`${API}/hearings/${hearingId}/hidden`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -62,8 +62,16 @@ export async function updateHidden(meetingId, hidden, token) {
   return res.json();
 }
 
-export async function updateDpsNotes(meetingId, dpsNotes, token) {
-  const res = await apiFetch(`${API}/meetings/${meetingId}/dps-notes`, {
+export async function fetchPriorAgendas(hearingId, token) {
+  const res = await apiFetch(`${API}/hearings/${hearingId}/prior-agendas`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch prior agendas");
+  return res.json();
+}
+
+export async function updateDpsNotes(hearingId, dpsNotes, token) {
+  const res = await apiFetch(`${API}/hearings/${hearingId}/dps-notes`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",

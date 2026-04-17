@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { fetchMeetings, scrapeMeetings } from "../../api/meetings";
+import { fetchHearings, scrapeHearings } from "../../api/hearings";
 import { useJob } from "../../hooks/useJob";
 import SyncSchedule from "../../components/SyncSchedule/SyncSchedule";
 import Toast from "../../components/Toast/Toast";
-import MeetingCard from "../../components/MeetingCard/MeetingCard";
+import HearingCard from "../../components/HearingCard/HearingCard";
 import CalendarView from "../../components/CalendarView/CalendarView";
-import { createMeetingsTour } from "../../tours/meetingsTour";
+import { createHearingsTour } from "../../tours/hearingsTour";
 import { todayJuneau, weekBounds, weekBoundsTitle, addDays } from "../../utils/weekBounds";
-import styles from "./Meetings.module.css";
+import styles from "./Hearings.module.css";
 
 function fmt(isoDate) {
   return new Date(isoDate + "T00:00:00").toLocaleDateString("en-US", {
@@ -19,26 +19,26 @@ function fmt(isoDate) {
   });
 }
 
-export default function Meetings() {
+export default function Hearings() {
   const { can, isLoggedIn, token, isTokenExpired } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // ─── List view state ───────────────────────────────────────────────────────
-  const [startDate, setStartDate] = useState(() => searchParams.get("start") || sessionStorage.getItem("meetings_startDate") || weekBounds().start);
-  const [endDate, setEndDate] = useState(() => searchParams.get("end") || sessionStorage.getItem("meetings_endDate") || weekBounds().end);
+  const [startDate, setStartDate] = useState(() => searchParams.get("start") || sessionStorage.getItem("hearings_startDate") || weekBounds().start);
+  const [endDate, setEndDate] = useState(() => searchParams.get("end") || sessionStorage.getItem("hearings_endDate") || weekBounds().end);
 
   // ─── Calendar view state ───────────────────────────────────────────────────
   const [activeView, setActiveView] = useState(() => {
     if (searchParams.get("view") === "calendar") return "calendar";
-    return sessionStorage.getItem("meetings_view") === "calendar" ? "calendar" : "list";
+    return sessionStorage.getItem("hearings_view") === "calendar" ? "calendar" : "list";
   });
   const [calendarStartDate, setCalendarStartDate] = useState(() =>
-    searchParams.get("calStart") || sessionStorage.getItem("meetings_calStart") || null
+    searchParams.get("calStart") || sessionStorage.getItem("hearings_calStart") || null
   );
   const [daysShown, setDaysShown] = useState(3);
 
   // ─── Shared state ─────────────────────────────────────────────────────────
-  const [allMeetings, setAllMeetings] = useState(null);
+  const [allHearings, setAllHearings] = useState(null);
   const [loading, setLoading] = useState(false);
   const [scrapeJobId, setScrapeJobId] = useState(null);
   const [toast, setToast] = useState(null);
@@ -46,14 +46,13 @@ export default function Meetings() {
   const [showInactive, setShowInactive] = useState(false);
   const [showHidden, setShowHidden] = useState(() => {
     if (searchParams.get("show_hidden") === "1") return true;
-    return sessionStorage.getItem("meetings_showHidden") === "true";
+    return sessionStorage.getItem("hearings_showHidden") === "true";
   });
-  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || sessionStorage.getItem("meetings_searchQuery") || "");
-  const [globalExpanded, setGlobalExpanded] = useState(() => sessionStorage.getItem("meetings_globalExpanded") === "true");
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || sessionStorage.getItem("hearings_searchQuery") || "");
+  const [globalExpanded, setGlobalExpanded] = useState(() => sessionStorage.getItem("hearings_globalExpanded") === "true");
   const [collapsedDates, setCollapsedDates] = useState(new Set());
 
   // ─── Derived fetch dates ───────────────────────────────────────────────────
-  // In calendar view we fetch only the displayed days; in list view we use the full date range.
   const calendarEndDate = calendarStartDate ? addDays(calendarStartDate, daysShown - 1) : null;
   const effectiveStart = activeView === "calendar" ? calendarStartDate : startDate;
   const effectiveEnd = activeView === "calendar" ? calendarEndDate : endDate;
@@ -64,7 +63,10 @@ export default function Meetings() {
       setCalendarStartDate(startDate || todayJuneau());
       setActiveView("calendar");
     } else if (view === "list" && activeView === "calendar") {
-      if (calendarStartDate) setStartDate(calendarStartDate);
+      if (calendarStartDate) {
+        setStartDate(calendarStartDate);
+        setEndDate(calendarEndDate);
+      }
       setActiveView("list");
     }
   }
@@ -85,8 +87,8 @@ export default function Meetings() {
   useEffect(() => {
     if (!scrapeJobId) return;
     if (jobStatus === "complete") {
-      loadMeetings();
-      setToast({ message: `${jobResult?.meetings_saved ?? 0} hearings refreshed successfully.`, type: "success" });
+      loadHearings();
+      setToast({ message: `${jobResult?.hearings_saved ?? 0} hearings refreshed successfully.`, type: "success" });
       setScrapeJobId(null);
     } else if (jobStatus === "failed") {
       setToast({ message: jobError ?? "Refresh failed.", type: "error" });
@@ -95,13 +97,13 @@ export default function Meetings() {
   }, [jobStatus]);
 
   // ─── Data fetching ─────────────────────────────────────────────────────────
-  async function loadMeetings() {
+  async function loadHearings() {
     if (!effectiveStart) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchMeetings({ startDate: effectiveStart, endDate: effectiveEnd, includeInactive: true, token });
-      setAllMeetings(data);
+      const data = await fetchHearings({ startDate: effectiveStart, endDate: effectiveEnd, includeInactive: true, token });
+      setAllHearings(data);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -110,26 +112,24 @@ export default function Meetings() {
   }
 
   useEffect(() => {
-    loadMeetings();
+    loadHearings();
   }, [effectiveStart, effectiveEnd, token]);
 
   useEffect(() => {
-    if (isTokenExpired && allMeetings) {
-      setAllMeetings((prev) => prev.map((m) => ({ ...m, dps_notes: null })));
+    if (isTokenExpired && allHearings) {
+      setAllHearings((prev) => prev.map((h) => ({ ...h, dps_notes: null })));
     }
   }, [isTokenExpired]);
 
   // ─── Sync view/calendar date to URL + sessionStorage ─────────────────────
-  // URL params survive page refresh and shareable links.
-  // sessionStorage fills in when the user returns via the navbar (bare /meetings URL).
   useEffect(() => {
     if (activeView === "calendar") {
-      sessionStorage.setItem("meetings_view", "calendar");
-      if (calendarStartDate) sessionStorage.setItem("meetings_calStart", calendarStartDate);
-      else sessionStorage.removeItem("meetings_calStart");
+      sessionStorage.setItem("hearings_view", "calendar");
+      if (calendarStartDate) sessionStorage.setItem("hearings_calStart", calendarStartDate);
+      else sessionStorage.removeItem("hearings_calStart");
     } else {
-      sessionStorage.removeItem("meetings_view");
-      sessionStorage.removeItem("meetings_calStart");
+      sessionStorage.removeItem("hearings_view");
+      sessionStorage.removeItem("hearings_calStart");
     }
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -147,14 +147,14 @@ export default function Meetings() {
 
   // ─── Persist Hearings tab settings to sessionStorage ─────────────────────
   useEffect(() => {
-    if (searchQuery) sessionStorage.setItem("meetings_searchQuery", searchQuery);
-    else sessionStorage.removeItem("meetings_searchQuery");
-    sessionStorage.setItem("meetings_startDate", startDate);
-    sessionStorage.setItem("meetings_endDate", endDate);
-    if (showHidden) sessionStorage.setItem("meetings_showHidden", "true");
-    else sessionStorage.removeItem("meetings_showHidden");
-    if (globalExpanded) sessionStorage.setItem("meetings_globalExpanded", "true");
-    else sessionStorage.removeItem("meetings_globalExpanded");
+    if (searchQuery) sessionStorage.setItem("hearings_searchQuery", searchQuery);
+    else sessionStorage.removeItem("hearings_searchQuery");
+    sessionStorage.setItem("hearings_startDate", startDate);
+    sessionStorage.setItem("hearings_endDate", endDate);
+    if (showHidden) sessionStorage.setItem("hearings_showHidden", "true");
+    else sessionStorage.removeItem("hearings_showHidden");
+    if (globalExpanded) sessionStorage.setItem("hearings_globalExpanded", "true");
+    else sessionStorage.removeItem("hearings_globalExpanded");
   }, [searchQuery, startDate, endDate, showHidden, globalExpanded]);
 
   function resetToDefaults() {
@@ -171,7 +171,7 @@ export default function Meetings() {
   async function handleScrape() {
     setError(null);
     try {
-      const job = await scrapeMeetings({ startDate: effectiveStart, endDate: effectiveEnd }, token);
+      const job = await scrapeHearings({ startDate: effectiveStart, endDate: effectiveEnd }, token);
       setScrapeJobId(job.id);
     } catch (e) {
       setToast({ message: e.message, type: "error" });
@@ -179,40 +179,41 @@ export default function Meetings() {
   }
 
   // ─── Filtering ─────────────────────────────────────────────────────────────
-  const hasInactive = allMeetings?.some((m) => !m.is_active) ?? false;
-  const meetings = allMeetings
-    ? allMeetings
-        .filter((m) => showInactive || m.is_active)
-        .filter((m) => showHidden || !m.hidden)
+  const hasInactive = allHearings?.some((h) => !h.is_active) ?? false;
+  const hearings = allHearings
+    ? allHearings
+        .filter((h) => showInactive || h.is_active)
+        .filter((h) => showHidden || !h.hidden)
     : null;
 
   const query = searchQuery.trim().toLowerCase();
 
-  function matchesQuery(m) {
-    const agendaText = m.agenda_items
+  function matchesQuery(h) {
+    const agendaText = h.agenda_items
       .flatMap((i) => [i.bill_number, i.content])
       .filter(Boolean)
       .join(" ");
-    const haystack = [m.committee_name, m.committee_type, m.location, m.dps_notes, agendaText]
+    const title = h.committee_name ?? "Floor Session";
+    const haystack = [title, h.committee_type, h.location, h.dps_notes, agendaText]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
     return haystack.includes(query);
   }
 
-  const filteredMeetings = meetings && query ? meetings.filter(matchesQuery) : meetings;
+  const filteredHearings = hearings && query ? hearings.filter(matchesQuery) : hearings;
 
   const hiddenMatchCount =
-    !showHidden && query && allMeetings
-      ? allMeetings.filter((m) => m.hidden && matchesQuery(m)).length
+    !showHidden && query && allHearings
+      ? allHearings.filter((h) => h.hidden && matchesQuery(h)).length
       : 0;
 
   // Group by date (list view only)
-  const byDate = filteredMeetings
-    ? filteredMeetings.reduce((acc, m) => {
-        const key = m.meeting_date;
+  const byDate = filteredHearings
+    ? filteredHearings.reduce((acc, h) => {
+        const key = h.hearing_date;
         if (!acc[key]) acc[key] = [];
-        acc[key].push(m);
+        acc[key].push(h);
         return acc;
       }, {})
     : {};
@@ -231,11 +232,11 @@ export default function Meetings() {
         {/* ── Left column ── */}
         <div className={styles.headerCol}>
           <h1 className={styles.title}>Hearing Schedule</h1>
-          {meetings !== null && (
+          {hearings !== null && (
             <p className={styles.subtitle}>
               {query
-                ? `${filteredMeetings.length} of ${meetings.length} hearing${meetings.length !== 1 ? "s" : ""}`
-                : `${meetings.length} hearing${meetings.length !== 1 ? "s" : ""}`}
+                ? `${filteredHearings.length} of ${hearings.length} hearing${hearings.length !== 1 ? "s" : ""}`
+                : `${hearings.length} hearing${hearings.length !== 1 ? "s" : ""}`}
             </p>
           )}
 
@@ -378,7 +379,7 @@ export default function Meetings() {
               </button>
             )}
             {/* Expand agendas — list view only, but state is preserved on switch */}
-            {activeView === "list" && meetings !== null && meetings.length > 0 && (
+            {activeView === "list" && hearings !== null && hearings.length > 0 && (
               <button
                 id="tour-expand-agendas"
                 className={`${styles.loadBtn} ${globalExpanded ? styles.loadBtnActive : ""}`}
@@ -391,7 +392,7 @@ export default function Meetings() {
         </div>
       </div>
 
-      {/* Visibility toggles row — own row on desktop, wraps on mobile */}
+      {/* Visibility toggles row */}
       {(isLoggedIn && hasInactive) || can("hearing:hide") ? (
         <div className={styles.filtersRow}>
           {isLoggedIn && hasInactive && (
@@ -437,16 +438,16 @@ export default function Meetings() {
           id="tour-meetings-search"
           className={styles.searchInput}
           type="search"
-          placeholder="Search committees, bills, locations, notes…"
+          placeholder="Search floor and committee hearings…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
         <button
           className={styles.helpBtn}
           onClick={() =>
-            createMeetingsTour({ isEditor: can("hearing:query"), activeView }).drive()
+            createHearingsTour({ isEditor: can("hearing:query"), activeView }).drive()
           }
-          title="Tour the Meetings page"
+          title="Tour the Hearings page"
         >
           ?
         </button>
@@ -464,32 +465,32 @@ export default function Meetings() {
       {error && <p className={styles.error}>{error}</p>}
       <Toast message={toast?.message} type={toast?.type} onDismiss={() => setToast(null)} />
 
-      {/* Empty state messages — list view only; calendar view shows this inline */}
-      {activeView === "list" && meetings !== null && meetings.length === 0 && (
+      {/* Empty state messages — list view only */}
+      {activeView === "list" && hearings !== null && hearings.length === 0 && (
         <p className={styles.notice}>
-          No meetings found for this date range.
+          No hearings found for this date range.
           {can("hearing:query") && ' Use "Refresh hearings from akleg.gov" to import them.'}
         </p>
       )}
-      {meetings !== null && meetings.length > 0 && filteredMeetings.length === 0 && (
-        <p className={styles.notice}>No meetings match your search.</p>
+      {hearings !== null && hearings.length > 0 && filteredHearings.length === 0 && (
+        <p className={styles.notice}>No hearings match your search.</p>
       )}
 
       {/* ── Calendar view ── */}
       {activeView === "calendar" && calendarStartDate && (
         <CalendarView
-          meetings={filteredMeetings ?? []}
+          hearings={filteredHearings ?? []}
           startDate={calendarStartDate}
           daysShown={daysShown}
           onDaysShownChange={setDaysShown}
           onNavigate={setCalendarStartDate}
           isFiltered={!!query}
           loading={loading}
-          noMeetingsInRange={meetings !== null && meetings.length === 0}
-          onMeetingReload={loadMeetings}
+          noHearingsInRange={hearings !== null && hearings.length === 0}
+          onHearingReload={loadHearings}
           showHidden={showHidden}
           onHiddenChanged={(updated) =>
-            setAllMeetings((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))
+            setAllHearings((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))
           }
         />
       )}
@@ -507,24 +508,24 @@ export default function Meetings() {
                   <span>{isCollapsed ? "▸" : "▾"}</span>
                   {fmt(dateKey)}
                   <span className={styles.dayCount}>
-                    {byDate[dateKey].length} meeting{byDate[dateKey].length !== 1 ? "s" : ""}
+                    {byDate[dateKey].length} hearing{byDate[dateKey].length !== 1 ? "s" : ""}
                   </span>
                 </h2>
                 {!isCollapsed && (
                   <div className={styles.dayCards}>
-                    {byDate[dateKey].map((m) => {
+                    {byDate[dateKey].map((h) => {
                       const isFirst = !firstCardRendered;
                       if (isFirst) firstCardRendered = true;
                       return (
-                        <MeetingCard
-                          key={m.id}
-                          meeting={m}
+                        <HearingCard
+                          key={h.id}
+                          hearing={h}
                           isFirst={isFirst}
                           globalExpanded={globalExpanded}
                           showHidden={showHidden}
-                          onNotesSaved={() => loadMeetings()}
+                          onNotesSaved={() => loadHearings()}
                           onHiddenChanged={(updated) =>
-                            setAllMeetings((prev) =>
+                            setAllHearings((prev) =>
                               prev.map((x) => (x.id === updated.id ? updated : x))
                             )
                           }

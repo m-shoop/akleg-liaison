@@ -1,7 +1,7 @@
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
 
-export function createMeetingsTour({ isEditor = false, activeView = "list" } = {}) {
+export function createHearingsTour({ isEditor = false, activeView = "list" } = {}) {
   const isCalendar = activeView === "calendar";
 
   return driver({
@@ -23,7 +23,7 @@ export function createMeetingsTour({ isEditor = false, activeView = "list" } = {
         popover: {
           title: "Search",
           description:
-            "Filter meetings by committee name, bill number, description, location, or your own notes. Results update as you type. In calendar view, a banner appears when filtering is active.",
+            "Filter hearings by committee name, bill number, description, location, or your own notes. Results update as you type. In calendar view, a banner appears when filtering is active.",
         },
       },
 
@@ -35,7 +35,7 @@ export function createMeetingsTour({ isEditor = false, activeView = "list" } = {
               popover: {
                 title: "Date Range",
                 description:
-                  "Choose the week or date range you want to view. Meetings load automatically when the dates change.",
+                  "Choose the week or date range you want to view. Hearings load automatically when the dates change.",
               },
             },
           ]
@@ -66,7 +66,7 @@ export function createMeetingsTour({ isEditor = false, activeView = "list" } = {
               popover: {
                 title: "Controls",
                 description:
-                  "Scrape the latest schedule directly from akleg.gov to pick up any changes. Use the hidden meetings toggle to show or hide meetings marked as hidden.",
+                  "Scrape the latest schedule directly from akleg.gov to pick up any changes. Use the hidden hearings toggle to show or hide hearings marked as hidden.",
               },
             },
           ]
@@ -80,7 +80,7 @@ export function createMeetingsTour({ isEditor = false, activeView = "list" } = {
               popover: {
                 title: "Expand / Collapse Agendas",
                 description:
-                  "Toggle all meeting agendas open or closed at once. You can also expand or collapse individual meetings independently by clicking '▸ Show agenda' on each card.",
+                  "Toggle all hearing agendas open or closed at once. You can also expand or collapse individual hearings independently by clicking '▸ Show agenda' on each card.",
               },
             },
           ]
@@ -92,9 +92,9 @@ export function createMeetingsTour({ isEditor = false, activeView = "list" } = {
             {
               element: "#tour-show-inactive",
               popover: {
-                title: "Show Inactive Meetings",
+                title: "Show Inactive Hearings",
                 description:
-                  "Reveals meetings that were removed from the akleg.gov schedule after a prior scrape. Inactive meetings are shown with a strikethrough and reduced opacity. Only appears when inactive meetings exist in the selected date range.",
+                  "Reveals hearings that were removed from the akleg.gov schedule after a prior scrape. Inactive hearings are shown with a strikethrough and reduced opacity. Only appears when inactive hearings exist in the selected date range.",
               },
             },
           ]
@@ -116,7 +116,7 @@ export function createMeetingsTour({ isEditor = false, activeView = "list" } = {
             {
               element: "#tour-first-meeting",
               popover: {
-                title: "Meeting Card",
+                title: "Hearing Card",
                 description:
                   "Each card shows the date, time, committee, and location. Click '▸ Show agenda' to expand the bill list. Click a committee name or bill number to open it on akleg.gov. Use the Notes column to attach internal DPS notes — they persist across scrapes.",
               },
@@ -126,9 +126,9 @@ export function createMeetingsTour({ isEditor = false, activeView = "list" } = {
             {
               element: "#tour-first-calendar-meeting",
               popover: {
-                title: "Calendar Meeting Block",
+                title: "Calendar Hearing Block",
                 description:
-                  "Each block shows the chamber and committee (e.g. (H) FINANCE) and the bills being heard. Click a block to open a detail overlay with the full agenda, location, sync time, and notes.",
+                  "Each block shows the chamber and committee (e.g. (H) FINANCE) or floor hearing label. Click a block to open a detail overlay with the full agenda, location, sync time, and notes.",
               },
             },
           ]),

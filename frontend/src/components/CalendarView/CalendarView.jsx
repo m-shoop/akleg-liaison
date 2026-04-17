@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { updateDpsNotes, updateHidden } from "../../api/meetings";
+import { updateDpsNotes, updateHidden } from "../../api/hearings";
 import { addDays } from "../../utils/weekBounds";
+import { alaskaLocalToUtc, exportToCalendar } from "../../utils/hearingCalendar";
+import PriorAgendasModal from "../PriorAgendasModal/PriorAgendasModal";
 import styles from "./CalendarView.module.css";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -13,7 +15,6 @@ const CONTENT_END_HOUR = 22;           // 10:00 PM — bottom of scrollable area
 const TOTAL_HEIGHT = (CONTENT_END_HOUR - CONTENT_START_HOUR) * PIXEL_PER_HOUR; // 960px
 const CONTAINER_HEIGHT = 11 * PIXEL_PER_HOUR; // 660px — visible window (7:30 AM–6:30 PM)
 const SCROLL_OFFSET_PX = (7.5 - CONTENT_START_HOUR) * PIXEL_PER_HOUR; // 90px
-const ASSUMED_DURATION_MIN = 60;
 
 const HOUR_MARKS = Array.from(
   { length: CONTENT_END_HOUR - CONTENT_START_HOUR + 1 },
@@ -55,137 +56,60 @@ function fmtHour(h) {
   return `${h - 12} PM`;
 }
 
-// Mirrors the same function in MeetingCard — converts Alaska local time to UTC.
-function alaskaLocalToUtc(dateStr, timeStr) {
-  const [y, mo, d] = dateStr.split("-").map(Number);
-  const [h, m] = timeStr.split(":").map(Number);
-  let candidate = new Date(Date.UTC(y, mo - 1, d, h + 9, m, 0));
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Anchorage",
-    hour: "numeric",
-    minute: "numeric",
-    hour12: false,
-  }).formatToParts(candidate);
-  const akH = parseInt(parts.find((p) => p.type === "hour").value) % 24;
-  const akM = parseInt(parts.find((p) => p.type === "minute").value);
-  const diffMs = ((h * 60 + m) - (akH * 60 + akM)) * 60000;
-  return new Date(candidate.getTime() + diffMs);
-}
-
-// Mirrors the same function in MeetingCard.
-function exportToCalendar(meeting, notes) {
-  const chamberLabel = meeting.chamber === "H" ? "House" : "Senate";
-  const summary = `${chamberLabel} ${meeting.committee_name} ${meeting.committee_type}`;
-  const dateStr = meeting.meeting_date.replace(/-/g, "");
-
-  let dtStart, dtEnd;
-  if (meeting.meeting_time) {
-    const pad = (n) => String(n).padStart(2, "0");
-    const startUtc = alaskaLocalToUtc(meeting.meeting_date, meeting.meeting_time);
-    const endUtc = new Date(startUtc.getTime() + 60 * 60 * 1000);
-    const fmtUtc = (dt) =>
-      `${dt.getUTCFullYear()}${pad(dt.getUTCMonth() + 1)}${pad(dt.getUTCDate())}` +
-      `T${pad(dt.getUTCHours())}${pad(dt.getUTCMinutes())}00Z`;
-    dtStart = `DTSTART:${fmtUtc(startUtc)}`;
-    dtEnd = `DTEND:${fmtUtc(endUtc)}`;
-  } else {
-    dtStart = `DTSTART;VALUE=DATE:${dateStr}`;
-    dtEnd = `DTEND;VALUE=DATE:${dateStr}`;
-  }
-
-  const descLines = [];
-  if (notes) {
-    descLines.push("Department of Public Safety Notes:");
-    descLines.push(notes);
-    descLines.push("--");
-  }
-  descLines.push("Hearing Schedule:");
-  meeting.agenda_items.forEach((item) => {
-    const prefix = item.prefix ? `${item.prefix} ` : "";
-    if (item.is_bill) {
-      descLines.push(`${prefix}${item.bill_number} — ${item.content}`);
-    } else {
-      descLines.push(`${prefix}${item.content}`);
-    }
-  });
-
-  const escape = (s) => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,");
-  const description = escape(descLines.join("\n")).replace(/\n/g, "\\n");
-
-  const ics = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Leg Up//Meeting Export//EN",
-    "BEGIN:VEVENT",
-    dtStart,
-    dtEnd,
-    `SUMMARY:${escape(summary)}`,
-    `DESCRIPTION:${description}`,
-    `LOCATION:${escape(meeting.location ?? "")}`,
-    "END:VEVENT",
-    "END:VCALENDAR",
-  ].join("\r\n");
-
-  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${meeting.committee_name.toLowerCase().replace(/\s+/g, "-")}-${meeting.meeting_date}.ics`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 /**
- * For each timed meeting in a day, compute its display column (col) and the
+ * For each timed hearing in a day, compute its display column (col) and the
  * total number of columns in its overlap group (totalCols).
  */
-function computeDayLayout(dayMeetings) {
-  const timed = dayMeetings.filter((m) => m.meeting_time);
+function computeDayLayout(dayHearings) {
+  const timed = dayHearings.filter((h) => h.hearing_time);
 
-  return timed.map((m) => {
-    const start = timeToMin(m.meeting_time);
-    const end = start + ASSUMED_DURATION_MIN;
+  return timed.map((h) => {
+    const start = timeToMin(h.hearing_time);
+    const end = start + (h.length ?? 60);
 
     const concurrent = timed
       .filter((other) => {
-        const os = timeToMin(other.meeting_time);
-        const oe = os + ASSUMED_DURATION_MIN;
+        const os = timeToMin(other.hearing_time);
+        const oe = os + (other.length ?? 60);
         return start < oe && end > os;
       })
-      .sort((a, b) => timeToMin(a.meeting_time) - timeToMin(b.meeting_time));
+      .sort((a, b) => timeToMin(a.hearing_time) - timeToMin(b.hearing_time));
 
-    const col = concurrent.findIndex((other) => other.id === m.id);
-    return { meeting: m, col, totalCols: concurrent.length };
+    const col = concurrent.findIndex((other) => other.id === h.id);
+    return { hearing: h, col, totalCols: concurrent.length };
   });
 }
 
-// ─── Meeting detail overlay ───────────────────────────────────────────────────
+// ─── Hearing detail overlay ───────────────────────────────────────────────────
 
-function MeetingDetailOverlay({ meeting, showHidden, onClose, onNotesReload, onHiddenChanged }) {
+function HearingDetailOverlay({ hearing, showHidden, onClose, onNotesReload, onHiddenChanged }) {
   const { can, token } = useAuth();
-  const [notes, setNotes] = useState(meeting.dps_notes ?? "");
+  const [notes, setNotes] = useState(hearing.dps_notes ?? "");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [hidingBusy, setHidingBusy] = useState(false);
+  const [showPriorAgendas, setShowPriorAgendas] = useState(false);
+
+  const isFloor = !hearing.committee_name;
 
   useEffect(() => {
-    if (!dirty) setNotes(meeting.dps_notes ?? "");
-  }, [meeting.dps_notes, dirty]);
+    if (!dirty) setNotes(hearing.dps_notes ?? "");
+  }, [hearing.dps_notes, dirty]);
 
   useEffect(() => {
     function handleKey(e) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !showPriorAgendas) onClose();
     }
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [onClose]);
+  }, [onClose, showPriorAgendas]);
 
   async function handleSave() {
     setSaving(true);
     try {
-      await updateDpsNotes(meeting.id, notes || null, token);
+      await updateDpsNotes(hearing.id, notes || null, token);
       setDirty(false);
-      onNotesReload(); // keeps overlay open
+      onNotesReload();
     } finally {
       setSaving(false);
     }
@@ -194,17 +118,17 @@ function MeetingDetailOverlay({ meeting, showHidden, onClose, onNotesReload, onH
   async function handleToggleHidden() {
     setHidingBusy(true);
     try {
-      const updated = await updateHidden(meeting.id, !meeting.hidden, token);
-      onHiddenChanged(updated); // parent updates allMeetings and closes overlay
+      const updated = await updateHidden(hearing.id, !hearing.hidden, token);
+      onHiddenChanged(updated);
     } finally {
       setHidingBusy(false);
     }
   }
 
-  const chamberFull = meeting.chamber === "H" ? "House" : "Senate";
+  const chamberFull = hearing.chamber === "H" ? "House" : "Senate";
 
-  const lastSynced = meeting.last_sync
-    ? new Date(meeting.last_sync).toLocaleString("en-US", {
+  const lastSynced = hearing.last_sync
+    ? new Date(hearing.last_sync).toLocaleString("en-US", {
         month: "long",
         day: "numeric",
         year: "numeric",
@@ -214,6 +138,10 @@ function MeetingDetailOverlay({ meeting, showHidden, onClose, onNotesReload, onH
         timeZoneName: "shortGeneric",
       })
     : null;
+
+  const notesPlaceholder = isFloor
+    ? `Notes for ${chamberFull} Floor hearing`
+    : `Notes for ${chamberFull} ${hearing.committee_name} hearing`;
 
   return (
     <>
@@ -226,38 +154,40 @@ function MeetingDetailOverlay({ meeting, showHidden, onClose, onNotesReload, onH
         <div className={styles.overlayHeader}>
           <span
             className={`${styles.overlayChamberBadge} ${
-              meeting.chamber === "H" ? styles.overlayChamberH : styles.overlayChamberS
+              hearing.chamber === "H" ? styles.overlayChamberH : styles.overlayChamberS
             }`}
           >
-            {meeting.chamber}
+            {hearing.chamber}
           </span>
           <div className={styles.overlayHeaderText}>
             <div className={styles.overlayCommittee}>
-              {meeting.committee_url ? (
+              {isFloor ? (
+                <span>{chamberFull} Floor Hearing</span>
+              ) : hearing.committee_url ? (
                 <a
-                  href={meeting.committee_url}
+                  href={hearing.committee_url}
                   target="_blank"
                   rel="noreferrer"
                   className={styles.overlayCommitteeLink}
                 >
-                  {chamberFull} {meeting.committee_name}
+                  {chamberFull} {hearing.committee_name}
                 </a>
               ) : (
                 <span>
-                  {chamberFull} {meeting.committee_name}
+                  {chamberFull} {hearing.committee_name}
                 </span>
               )}
             </div>
             <div className={styles.overlayMeta}>
-              {meeting.committee_type && <span>{meeting.committee_type}</span>}
-              {meeting.meeting_time && <span>{fmtTime(meeting.meeting_time)}</span>}
-              {meeting.location && <span>{meeting.location}</span>}
+              {!isFloor && hearing.committee_type && <span>{hearing.committee_type}</span>}
+              {hearing.hearing_time && <span>{fmtTime(hearing.hearing_time)}</span>}
+              {hearing.location && <span>{hearing.location}</span>}
             </div>
           </div>
           {can("hearing:export-ics") && (
             <button
               className={styles.overlayCalBtn}
-              onClick={() => exportToCalendar(meeting, notes)}
+              onClick={() => exportToCalendar(hearing, notes)}
               title="Export to Outlook calendar"
             >
               + Calendar
@@ -265,12 +195,12 @@ function MeetingDetailOverlay({ meeting, showHidden, onClose, onNotesReload, onH
           )}
         </div>
 
-        {meeting.agenda_items.length > 0 && (
+        {hearing.agenda_items.length > 0 && (
           <div className={styles.overlayAgenda}>
             <div className={styles.overlaySectionTitle}>Agenda</div>
             <table className={styles.overlayAgendaTable}>
               <tbody>
-                {meeting.agenda_items.map((item) =>
+                {hearing.agenda_items.map((item) =>
                   item.is_bill ? (
                     <tr key={item.id} className={styles.overlayBillRow}>
                       <td className={styles.overlayBillNum}>
@@ -291,7 +221,7 @@ function MeetingDetailOverlay({ meeting, showHidden, onClose, onNotesReload, onH
                         )}
                         {" "}<Link
                           to="/"
-                          state={{ search: item.bill_number }}
+                          state={{ search: item.bill_number, showUntracked: true }}
                           className={styles.legLink}
                           title={`Find ${item.bill_number} in Legislation tab`}
                         >
@@ -322,6 +252,24 @@ function MeetingDetailOverlay({ meeting, showHidden, onClose, onNotesReload, onH
           </div>
         )}
 
+        {can("prior-hearing-agendas:view") && hearing.has_prior_agendas && (
+          <div className={styles.overlayPriorAgendasRow}>
+            <button
+              className={styles.overlayPriorAgendasBtn}
+              onClick={() => setShowPriorAgendas(true)}
+            >
+              Prior Agendas
+            </button>
+          </div>
+        )}
+
+        {showPriorAgendas && (
+          <PriorAgendasModal
+            hearing={hearing}
+            onClose={() => setShowPriorAgendas(false)}
+          />
+        )}
+
         {can("hearing-notes:view") && (
           <div className={styles.overlayNotes}>
             <div className={styles.overlaySectionTitle}>Notes</div>
@@ -330,7 +278,7 @@ function MeetingDetailOverlay({ meeting, showHidden, onClose, onNotesReload, onH
                 <textarea
                   className={styles.overlayNotesInput}
                   value={notes}
-                  placeholder={`Notes for ${chamberFull} ${meeting.committee_name} meeting`}
+                  placeholder={notesPlaceholder}
                   onChange={(e) => {
                     setNotes(e.target.value);
                     setDirty(true);
@@ -355,20 +303,20 @@ function MeetingDetailOverlay({ meeting, showHidden, onClose, onNotesReload, onH
         {can("hearing:hide") && (
           <div className={styles.overlayHideRow}>
             <div className={styles.overlaySectionTitle}>Visibility</div>
-            {meeting.hidden && showHidden && (
+            {hearing.hidden && showHidden && (
               <p className={styles.overlayHiddenNote}>Hidden from view and PDF</p>
             )}
             <button
-              className={`${styles.overlayHideBtn} ${meeting.hidden ? styles.overlayHideBtnActive : ""}`}
+              className={`${styles.overlayHideBtn} ${hearing.hidden ? styles.overlayHideBtnActive : ""}`}
               onClick={handleToggleHidden}
               disabled={hidingBusy}
               title={
-                meeting.hidden
+                hearing.hidden
                   ? "Unhide this hearing"
                   : "Hide this hearing and remove it from the PDF export."
               }
             >
-              {hidingBusy ? "…" : meeting.hidden ? "Unhide" : "Hide"}
+              {hidingBusy ? "…" : hearing.hidden ? "Unhide" : "Hide"}
             </button>
           </div>
         )}
@@ -384,19 +332,19 @@ function MeetingDetailOverlay({ meeting, showHidden, onClose, onNotesReload, onH
 // ─── CalendarView ─────────────────────────────────────────────────────────────
 
 export default function CalendarView({
-  meetings,
+  hearings,
   startDate,
   daysShown,
   onDaysShownChange,
   onNavigate,
   isFiltered,
   loading,
-  noMeetingsInRange,
-  onMeetingReload,
+  noHearingsInRange,
+  onHearingReload,
   showHidden,
   onHiddenChanged,
 }) {
-  const [selectedMeeting, setSelectedMeeting] = useState(null);
+  const [selectedHearing, setSelectedHearing] = useState(null);
   const scrollRef = useRef(null);
 
   // On mobile (≤640px) only 1-day view is supported — enforce it and react to resize/rotation.
@@ -408,12 +356,12 @@ export default function CalendarView({
     return () => mq.removeEventListener("change", enforce);
   }, [onDaysShownChange]);
 
-  // Keep the overlay in sync when the parent refreshes meeting data (e.g. after saving notes).
+  // Keep the overlay in sync when the parent refreshes hearing data (e.g. after saving notes).
   useEffect(() => {
-    if (!selectedMeeting) return;
-    const updated = (meetings ?? []).find((m) => m.id === selectedMeeting.id);
-    if (updated) setSelectedMeeting(updated);
-  }, [meetings]);
+    if (!selectedHearing) return;
+    const updated = (hearings ?? []).find((h) => h.id === selectedHearing.id);
+    if (updated) setSelectedHearing(updated);
+  }, [hearings]);
 
   // Scroll to 7:30 AM on mount and whenever the start date changes
   useEffect(() => {
@@ -424,10 +372,10 @@ export default function CalendarView({
 
   const days = Array.from({ length: daysShown }, (_, i) => addDays(startDate, i));
 
-  const meetingsByDate = {};
-  for (const m of meetings ?? []) {
-    if (!meetingsByDate[m.meeting_date]) meetingsByDate[m.meeting_date] = [];
-    meetingsByDate[m.meeting_date].push(m);
+  const hearingsByDate = {};
+  for (const h of hearings ?? []) {
+    if (!hearingsByDate[h.hearing_date]) hearingsByDate[h.hearing_date] = [];
+    hearingsByDate[h.hearing_date].push(h);
   }
 
   const dayLabel = daysShown === 1 ? "day" : "days";
@@ -467,8 +415,8 @@ export default function CalendarView({
           {daysShown} {dayLabel} &gt;&gt;
         </button>
         {loading && <span className={styles.navLoading}>Loading…</span>}
-        {!loading && noMeetingsInRange && (
-          <span className={styles.navLoading}>No meetings found for this date range.</span>
+        {!loading && noHearingsInRange && (
+          <span className={styles.navLoading}>No hearings found for this date range.</span>
         )}
         {isFiltered && (
           <span className={styles.filterBanner}>
@@ -479,11 +427,6 @@ export default function CalendarView({
 
       {/* Calendar grid */}
       <div className={styles.calendarOuter}>
-        {/*
-          The scroll area contains BOTH the sticky header row and the time body.
-          Keeping them in the same scroll container guarantees the vertical lines
-          in the header and body stay perfectly aligned regardless of scrollbar width.
-        */}
         <div
           className={styles.calendarScrollArea}
           style={{ height: CONTAINER_HEIGHT }}
@@ -515,9 +458,12 @@ export default function CalendarView({
 
             <div className={styles.calendarDaysRow}>
               {days.map((dateStr) => {
-                const dayMeetings = meetingsByDate[dateStr] ?? [];
-                const timedLayout = computeDayLayout(dayMeetings);
-                const untimedMeetings = dayMeetings.filter((m) => !m.meeting_time);
+                const dayHearings = hearingsByDate[dateStr] ?? [];
+                const timedLayout = [
+                  ...computeDayLayout(dayHearings.filter((h) => h.hearing_time && h.committee_name)),
+                  ...computeDayLayout(dayHearings.filter((h) => h.hearing_time && !h.committee_name)),
+                ];
+                const untimedHearings = dayHearings.filter((h) => !h.hearing_time);
 
                 return (
                   <div key={dateStr} className={styles.dayColumn} style={{ height: TOTAL_HEIGHT }}>
@@ -538,9 +484,9 @@ export default function CalendarView({
                       />
                     ))}
 
-                    {/* Untimed meetings — anchored at 7:30 AM position */}
-                    {untimedMeetings.map((m, idx) => {
-                      const bills = m.agenda_items
+                    {/* Untimed hearings — anchored at 7:30 AM position */}
+                    {untimedHearings.map((h, idx) => {
+                      const bills = h.agenda_items
                         .filter((i) => i.is_bill)
                         .map((i) => i.bill_number)
                         .filter(Boolean);
@@ -548,23 +494,24 @@ export default function CalendarView({
                         bills.length > 3 ? bills.slice(0, 3).join(", ") + "…" : bills.join(", ");
                       const isFirstBlock = !firstBlockRendered;
                       if (isFirstBlock) firstBlockRendered = true;
+                      const blockLabel = h.committee_name ?? "Floor Session";
                       return (
                         <div
-                          key={m.id}
+                          key={h.id}
                           id={isFirstBlock ? "tour-first-calendar-meeting" : undefined}
                           className={`${styles.meetingBlock} ${
-                            m.chamber === "H" ? styles.meetingBlockHouse : styles.meetingBlockSenate
-                          }${!m.is_active ? ` ${styles.meetingBlockInactive}` : ""}${m.hidden ? ` ${styles.meetingBlockHidden}` : ""}`}
+                            h.chamber === "H" ? styles.meetingBlockHouse : styles.meetingBlockSenate
+                          }${!h.is_active ? ` ${styles.meetingBlockInactive}` : ""}${h.hidden ? ` ${styles.meetingBlockHidden}` : ""}${selectedHearing?.id === h.id ? ` ${styles.meetingBlockSelected}` : ""}`}
                           style={{
                             top: SCROLL_OFFSET_PX + 4 + idx * 46,
                             left: 2,
                             right: 2,
                             height: 42,
                           }}
-                          onClick={() => setSelectedMeeting(m)}
+                          onClick={() => setSelectedHearing(h)}
                         >
                           <div className={styles.blockCommittee}>
-                            {m.committee_name} ({m.chamber})
+                            {blockLabel} ({h.chamber})
                           </div>
                           {bills.length > 0 && (
                             <div
@@ -578,14 +525,15 @@ export default function CalendarView({
                       );
                     })}
 
-                    {/* Timed meetings */}
-                    {timedLayout.map(({ meeting: m, col, totalCols }) => {
-                      const top = timeToY(m.meeting_time);
-                      const height = Math.max(PIXEL_PER_HOUR - 2, 44);
+                    {/* Timed hearings */}
+                    {timedLayout.map(({ hearing: h, col, totalCols }) => {
+                      const top = timeToY(h.hearing_time);
+                      const durationMin = h.length ?? 60;
+                      const height = Math.max((durationMin / 60) * PIXEL_PER_HOUR - 2, 44);
                       const widthPct = 100 / totalCols;
                       const leftPct = col * widthPct;
 
-                      const bills = m.agenda_items
+                      const bills = h.agenda_items
                         .filter((i) => i.is_bill)
                         .map((i) => i.bill_number)
                         .filter(Boolean);
@@ -595,14 +543,15 @@ export default function CalendarView({
                           : bills.join(", ");
                       const isFirstBlock = !firstBlockRendered;
                       if (isFirstBlock) firstBlockRendered = true;
+                      const blockLabel = h.committee_name ?? "Floor Session";
 
                       return (
                         <div
-                          key={m.id}
+                          key={h.id}
                           id={isFirstBlock ? "tour-first-calendar-meeting" : undefined}
                           className={`${styles.meetingBlock} ${
-                            m.chamber === "H" ? styles.meetingBlockHouse : styles.meetingBlockSenate
-                          }${!m.is_active ? ` ${styles.meetingBlockInactive}` : ""}${m.hidden ? ` ${styles.meetingBlockHidden}` : ""}`}
+                            h.chamber === "H" ? styles.meetingBlockHouse : styles.meetingBlockSenate
+                          }${!h.is_active ? ` ${styles.meetingBlockInactive}` : ""}${h.hidden ? ` ${styles.meetingBlockHidden}` : ""}${selectedHearing?.id === h.id ? ` ${styles.meetingBlockSelected}` : ""}`}
                           style={{
                             top,
                             height,
@@ -612,10 +561,10 @@ export default function CalendarView({
                                 ? `calc(${widthPct}% - 4px)`
                                 : `calc(${widthPct}% - 3px)`,
                           }}
-                          onClick={() => setSelectedMeeting(m)}
+                          onClick={() => setSelectedHearing(h)}
                         >
                           <div className={styles.blockCommittee}>
-                            {m.committee_name} ({m.chamber})
+                            {blockLabel} ({h.chamber})
                           </div>
                           {bills.length > 0 && (
                             <div
@@ -636,16 +585,16 @@ export default function CalendarView({
         </div>
       </div>
 
-      {/* Meeting detail overlay */}
-      {selectedMeeting && (
-        <MeetingDetailOverlay
-          meeting={selectedMeeting}
+      {/* Hearing detail overlay */}
+      {selectedHearing && (
+        <HearingDetailOverlay
+          hearing={selectedHearing}
           showHidden={showHidden}
-          onClose={() => setSelectedMeeting(null)}
-          onNotesReload={onMeetingReload}
+          onClose={() => setSelectedHearing(null)}
+          onNotesReload={onHearingReload}
           onHiddenChanged={(updated) => {
             onHiddenChanged(updated);
-            setSelectedMeeting(null);
+            setSelectedHearing(null);
           }}
         />
       )}

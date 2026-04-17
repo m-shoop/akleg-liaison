@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useReactToPrint } from "react-to-print";
 import { fetchBills } from "../../api/bills";
-import { fetchMeetings, fetchUpcomingHearings } from "../../api/meetings";
+import { fetchHearings, fetchUpcomingHearings } from "../../api/hearings";
 import { fetchTags } from "../../api/tags";
 import { useAuth } from "../../context/AuthContext";
 import BillCard from "../../components/BillCard/BillCard";
 import FiscalDeptFilter from "../../components/FiscalDeptFilter/FiscalDeptFilter";
 import OutcomeFilter from "../../components/OutcomeFilter/OutcomeFilter";
-import PrintMeetingsSection from "../../components/PrintMeetingsSection/PrintMeetingsSection";
+import PrintHearingsSection from "../../components/PrintHearingsSection/PrintHearingsSection";
 import ReportHeaderEditor from "../../components/ReportHeaderEditor/ReportHeaderEditor";
 import SyncSchedule from "../../components/SyncSchedule/SyncSchedule";
 import Toast from "../../components/Toast/Toast";
@@ -47,7 +47,7 @@ export default function Home() {
     );
     return depts;
   }, [bills]);
-  const [showUntracked, setShowUntracked] = useState(() => sessionStorage.getItem("leg_showUntracked") === "true");
+  const [showUntracked, setShowUntracked] = useState(location.state?.showUntracked ?? sessionStorage.getItem("leg_showUntracked") === "true");
   const [sideBySide, setSideBySide] = useState(() => sessionStorage.getItem("leg_sideBySide") !== "false");
   const [showKeywords, setShowKeywords] = useState(() => sessionStorage.getItem("leg_showKeywords") === "true");
   // location.state?.search (from bill-link navigation) takes priority over stored search
@@ -109,10 +109,10 @@ export default function Home() {
       setHearingBillIds(null);
       return;
     }
-    fetchMeetings({ startDate: printStartDate, endDate: printEndDate, token })
-      .then((meetings) => {
+    fetchHearings({ startDate: printStartDate, endDate: printEndDate, token })
+      .then((hearings) => {
         const ids = new Set(
-          meetings
+          hearings
             .flatMap((m) => m.agenda_items)
             .filter((item) => item.is_bill && item.bill_id != null)
             .map((item) => item.bill_id)
@@ -228,7 +228,7 @@ export default function Home() {
 
   async function exportPDF() {
     if (printStartDate && printEndDate) {
-      const data = await fetchMeetings({ startDate: printStartDate, endDate: printEndDate, token });
+      const data = await fetchHearings({ startDate: printStartDate, endDate: printEndDate, token });
       setPrintMeetings(data);
       setPendingPrint(true);
     } else {
@@ -328,7 +328,7 @@ export default function Home() {
                 Show Untracked
               </button>
             </div>
-            <div id="tour-toggle-layout" className={styles.toggleGroup}>
+            <div id="tour-toggle-layout" className={`${styles.toggleGroup} ${styles.layoutToggle}`}>
               <button
                 className={`${styles.toggleOption} ${sideBySide ? styles.toggleSelected : ""}`}
                 onClick={() => setSideBySide(true)}
@@ -445,7 +445,7 @@ export default function Home() {
 
       <div ref={contentRef}>
         <ReportHeaderEditor printStartDate={printStartDate} printEndDate={printEndDate} />
-        <PrintMeetingsSection meetings={printMeetings} startDate={printStartDate} endDate={printEndDate} />
+        <PrintHearingsSection hearings={printMeetings} startDate={printStartDate} endDate={printEndDate} />
 
         <p className={styles.aiLegendPrint}>
           ✨ Content marked with this symbol is AI-generated and may contain false information. Please review for accuracy.

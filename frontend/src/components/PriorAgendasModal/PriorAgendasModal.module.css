@@ -1,0 +1,305 @@
+/* Transparent backdrop — captures clicks outside to close */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: transparent;
+}
+
+/* Two-column layout container — no background, gap between panels is see-through */
+.layout {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 201;
+  display: flex;
+  flex-direction: row;
+  gap: 1.25rem;
+  width: min(860px, 94vw);
+  max-height: 80vh;
+}
+
+/* ─── Left panel: current version ─────────────────────────────────────────── */
+
+.currentPanel {
+  flex: 1;
+  min-width: 0;
+  background: var(--color-glacial-water);
+  border-radius: 8px;
+  padding: 1rem;
+  overflow-y: auto;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.meetingContext {
+  width: 100%;
+  background: var(--color-surface);
+  border-radius: 6px;
+  padding: 0.55rem 0.75rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  text-align: center;
+}
+
+.contextCommittee {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.contextType {
+  font-size: 0.75rem;
+  color: var(--color-text-primary);
+  opacity: 0.75;
+}
+
+.contextDate {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-top: 0.15rem;
+}
+
+.contextTime {
+  font-size: 0.75rem;
+  color: var(--color-text-primary);
+  opacity: 0.75;
+}
+
+.currentHeader {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0;
+}
+
+.dateLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  border-radius: 4px;
+  padding: 0.2rem 0.65rem;
+  white-space: nowrap;
+}
+
+
+.connector {
+  width: 2px;
+  height: 10px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.agendaBox {
+  width: 100%;
+  background: var(--color-surface-raised);
+  border-radius: 6px;
+  padding: 0.65rem 0.85rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+/* ─── Right panel: prior versions ─────────────────────────────────────────── */
+
+.priorPanel {
+  flex: 1;
+  min-width: 0;
+  background: var(--color-rainforest);
+  border-radius: 8px;
+  padding: 1rem;
+  overflow-y: auto;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.closeBtn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.6rem;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--color-text-on-dark);
+  padding: 0.2rem 0.45rem;
+  line-height: 1;
+  transition: background-color 0.12s;
+}
+
+.closeBtn:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.priorStatus {
+  font-size: 0.85rem;
+  color: var(--color-glacial-water);
+  font-style: italic;
+  text-align: center;
+  padding: 1rem 0.5rem;
+  margin: 0;
+}
+
+.versionEntry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.versionEntry:first-of-type {
+  margin-top: 0.5rem;
+}
+
+.priorPanelHeader {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 1.75rem; /* space below close button */
+  margin-bottom: 0.5rem;
+  padding: 0 0.1rem;
+  text-align: center;
+}
+
+.priorPanelTitle {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-text-on-dark);
+}
+
+.priorPanelSubtitle {
+  font-size: 0.72rem;
+  font-style: italic;
+  color: rgba(247, 244, 240, 0.7);
+}
+
+.priorDateLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-on-dark);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+  padding: 0.2rem 0.65rem;
+  white-space: nowrap;
+}
+
+.priorConnector {
+  width: 2px;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.priorAgendaBox {
+  width: 100%;
+  background: var(--color-surface-raised);
+  border-radius: 6px;
+  padding: 0.65rem 0.85rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  margin-bottom: 0.5rem;
+}
+
+/* ─── Shared agenda table styles ───────────────────────────────────────────── */
+
+.emptyNote {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+  margin: 0;
+}
+
+.agendaTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.agendaTable td {
+  padding: 0.18rem 0.4rem;
+  vertical-align: top;
+}
+
+.billRow td,
+.noteRow td {
+  border-top: 1px solid var(--color-border);
+}
+
+.billNum {
+  font-weight: 600;
+  color: var(--color-rainforest);
+  white-space: nowrap;
+  width: 60px;
+}
+
+.prefix {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.notePrefix {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  width: 60px;
+}
+
+.billLink {
+  color: var(--color-rainforest);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+.billLink:hover {
+  text-decoration-style: solid;
+}
+
+.billDesc {
+  /* takes remaining space */
+}
+
+.noteCell {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  padding-left: 0.75rem;
+  font-style: italic;
+}
+
+.noteLink {
+  color: var(--color-rainy-sky);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+
+/* ─── Mobile ───────────────────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .layout {
+    flex-direction: column;
+    top: auto;
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    transform: none;
+    width: auto;
+    max-height: 85vh;
+  }
+
+  .currentPanel,
+  .priorPanel {
+    max-height: 40vh;
+  }
+}
