@@ -1,19 +1,9 @@
-/* Inactive + warning banners */
+/* Inactive banner */
 
 .inactiveBanner {
   font-size: 0.72rem;
   color: #888;
   font-style: italic;
-  margin-bottom: 0.35rem;
-}
-
-.warningBanner {
-  font-size: 0.72rem;
-  background-color: #fff8e1;
-  border: 1px solid #f0c040;
-  border-radius: 4px;
-  padding: 0.25rem 0.5rem;
-  color: #7a5c00;
   margin-bottom: 0.35rem;
 }
 

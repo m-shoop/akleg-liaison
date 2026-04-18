@@ -48,6 +48,8 @@ export default function Hearings() {
     if (searchParams.get("show_hidden") === "1") return true;
     return sessionStorage.getItem("hearings_showHidden") === "true";
   });
+  const [hideWithoutNotes, setHideWithoutNotes] = useState(false);
+  const [additionalFiltersOpen, setAdditionalFiltersOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || sessionStorage.getItem("hearings_searchQuery") || "");
   const [globalExpanded, setGlobalExpanded] = useState(() => sessionStorage.getItem("hearings_globalExpanded") === "true");
   const [collapsedDates, setCollapsedDates] = useState(new Set());
@@ -162,6 +164,7 @@ export default function Hearings() {
     setStartDate(weekBounds().start);
     setEndDate(weekBounds().end);
     setShowHidden(false);
+    setHideWithoutNotes(false);
     setGlobalExpanded(false);
     setActiveView("list");
     setCalendarStartDate(null);
@@ -184,6 +187,7 @@ export default function Hearings() {
     ? allHearings
         .filter((h) => showInactive || h.is_active)
         .filter((h) => showHidden || !h.hidden)
+        .filter((h) => !hideWithoutNotes || h.dps_notes)
     : null;
 
   const query = searchQuery.trim().toLowerCase();
@@ -392,45 +396,68 @@ export default function Hearings() {
         </div>
       </div>
 
-      {/* Visibility toggles row */}
-      {(isLoggedIn && hasInactive) || can("hearing:hide") ? (
-        <div className={styles.filtersRow}>
-          {isLoggedIn && hasInactive && (
-            <div id="tour-show-inactive" className={styles.toggleGroup}>
-              <button
-                className={`${styles.toggleOption} ${!showInactive ? styles.toggleSelected : ""}`}
-                onClick={() => setShowInactive(false)}
-                disabled={loading}
-              >
-                Hide inactive
-              </button>
-              <button
-                className={`${styles.toggleOption} ${showInactive ? styles.toggleSelected : ""}`}
-                onClick={() => setShowInactive(true)}
-                disabled={loading}
-              >
-                Show inactive
-              </button>
-            </div>
-          )}
-          {can("hearing:hide") && (
+      {/* Additional Filters collapsible */}
+      <div className={styles.additionalFilters}>
+        <button
+          className={styles.additionalFiltersHeader}
+          onClick={() => setAdditionalFiltersOpen((v) => !v)}
+        >
+          <span>Additional Filters</span>
+          <span className={`${styles.collapseArrow} ${additionalFiltersOpen ? styles.collapseArrowOpen : ""}`}>▾</span>
+        </button>
+        {additionalFiltersOpen && (
+          <div className={styles.filtersRow}>
+            {isLoggedIn && hasInactive && (
+              <div id="tour-show-inactive" className={styles.toggleGroup}>
+                <button
+                  className={`${styles.toggleOption} ${!showInactive ? styles.toggleSelected : ""}`}
+                  onClick={() => setShowInactive(false)}
+                  disabled={loading}
+                >
+                  Hide inactive
+                </button>
+                <button
+                  className={`${styles.toggleOption} ${showInactive ? styles.toggleSelected : ""}`}
+                  onClick={() => setShowInactive(true)}
+                  disabled={loading}
+                >
+                  Show inactive
+                </button>
+              </div>
+            )}
+            {can("hearing:hide") && (
+              <div className={styles.toggleGroup}>
+                <button
+                  className={`${styles.toggleOption} ${!showHidden ? styles.toggleSelected : ""}`}
+                  onClick={() => setShowHidden(false)}
+                >
+                  Hide hidden
+                </button>
+                <button
+                  className={`${styles.toggleOption} ${showHidden ? styles.toggleSelected : ""}`}
+                  onClick={() => setShowHidden(true)}
+                >
+                  Display hidden
+                </button>
+              </div>
+            )}
             <div className={styles.toggleGroup}>
               <button
-                className={`${styles.toggleOption} ${!showHidden ? styles.toggleSelected : ""}`}
-                onClick={() => setShowHidden(false)}
+                className={`${styles.toggleOption} ${!hideWithoutNotes ? styles.toggleSelected : ""}`}
+                onClick={() => setHideWithoutNotes(false)}
               >
-                Hide hidden
+                Display Hearings Without Notes
               </button>
               <button
-                className={`${styles.toggleOption} ${showHidden ? styles.toggleSelected : ""}`}
-                onClick={() => setShowHidden(true)}
+                className={`${styles.toggleOption} ${hideWithoutNotes ? styles.toggleSelected : ""}`}
+                onClick={() => setHideWithoutNotes(true)}
               >
-                Display hidden
+                Hide Hearings Without Notes
               </button>
             </div>
-          )}
-        </div>
-      ) : null}
+          </div>
+        )}
+      </div>
 
       {/* Search row */}
       <div className={styles.searchRow}>

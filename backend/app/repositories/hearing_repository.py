@@ -366,20 +366,6 @@ async def list_hearings(
     result = await session.execute(stmt)
     all_hearings = list(result.scalars().all())
 
-    # Build a set of (chamber, committee_name, hearing_date, legislature_session)
-    # keys for inactive committee hearings that have notes.
-    inactive_with_notes: set[tuple] = {
-        (h.chamber, h.committee_name, h.hearing_date, h.legislature_session)
-        for h in all_hearings
-        if not h.is_active and h.dps_notes and h.committee_name
-    }
-
-    for h in all_hearings:
-        key = (h.chamber, h.committee_name, h.hearing_date, h.legislature_session)
-        h.has_inactive_notes_sibling = (
-            h.is_active and h.committee_name is not None and key in inactive_with_notes
-        )
-
     if include_inactive:
         return all_hearings
     return [h for h in all_hearings if h.is_active]

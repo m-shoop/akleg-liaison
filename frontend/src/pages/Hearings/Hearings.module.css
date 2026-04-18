@@ -209,13 +209,48 @@
   color: var(--color-rainy-sky);
 }
 
+/* Additional Filters collapsible */
+
+.additionalFilters {
+  margin-bottom: 0.75rem;
+}
+
+.additionalFiltersHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.additionalFiltersHeader:hover {
+  color: var(--color-rainy-sky);
+}
+
+.collapseArrow {
+  font-size: 1rem;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+
+.collapseArrowOpen {
+  transform: rotate(-180deg);
+}
+
 /* Visibility toggles — own row between header and search */
 
 .filtersRow {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
 /* Search bar */

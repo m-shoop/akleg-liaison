@@ -38,8 +38,6 @@ class HearingRead(BaseModel):
     hidden: bool
     dps_notes: str | None
     last_sync: datetime | None
-    # True when an inactive sibling hearing (same chamber/committee/date) has notes.
-    has_inactive_notes_sibling: bool = False
     # True when at least one prior (non-current) agenda version exists.
     has_prior_agendas: bool = False
     # created_at of the current agenda version.

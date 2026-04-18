@@ -90,11 +90,7 @@ export default function HearingCard({ hearing, isFirst, globalExpanded, showHidd
         {inactive && (
           <div className={styles.inactiveBanner}>Deactivated — this hearing was removed from the schedule</div>
         )}
-        {hearing.has_inactive_notes_sibling && (
-          <div className={styles.warningBanner}>
-            A prior version of this hearing has notes — toggle "Show inactive" to view or clear them
-          </div>
-        )}
+
         <div className={styles.cardDate}>
           <span>{fmt(hearing.hearing_date)}</span>
           <div className={styles.cardDateRight}>
