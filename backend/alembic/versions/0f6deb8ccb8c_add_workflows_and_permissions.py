@@ -1,6 +1,6 @@
 """Add workflow tables and new permissions (bill:request-tracking, workflow:view-all, workflow:approve-tracking)
 
-Revision ID: a2b3c4d5e6f7
+Revision ID: 0f6deb8ccb8c
 Revises: f3a4b5c6d7e8
 Create Date: 2026-04-14 00:00:00.000000
 
@@ -10,7 +10,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "a2b3c4d5e6f7"
+revision: str = "0f6deb8ccb8c"
 down_revision: Union[str, None] = "f3a4b5c6d7e8"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

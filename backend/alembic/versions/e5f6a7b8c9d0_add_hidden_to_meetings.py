@@ -1,7 +1,7 @@
 """add_hidden_to_meetings
 
 Revision ID: e5f6a7b8c9d0
-Revises: 8965a43a9ec2
+Revises: 898e19958381
 Create Date: 2026-03-28 00:00:00.000000
 
 """
