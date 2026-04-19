@@ -8,7 +8,7 @@ the old meeting_id column.
 Historical agenda items are never deleted; replace_agenda_items now creates a
 new version row on each distinct scrape rather than overwriting in place.
 
-Revision ID: c1d2e3f4a5b6
+Revision ID: 4f7a1c9e2d85
 Revises: b9c0d1e2f3a4
 Create Date: 2026-04-17 00:00:00.000000
 
