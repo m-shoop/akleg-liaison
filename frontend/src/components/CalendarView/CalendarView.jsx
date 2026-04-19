@@ -179,6 +179,7 @@ function HearingDetailOverlay({ hearing, showHidden, onClose, onNotesReload, onH
               )}
             </div>
             <div className={styles.overlayMeta}>
+              {hearing.hearing_date && <span>{fmtShortDate(hearing.hearing_date)}</span>}
               {!isFloor && hearing.committee_type && <span>{hearing.committee_type}</span>}
               {hearing.hearing_time && <span>{fmtTime(hearing.hearing_time)}</span>}
               {hearing.location && <span>{hearing.location}</span>}
