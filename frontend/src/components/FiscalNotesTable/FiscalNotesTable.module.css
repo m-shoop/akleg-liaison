@@ -69,6 +69,14 @@
   text-decoration-style: solid;
 }
 
+@media (max-width: 640px) {
+  .colAppropriation,
+  .colAllocation,
+  .colCode {
+    display: none;
+  }
+}
+
 @media print {
   .table td {
     border-bottom: none;

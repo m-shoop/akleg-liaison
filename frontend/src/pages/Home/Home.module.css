@@ -202,6 +202,33 @@
   .controls {
     width: 100%;
   }
+
+  /* Stack filter pairs vertically so buttons don't overflow */
+  .togglePair {
+    flex-direction: column;
+  }
+
+  /* Tighten button padding on narrow screens */
+  .toggleOption {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.82rem;
+  }
+
+  /* Hide the Side by Side / Single Column toggle entirely */
+  .layoutToggle {
+    display: none;
+  }
+
+  /* Force single column layout regardless of sideBySide state */
+  .sideBySideGrid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  /* Allow the hearing filter label to wrap */
+  .hearingFilterLabel {
+    white-space: normal;
+  }
 }
 
 @media print {
@@ -296,6 +323,7 @@
 
 .weekShortcuts {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.3rem;
   margin-top: 0.35rem;
 }
@@ -353,6 +381,25 @@
   opacity: 0.45;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+.defaultBtn {
+  align-self: flex-start;
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: 1.5px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  margin-top: auto;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.defaultBtn:hover {
+  border-color: var(--color-rainy-sky);
+  color: var(--color-rainy-sky);
 }
 
 @media print {

@@ -8,7 +8,7 @@ from app.models.bill import (
     OutcomeType,
 )
 from app.models.fiscal_note_query_failed import FiscalNoteQueryFailed
-from app.models.meeting import AgendaItem, Meeting
+from app.models.hearing import AgendaItem, CommitteeHearing, Hearing, HearingAgendaVersion
 from app.models.tag import BillTag, Tag
 from app.models.user import Permission, Role, RolePermission, TokenType, User, UserRoles, UserStatus, UserToken
 from app.models.workflow import (
@@ -39,7 +39,9 @@ __all__ = [
     "Permission",
     "RolePermission",
     "UserRoles",
-    "Meeting",
+    "Hearing",
+    "CommitteeHearing",
+    "HearingAgendaVersion",
     "AgendaItem",
     "Workflow",
     "WorkflowAction",

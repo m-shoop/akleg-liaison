@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import Navbar from "./components/Navbar/Navbar";
 import Footer from "./components/Footer/Footer";
@@ -7,7 +7,7 @@ import SessionExpiredBanner from "./components/SessionExpiredBanner/SessionExpir
 import Home from "./pages/Home/Home";
 import Login from "./pages/Login/Login";
 import QueryBill from "./pages/QueryBill/QueryBill";
-import Meetings from "./pages/Meetings/Meetings";
+import Hearings from "./pages/Hearings/Hearings";
 import Requests from "./pages/Requests/Requests";
 import Register from "./pages/Register/Register";
 import ForgotPassword from "./pages/ForgotPassword/ForgotPassword";
@@ -29,7 +29,8 @@ export default function App() {
           <Route path="/activate"        element={<ActivateToken />} />
           <Route path="/set-password"    element={<SetPassword />} />
           <Route path="/query-bill"      element={<QueryBill />} />
-          <Route path="/meetings"        element={<Meetings />} />
+          <Route path="/hearings"   element={<Hearings />} />
+          <Route path="/meetings"        element={<Navigate to="/hearings" replace />} />
           <Route path="/requests"        element={<Requests />} />
         </Routes>
       </main>

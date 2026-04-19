@@ -31,7 +31,7 @@ from app.database import AsyncSessionLocal
 from app.services.bill_scraper import scrape_bill_list
 from app.services.bill_sync import sync_bill_for_scheduler
 from app.services.fiscal_note_sync import load_allnotes_entries
-from app.services.meeting_scraper import scrape_and_store_meetings
+from app.services.hearing_scraper import scrape_and_store_hearings
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,7 @@ async def _sync_hearings() -> None:
     logger.info("[scheduler] Starting hearing sync for %s to %s.", start, end)
     try:
         async with AsyncSessionLocal() as db:
-            count = await scrape_and_store_meetings(db, start, end, _LEGISLATURE_SESSION)
+            count = await scrape_and_store_hearings(db, start, end, _LEGISLATURE_SESSION)
         logger.info("[scheduler] Hearing sync complete: %d meeting(s) saved.", count)
     except Exception as exc:
         logger.warning("[scheduler] Error during hearing sync: %s", exc)

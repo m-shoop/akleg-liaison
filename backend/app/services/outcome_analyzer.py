@@ -113,18 +113,23 @@ Enum guidance:
 - Use "other" for any action that does not clearly match another enum value \
 (e.g. advanced to third reading, engrossment, effective date notes, a motion \
 to table an amendment, or a bill dying in committee).
-- For "referred_to_committee", the committee field must be the DESTINATION \
-committee named in the referral sentence — never the committee that wrote \
-the report. The reporting committee and the destination committee are always \
-different. Concrete examples:
+- For "referred_to_committee", the committee field is REQUIRED — never omit \
+it. It must be the DESTINATION committee named in the referral sentence — \
+never the committee that wrote the report. The reporting committee and the \
+destination committee are always different. Concrete examples:
   * "The Judiciary Committee considered... HB 62 was referred to the Finance \
 Committee." → committee = "House Finance" (NOT "House Judiciary")
   * "The Finance Committee considered... referred to the Rules Committee." \
 → committee = "House Rules" (NOT "House Finance")
+  * "The Labor & Commerce Committee considered... HB 25 was referred to the \
+Rules Committee." → committee = "House Rules" (NOT "House Labor & Commerce")
   Look for the sentence beginning "HB [number] was referred to" or \
-"The bill was referred to" and use the committee named in THAT sentence.
+"The bill was referred to" — it is often the LAST sentence of the entry — \
+and use the committee named in THAT sentence.
 - Always format the committee field as "[Chamber] [Committee Name]" in title \
-case, where Chamber is either "House" or "Senate". \
+case, where Chamber is either "House" or "Senate". Determine the chamber \
+from the journal header at the top of the document — it will say either \
+"House Journal" or "Senate Journal". \
 Examples: "House Judiciary", "Senate Finance", "House Rules". \
 Never omit the chamber prefix and never use all caps.\
 """

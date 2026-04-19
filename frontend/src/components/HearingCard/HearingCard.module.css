@@ -1,19 +1,9 @@
-/* Inactive + warning banners */
+/* Inactive banner */
 
 .inactiveBanner {
   font-size: 0.72rem;
   color: #888;
   font-style: italic;
-  margin-bottom: 0.35rem;
-}
-
-.warningBanner {
-  font-size: 0.72rem;
-  background-color: #fff8e1;
-  border: 1px solid #f0c040;
-  border-radius: 4px;
-  padding: 0.25rem 0.5rem;
-  color: #7a5c00;
   margin-bottom: 0.35rem;
 }
 
@@ -232,6 +222,19 @@ a.committeeName:hover {
   /* takes remaining space */
 }
 
+.legLink {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-rainforest);
+  opacity: 0.6;
+  transition: opacity 0.12s;
+  vertical-align: middle;
+}
+
+.legLink:hover {
+  opacity: 1;
+}
+
 .teleconf {
   font-size: 0.72rem;
   color: var(--color-text-secondary);
@@ -370,6 +373,38 @@ a.committeeName:hover {
   }
 }
 
+/* Prior agendas link */
+
+.priorAgendasRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.priorAgendasBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-rainy-sky);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+  transition: color 0.12s;
+}
+
+.priorAgendasBtn:hover {
+  color: var(--color-rainforest);
+  text-decoration-style: solid;
+}
+
+@media print {
+  .priorAgendasRow {
+    display: none;
+  }
+}
+
 .lastSynced {
   font-size: 0.65rem;
   color: var(--color-text-secondary);
@@ -382,5 +417,31 @@ a.committeeName:hover {
   .lastSynced {
     opacity: 1;
     color: #888;
+  }
+}
+
+@media (max-width: 640px) {
+  .card {
+    flex-direction: column;
+  }
+
+  .dpsRow {
+    width: auto;
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+    padding-left: 0;
+    padding-top: 0.75rem;
+  }
+
+  .hideRow {
+    width: auto;
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+    padding-left: 0;
+    padding-top: 0.75rem;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
 }

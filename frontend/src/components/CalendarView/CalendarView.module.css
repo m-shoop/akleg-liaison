@@ -1,0 +1,618 @@
+/* ─── Navigation ─────────────────────────────────────────────────────────────── */
+
+.calendarWrapper {
+}
+
+.calendarNav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.navBtn {
+  padding: 0.4rem 0.85rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1.5px solid var(--color-rainy-sky);
+  background: transparent;
+  color: var(--color-rainy-sky);
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.navBtn:hover {
+  background-color: var(--color-rainy-sky);
+  color: var(--color-text-on-dark);
+}
+
+.navLoading {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+  margin-left: 0.25rem;
+}
+
+.daysToggle {
+  display: flex;
+  border: 1.5px solid var(--color-rainy-sky);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.daysOption {
+  padding: 0.4rem 0.85rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: transparent;
+  color: var(--color-rainy-sky);
+  border: none;
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.daysOption + .daysOption {
+  border-left: 1.5px solid var(--color-rainy-sky);
+}
+
+.daysOption:hover:not(.daysSelected) {
+  background-color: rgba(90, 110, 127, 0.08);
+}
+
+.daysSelected {
+  background-color: var(--color-rainy-sky);
+  color: var(--color-text-on-dark);
+}
+
+@media (max-width: 640px) {
+  .daysToggle {
+    display: none;
+  }
+
+  .overlayBox {
+    top: auto;
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    transform: none;
+    width: auto;
+    max-height: 85vh;
+  }
+}
+
+/* ─── Filter banner ───────────────────────────────────────────────────────────── */
+
+.filterBanner {
+  background-color: #fff8e1;
+  border: 1px solid #f0c040;
+  border-radius: 4px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.78rem;
+  color: #7a5c00;
+}
+
+/* ─── Calendar outer shell ────────────────────────────────────────────────────── */
+
+.calendarOuter {
+  border: 1.5px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.timeSpacer {
+  width: 52px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--color-border);
+}
+
+.dayHeader {
+  flex: 1;
+  padding: 0.5rem 0.4rem;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  border-right: 1px solid var(--color-border);
+}
+
+.dayHeader:last-child {
+  border-right: none;
+}
+
+/* ─── Scrollable body ─────────────────────────────────────────────────────────── */
+
+.calendarScrollArea {
+  /* Block container — header is sticky inside, body follows below */
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #FAFAF8;
+}
+
+/* ─── Day headers (sticky inside scroll area — guarantees line alignment) ─────── */
+
+.calendarHeaderRow {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  background: #FAFAF8;
+  border-bottom: 2px solid var(--color-border);
+}
+
+/* ─── Time body (gutter + columns, below sticky header) ──────────────────────── */
+
+.calendarBody {
+  display: flex;
+}
+
+/* ─── Time gutter ─────────────────────────────────────────────────────────────── */
+
+.timeGutter {
+  width: 52px;
+  flex-shrink: 0;
+  position: relative;
+  border-right: 1px solid var(--color-border);
+}
+
+.timeLabel {
+  position: absolute;
+  right: 6px;
+  font-size: 0.6rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  transform: translateY(-50%);
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* ─── Day columns ─────────────────────────────────────────────────────────────── */
+
+.calendarDaysRow {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+
+.dayColumn {
+  flex: 1;
+  position: relative;
+  border-right: 1px solid var(--color-border);
+  min-width: 0;
+}
+
+.dayColumn:last-child {
+  border-right: none;
+}
+
+.hourLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--color-border);
+  pointer-events: none;
+}
+
+.halfHourLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed var(--color-border);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ─── Meeting blocks ──────────────────────────────────────────────────────────── */
+
+.meetingBlock {
+  position: absolute;
+  border-radius: 7px;
+  padding: 3px 5px;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  overflow: hidden;
+  cursor: pointer;
+  z-index: 1;
+  transition: filter 0.1s, box-shadow 0.1s, z-index 0s;
+  border: 1.5px solid transparent;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+.meetingBlock:hover,
+.meetingBlockSelected {
+  z-index: 2;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.26);
+}
+
+.meetingBlockHouse:hover,
+.meetingBlockHouse.meetingBlockSelected {
+  background: rgba(168, 200, 192, 1);
+}
+
+.meetingBlockSenate:hover,
+.meetingBlockSenate.meetingBlockSelected {
+  background: var(--color-bay-stone);
+}
+
+.meetingBlockHouse {
+  background: rgba(168, 200, 192, 0.68);
+  border-color: var(--color-glacial-water);
+}
+
+.meetingBlockSenate {
+  background: color-mix(in srgb, var(--color-bay-stone) 42%, transparent);
+  border-color: var(--color-bay-stone);
+}
+
+.meetingBlockInactive {
+  opacity: 0.4;
+  border-color: #ccc !important;
+}
+
+.meetingBlockHidden {
+  opacity: 0.45;
+}
+
+.meetingBlockInactive .blockCommittee {
+  text-decoration: line-through;
+  color: var(--color-text-secondary);
+}
+
+.blockCommittee {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.blockBills {
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+/* ─── Overlay ─────────────────────────────────────────────────────────────────── */
+
+.overlayBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: transparent;
+}
+
+.overlayBox {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 101;
+  background: var(--color-surface-raised);
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem 1.5rem;
+  width: min(540px, 90vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+.overlayClose {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.75rem;
+  background: none;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  line-height: 1;
+  transition: background-color 0.12s;
+}
+
+.overlayClose:hover {
+  background: var(--color-border);
+}
+
+.overlayHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+  margin-bottom: 1rem;
+  padding-left: 1.5rem; /* space for close button */
+}
+
+.overlayChamberBadge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  background-color: var(--color-lichen);
+  color: var(--color-text-primary);
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.overlayChamberH {
+  border-left: 3px solid var(--color-glacial-water);
+}
+
+.overlayChamberS {
+  border-left: 3px solid var(--color-rainy-sky);
+}
+
+.overlayHeaderText {
+  min-width: 0;
+}
+
+.overlayCommittee {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-rainforest);
+  margin-bottom: 0.2rem;
+}
+
+.overlayCommitteeLink {
+  color: var(--color-rainforest);
+  text-decoration: none;
+}
+
+.overlayCommitteeLink:hover {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+.overlayMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+/* ─── Overlay: agenda ─────────────────────────────────────────────────────────── */
+
+.overlaySectionTitle {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.4rem;
+}
+
+.overlayAgenda {
+  margin-bottom: 1rem;
+}
+
+.overlayAgendaTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.overlayAgendaTable td {
+  padding: 0.2rem 0.4rem;
+  vertical-align: top;
+}
+
+.overlayBillRow td,
+.overlayNoteRow td {
+  border-top: 1px solid var(--color-border);
+}
+
+.overlayBillNum {
+  font-weight: 600;
+  color: var(--color-rainforest);
+  white-space: nowrap;
+  width: 64px;
+}
+
+.overlayPrefix {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.overlayBillLink {
+  color: var(--color-rainforest);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+.overlayBillLink:hover {
+  text-decoration-style: solid;
+}
+
+.overlayNotePrefix {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  width: 64px;
+}
+
+.overlayNoteCell {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+/* ─── Bill leg link ───────────────────────────────────────────────────────────── */
+
+.legLink {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-rainforest);
+  opacity: 0.6;
+  transition: opacity 0.12s;
+  vertical-align: middle;
+}
+
+.legLink:hover {
+  opacity: 1;
+}
+
+/* ─── Overlay: prior agendas link ────────────────────────────────────────────── */
+
+.overlayPriorAgendasRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.overlayPriorAgendasBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--color-rainy-sky);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+  transition: color 0.12s;
+}
+
+.overlayPriorAgendasBtn:hover {
+  color: var(--color-rainforest);
+  text-decoration-style: solid;
+}
+
+/* ─── Overlay: notes ──────────────────────────────────────────────────────────── */
+
+.overlayNotes {
+  margin-bottom: 0.75rem;
+}
+
+.overlayNotesInput {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1.5px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.overlayNotesInput:focus {
+  outline: none;
+  border-color: var(--color-glacial-water);
+}
+
+.overlayNotesReadOnly {
+  font-size: 0.85rem;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.overlaySaveBtn {
+  margin-top: 0.4rem;
+  float: right;
+  padding: 0.3rem 0.9rem;
+  border-radius: 4px;
+  border: 1.5px solid var(--color-rainforest);
+  background: transparent;
+  color: var(--color-rainforest);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.overlaySaveBtn:hover:not(:disabled) {
+  background-color: var(--color-rainforest);
+  color: white;
+}
+
+.overlaySaveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── Overlay: export + hide ──────────────────────────────────────────────────── */
+
+.overlayCalBtn {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 0.15rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  border: 1px solid var(--color-rainy-sky);
+  background: transparent;
+  color: var(--color-rainy-sky);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.overlayCalBtn:hover {
+  background-color: var(--color-rainy-sky);
+  color: var(--color-text-on-dark);
+}
+
+.overlayHideRow {
+  margin-bottom: 0.75rem;
+}
+
+.overlayHiddenNote {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+  margin: 0 0 0.3rem;
+}
+
+.overlayHideBtn {
+  padding: 0.3rem 0.7rem;
+  border-radius: 4px;
+  border: 1.5px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.overlayHideBtn:hover:not(:disabled) {
+  border-color: var(--color-rainy-sky);
+  color: var(--color-rainy-sky);
+}
+
+.overlayHideBtnActive {
+  border-color: var(--color-rainy-sky);
+  color: var(--color-rainy-sky);
+}
+
+.overlayHideBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── Overlay: footer ─────────────────────────────────────────────────────────── */
+
+.overlayLastSynced {
+  clear: both;
+  font-size: 0.65rem;
+  color: var(--color-text-secondary);
+  opacity: 0.6;
+  text-align: right;
+  margin-top: 0.75rem;
+  margin-bottom: 0;
+}

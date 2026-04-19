@@ -1,6 +1,5 @@
 .page {
   max-width: 1200px;
-  min-width: 680px;
   margin: 0 auto;
   padding: 2.5rem 1.5rem 4rem;
 }
@@ -105,6 +104,35 @@
   gap: 0.5rem;
 }
 
+/* View toggle (List / Calendar) — desktop only */
+
+.viewToggle {
+  display: flex;
+  border: 1.5px solid var(--color-rainy-sky);
+  border-radius: 4px;
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+.desktopOnly {
+  /* Hidden on phone and tablet; calendar view is desktop-only */
+}
+
+@media (max-width: 640px) {
+  .desktopOnly {
+    display: none;
+  }
+}
+
+.toggleIcon {
+  width: 13px;
+  height: 13px;
+  vertical-align: middle;
+  margin-right: 0.3rem;
+  flex-shrink: 0;
+}
+
+/* Hide/show-hidden toggle group */
 .toggleGroup {
   display: flex;
   border-radius: 4px;
@@ -161,6 +189,68 @@
 .scrapeBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.defaultBtn {
+  align-self: flex-start;
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: 1.5px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.defaultBtn:hover {
+  border-color: var(--color-rainy-sky);
+  color: var(--color-rainy-sky);
+}
+
+/* Additional Filters collapsible */
+
+.additionalFilters {
+  margin-bottom: 0.75rem;
+}
+
+.additionalFiltersHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.additionalFiltersHeader:hover {
+  color: var(--color-rainy-sky);
+}
+
+.collapseArrow {
+  font-size: 1rem;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+
+.collapseArrowOpen {
+  transform: rotate(-180deg);
+}
+
+/* Visibility toggles — own row between header and search */
+
+.filtersRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
 /* Search bar */
@@ -270,4 +360,27 @@
   color: #b33a3a;
   font-size: 0.95rem;
   padding: 0.5rem 0;
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 1.5rem 1rem 3rem;
+  }
+
+  .pageHeader {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .btnRow {
+    flex-wrap: wrap;
+  }
+
+  .weekShortcuts {
+    flex-wrap: wrap;
+  }
+
+  .dateRow {
+    flex-wrap: wrap;
+  }
 }

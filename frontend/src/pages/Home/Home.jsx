@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useReactToPrint } from "react-to-print";
 import { fetchBills } from "../../api/bills";
-import { fetchMeetings, fetchUpcomingHearings } from "../../api/meetings";
+import { fetchHearings, fetchUpcomingHearings } from "../../api/hearings";
 import { fetchTags } from "../../api/tags";
 import { useAuth } from "../../context/AuthContext";
 import BillCard from "../../components/BillCard/BillCard";
 import FiscalDeptFilter from "../../components/FiscalDeptFilter/FiscalDeptFilter";
 import OutcomeFilter from "../../components/OutcomeFilter/OutcomeFilter";
-import PrintMeetingsSection from "../../components/PrintMeetingsSection/PrintMeetingsSection";
+import PrintHearingsSection from "../../components/PrintHearingsSection/PrintHearingsSection";
 import ReportHeaderEditor from "../../components/ReportHeaderEditor/ReportHeaderEditor";
 import SyncSchedule from "../../components/SyncSchedule/SyncSchedule";
 import Toast from "../../components/Toast/Toast";
@@ -25,9 +25,18 @@ export default function Home() {
   const [allTags, setAllTags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showDescription, setShowDescription] = useState(false);
-  const [selectedOutcomes, setSelectedOutcomes] = useState(DEFAULT_SELECTED);
-  const [selectedDepts, setSelectedDepts] = useState(new Set(["Department of Public Safety"]));
+  const [showDescription, setShowDescription] = useState(() => sessionStorage.getItem("leg_showDescription") === "true");
+  const [selectedOutcomes, setSelectedOutcomes] = useState(() => {
+    const stored = sessionStorage.getItem("leg_selectedOutcomes");
+    if (stored) { try { return new Set(JSON.parse(stored)); } catch { /* ignore */ } }
+    return DEFAULT_SELECTED;
+  });
+  const [selectedDepts, setSelectedDepts] = useState(() => {
+    const stored = sessionStorage.getItem("leg_selectedDepts");
+    if (stored === "null") return null;
+    if (stored) { try { return new Set(JSON.parse(stored)); } catch { /* ignore */ } }
+    return new Set(["Department of Public Safety"]);
+  });
 
   const allDepts = useMemo(() => {
     const depts = new Set();
@@ -38,16 +47,17 @@ export default function Home() {
     );
     return depts;
   }, [bills]);
-  const [showUntracked, setShowUntracked] = useState(false);
-  const [sideBySide, setSideBySide] = useState(true);
-  const [showKeywords, setShowKeywords] = useState(false);
-  const [searchQuery, setSearchQuery] = useState(location.state?.search ?? "");
-  const [printStartDate, setPrintStartDate] = useState("");
-  const [printEndDate, setPrintEndDate] = useState("");
+  const [showUntracked, setShowUntracked] = useState(location.state?.showUntracked ?? sessionStorage.getItem("leg_showUntracked") === "true");
+  const [sideBySide, setSideBySide] = useState(() => sessionStorage.getItem("leg_sideBySide") !== "false");
+  const [showKeywords, setShowKeywords] = useState(() => sessionStorage.getItem("leg_showKeywords") === "true");
+  // location.state?.search (from bill-link navigation) takes priority over stored search
+  const [searchQuery, setSearchQuery] = useState(location.state?.search ?? sessionStorage.getItem("leg_searchQuery") ?? "");
+  const [printStartDate, setPrintStartDate] = useState(() => sessionStorage.getItem("leg_printStartDate") ?? "");
+  const [printEndDate, setPrintEndDate] = useState(() => sessionStorage.getItem("leg_printEndDate") ?? "");
   const [printMeetings, setPrintMeetings] = useState(null);
   const [upcomingHearings, setUpcomingHearings] = useState({});
   const [pendingPrint, setPendingPrint] = useState(false);
-  const [filterToHearings, setFilterToHearings] = useState(false);
+  const [filterToHearings, setFilterToHearings] = useState(() => sessionStorage.getItem("leg_filterToHearings") === "true");
   const [hearingBillIds, setHearingBillIds] = useState(null);
   const contentRef = useRef(null);
 
@@ -58,16 +68,51 @@ export default function Home() {
     }
   }, [printStartDate, printEndDate]);
 
+  // ─── Persist Legislation tab settings to sessionStorage ───────────────────
+  useEffect(() => {
+    if (searchQuery) sessionStorage.setItem("leg_searchQuery", searchQuery);
+    else sessionStorage.removeItem("leg_searchQuery");
+    if (showDescription) sessionStorage.setItem("leg_showDescription", "true");
+    else sessionStorage.removeItem("leg_showDescription");
+    if (showKeywords) sessionStorage.setItem("leg_showKeywords", "true");
+    else sessionStorage.removeItem("leg_showKeywords");
+    if (showUntracked) sessionStorage.setItem("leg_showUntracked", "true");
+    else sessionStorage.removeItem("leg_showUntracked");
+    if (!sideBySide) sessionStorage.setItem("leg_sideBySide", "false");
+    else sessionStorage.removeItem("leg_sideBySide");
+    if (printStartDate) sessionStorage.setItem("leg_printStartDate", printStartDate);
+    else sessionStorage.removeItem("leg_printStartDate");
+    if (printEndDate) sessionStorage.setItem("leg_printEndDate", printEndDate);
+    else sessionStorage.removeItem("leg_printEndDate");
+    if (filterToHearings) sessionStorage.setItem("leg_filterToHearings", "true");
+    else sessionStorage.removeItem("leg_filterToHearings");
+    sessionStorage.setItem("leg_selectedOutcomes", JSON.stringify([...selectedOutcomes]));
+    sessionStorage.setItem("leg_selectedDepts", selectedDepts === null ? "null" : JSON.stringify([...selectedDepts]));
+  }, [searchQuery, showDescription, showKeywords, showUntracked, sideBySide, printStartDate, printEndDate, filterToHearings, selectedOutcomes, selectedDepts]);
+
+  function resetToDefaults() {
+    setSearchQuery("");
+    setShowDescription(false);
+    setShowKeywords(false);
+    setShowUntracked(false);
+    setSideBySide(true);
+    setPrintStartDate("");
+    setPrintEndDate("");
+    setFilterToHearings(false);
+    setSelectedOutcomes(DEFAULT_SELECTED);
+    setSelectedDepts(new Set(["Department of Public Safety"]));
+  }
+
   // Fetch hearing bill IDs whenever the filter is on and both dates are set
   useEffect(() => {
     if (!filterToHearings || !printStartDate || !printEndDate) {
       setHearingBillIds(null);
       return;
     }
-    fetchMeetings({ startDate: printStartDate, endDate: printEndDate, token })
-      .then((meetings) => {
+    fetchHearings({ startDate: printStartDate, endDate: printEndDate, token })
+      .then((hearings) => {
         const ids = new Set(
-          meetings
+          hearings
             .flatMap((m) => m.agenda_items)
             .filter((item) => item.is_bill && item.bill_id != null)
             .map((item) => item.bill_id)
@@ -183,7 +228,7 @@ export default function Home() {
 
   async function exportPDF() {
     if (printStartDate && printEndDate) {
-      const data = await fetchMeetings({ startDate: printStartDate, endDate: printEndDate, token });
+      const data = await fetchHearings({ startDate: printStartDate, endDate: printEndDate, token });
       setPrintMeetings(data);
       setPendingPrint(true);
     } else {
@@ -223,6 +268,9 @@ export default function Home() {
                 ?
               </button>
             </div>
+            <button className={styles.defaultBtn} onClick={resetToDefaults}>
+              Default Settings
+            </button>
           </div>
           <div className={styles.controls}>
             <div id="tour-filter-outcomes-fiscal-notes" className={styles.togglePair}>
@@ -280,7 +328,7 @@ export default function Home() {
                 Show Untracked
               </button>
             </div>
-            <div id="tour-toggle-layout" className={styles.toggleGroup}>
+            <div id="tour-toggle-layout" className={`${styles.toggleGroup} ${styles.layoutToggle}`}>
               <button
                 className={`${styles.toggleOption} ${sideBySide ? styles.toggleSelected : ""}`}
                 onClick={() => setSideBySide(true)}
@@ -397,7 +445,7 @@ export default function Home() {
 
       <div ref={contentRef}>
         <ReportHeaderEditor printStartDate={printStartDate} printEndDate={printEndDate} />
-        <PrintMeetingsSection meetings={printMeetings} startDate={printStartDate} endDate={printEndDate} />
+        <PrintHearingsSection hearings={printMeetings} startDate={printStartDate} endDate={printEndDate} />
 
         <p className={styles.aiLegendPrint}>
           ✨ Content marked with this symbol is AI-generated and may contain false information. Please review for accuracy.

@@ -23,7 +23,7 @@ function weekOf(isoDate) {
 
 function hearingLink(billNumber, isoDate) {
   const { start, end } = weekOf(isoDate);
-  return `/meetings?search=${encodeURIComponent(billNumber)}&start=${start}&end=${end}&show_hidden=1`;
+  return `/hearings?search=${encodeURIComponent(billNumber)}&start=${start}&end=${end}&show_hidden=1`;
 }
 
 function committeeLink(status) {
