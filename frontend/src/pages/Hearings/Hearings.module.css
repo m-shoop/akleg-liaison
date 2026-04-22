@@ -350,10 +350,42 @@
   padding: 1rem 0;
 }
 
-.loading {
-  color: var(--color-text-primary);
-  font-size: 0.95rem;
-  padding: 1rem 0;
+.loadingOverlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6rem 0;
+}
+
+.loadingText {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 3px solid var(--color-border);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.loadingText::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: var(--color-text-secondary, #666);
+  border-right-color: var(--color-text-secondary, #666);
+  animation: loadingSpin 1.4s ease-in-out infinite;
+  box-sizing: border-box;
+}
+
+@keyframes loadingSpin {
+  to { transform: rotate(360deg); }
 }
 
 .error {

@@ -101,7 +101,7 @@
   border-radius: 4px;
   font-size: 0.925rem;
   font-family: inherit;
-  background: var(--color-surface);
+  background: var(--color-surface-raised);
   color: var(--color-text-primary);
   transition: border-color 0.15s;
 }
@@ -140,7 +140,7 @@
   padding: 0.4rem 0.75rem;
   font-size: 0.875rem;
   font-weight: 500;
-  background: transparent;
+  background: var(--color-surface-raised);
   color: var(--color-rainy-sky);
   border: none;
   white-space: nowrap;
@@ -256,6 +256,45 @@
   padding: 1rem 0;
 }
 
+.loadingOverlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6rem 0;
+}
+
+.loadingText {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: var(--color-surface, #f0f0f0);
+  border: 3px solid var(--color-border, #ddd);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  letter-spacing: 0.03em;
+}
+
+.loadingText::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: var(--color-text-secondary, #666);
+  border-right-color: var(--color-text-secondary, #666);
+  animation: loadingSpin 1.4s ease-in-out infinite;
+  box-sizing: border-box;
+}
+
+@keyframes loadingSpin {
+  to { transform: rotate(360deg); }
+}
+
 .error {
   color: #b33a3a;
   font-size: 0.95rem;
@@ -289,7 +328,7 @@
   border-radius: 4px;
   font-size: 0.8rem;
   font-family: inherit;
-  background: var(--color-surface);
+  background: var(--color-surface-raised);
   color: var(--color-text-primary);
 }
 
@@ -297,7 +336,7 @@
   padding: 0.4rem 1rem;
   border-radius: 4px;
   border: 1.5px solid var(--color-rainforest);
-  background: transparent;
+  background: var(--color-surface-raised);
   color: var(--color-rainforest);
   font-size: 0.875rem;
   font-weight: 500;
@@ -334,7 +373,7 @@
   font-size: 0.78rem;
   font-weight: 500;
   border: 1.5px solid var(--color-border);
-  background: transparent;
+  background: var(--color-surface-raised);
   color: var(--color-text-secondary);
   white-space: nowrap;
   transition: border-color 0.15s, color 0.15s;
@@ -351,7 +390,7 @@
   font-size: 0.78rem;
   font-weight: 500;
   border: 1.5px solid var(--color-rainy-sky);
-  background: transparent;
+  background: var(--color-surface-raised);
   color: var(--color-rainy-sky);
   white-space: nowrap;
   transition: background-color 0.15s, color 0.15s;
@@ -383,6 +422,121 @@
   pointer-events: none;
 }
 
+/* ── Collapsible panel sections ──────────────────────────────── */
+
+.panelSection {
+  border-top: 1px solid var(--color-border);
+  padding: 0;
+}
+
+.panelSectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0.55rem 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-secondary);
+  text-align: left;
+}
+
+.panelSectionHeader:hover {
+  color: var(--color-text-primary);
+}
+
+.panelSectionHeaderStatic {
+  padding: 0.55rem 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-secondary);
+}
+
+.panelSectionBody {
+  padding: 0 0 1rem;
+}
+
+.panelNote {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin: 0 0 0.75rem;
+  line-height: 1.4;
+}
+
+.displayOptionsGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.exportRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
+}
+
+.exportDisplayGrid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.exportDisplayLeft,
+.exportDisplayRight {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.exportDisplayColHeader {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-secondary);
+}
+
+.exportDisplayDivider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--color-border);
+}
+
+@media (max-width: 640px) {
+  .exportDisplayGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .exportDisplayDivider {
+    width: auto;
+    height: 1px;
+    align-self: auto;
+  }
+}
+
+@media print {
+  .panelSection,
+  .panelSectionHeader,
+  .panelSectionHeaderStatic,
+  .panelSectionBody,
+  .panelNote,
+  .displayOptionsGrid,
+  .exportRow {
+    display: none;
+  }
+}
+
 .defaultBtn {
   align-self: flex-start;
   padding: 0.35rem 0.75rem;
@@ -390,7 +544,7 @@
   font-size: 0.8rem;
   font-weight: 500;
   border: 1.5px solid var(--color-border);
-  background: transparent;
+  background: var(--color-surface-raised);
   color: var(--color-text-secondary);
   white-space: nowrap;
   margin-top: auto;

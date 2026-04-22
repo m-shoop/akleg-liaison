@@ -32,6 +32,7 @@ export default function App() {
           <Route path="/hearings"   element={<Hearings />} />
           <Route path="/meetings"        element={<Navigate to="/hearings" replace />} />
           <Route path="/requests"        element={<Requests />} />
+          <Route path="/tasks"           element={<Navigate to="/requests" replace />} />
         </Routes>
       </main>
       <Footer />

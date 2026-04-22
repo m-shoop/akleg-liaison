@@ -11,10 +11,17 @@ class WorkflowActionType(str, enum.Enum):
     REQUEST_BILL_TRACKING = "request_bill_tracking"
     DENY_BILL_TRACKING = "deny_bill_tracking"
     APPROVE_BILL_TRACKING = "approve_bill_tracking"
+    HEARING_ASSIGNED = "hearing_assigned"
+    HEARING_ASSIGNMENT_COMPLETE = "hearing_assignment_complete"
+    REASSIGNMENT_REQUEST = "reassignment_request"
+    HEARING_ASSIGNMENT_CANCELED = "hearing_assignment_canceled"
+    AUTO_SUGGESTED_HEARING_ASSIGNMENT = "auto_suggested_hearing_assignment"
+    HEARING_ASSIGNMENT_DISCARDED = "hearing_assignment_discarded"
 
 
 class WorkflowType(str, enum.Enum):
     REQUEST_BILL_TRACKING = "request_bill_tracking"
+    HEARING_ASSIGNMENT = "hearing_assignment"
 
 
 class WorkflowStatus(str, enum.Enum):
@@ -52,6 +59,11 @@ class Workflow(Base):
         order_by="WorkflowAction.action_timestamp",
     )
     bill_tracking_request: Mapped["BillTrackingRequest | None"] = relationship(
+        back_populates="workflow",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    hearing_assignment: Mapped["HearingAssignment | None"] = relationship(
         back_populates="workflow",
         uselist=False,
         cascade="all, delete-orphan",
@@ -95,3 +107,29 @@ class BillTrackingRequest(Base):
 
     workflow: Mapped["Workflow"] = relationship(back_populates="bill_tracking_request")
     bill: Mapped["Bill"] = relationship("Bill")  # type: ignore[name-defined]
+
+
+class HearingAssignment(Base):
+    __tablename__ = "hearing_assignments"
+    __table_args__ = (
+        UniqueConstraint("workflow_id", name="uq_hearing_assignment_workflow"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    assignee_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    hearing_id: Mapped[int] = mapped_column(
+        ForeignKey("hearings.id", ondelete="CASCADE"), nullable=False
+    )
+    bill_id: Mapped[int | None] = mapped_column(
+        ForeignKey("bills.id", ondelete="SET NULL"), nullable=True
+    )
+    workflow_id: Mapped[int] = mapped_column(
+        ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False
+    )
+
+    workflow: Mapped["Workflow"] = relationship(back_populates="hearing_assignment")
+    assignee_user: Mapped["User"] = relationship("User", foreign_keys=[assignee_id])  # type: ignore[name-defined]
+    hearing: Mapped["Hearing"] = relationship("Hearing")  # type: ignore[name-defined]
+    bill: Mapped["Bill | None"] = relationship("Bill")  # type: ignore[name-defined]

@@ -9,7 +9,8 @@ from slowapi.errors import RateLimitExceeded
 
 from app.database import Base, engine
 from app.limiter import limiter
-from app.routers import auth, bills, hearings, jobs, tags, workflows
+from app.routers import auth, bills, hearings, jobs, reports, tags, workflows
+from app.services.hearing_assignment_suggester import hearing_assignment_suggester_loop
 from app.services.scheduler import hearing_scheduler_loop, scheduler_loop
 
 logging.basicConfig(level=logging.INFO)
@@ -20,10 +21,12 @@ async def lifespan(app: FastAPI):
     # Start background schedulers
     bill_task = asyncio.create_task(scheduler_loop())
     hearing_task = asyncio.create_task(hearing_scheduler_loop())
+    suggestion_task = asyncio.create_task(hearing_assignment_suggester_loop())
     yield
     bill_task.cancel()
     hearing_task.cancel()
-    for task in (bill_task, hearing_task):
+    suggestion_task.cancel()
+    for task in (bill_task, hearing_task, suggestion_task):
         try:
             await task
         except asyncio.CancelledError:
@@ -54,6 +57,7 @@ app.include_router(tags.router)
 app.include_router(hearings.router)
 app.include_router(jobs.router)
 app.include_router(workflows.router)
+app.include_router(reports.router)
 
 
 @app.get("/health")

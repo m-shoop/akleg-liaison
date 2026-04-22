@@ -83,3 +83,30 @@ class CreateWorkflowRequest(BaseModel):
 
 class AddActionRequest(BaseModel):
     type: WorkflowActionType
+    new_assignee_email: str | None = None
+
+
+class BillTrackingStateRequest(BaseModel):
+    bill_ids: list[int]
+
+
+class BillTrackingStateItem(BaseModel):
+    bill_id: int
+    tracking_requested: bool
+    user_tracking_request_denied: bool
+
+
+class CreateHearingAssignmentRequest(BaseModel):
+    hearing_id: int
+    assignee_email: str
+    bill_number: str | None = None
+
+
+class HearingAssignmentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    workflow_id: int
+    assignee_id: int
+    hearing_id: int
+    bill_id: int | None

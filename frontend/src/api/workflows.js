@@ -36,11 +36,40 @@ export async function requestBillTracking(billId, token) {
   return res.json();
 }
 
-export async function addWorkflowAction(workflowId, actionType, token) {
+export async function fetchBillTrackingState({ billIds, token }) {
+  const res = await apiFetch(`${BASE}/bill-tracking-state`, {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ bill_ids: billIds }),
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createHearingAssignment({ hearingId, assigneeEmail, billNumber = null, token }) {
+  const res = await apiFetch(`${BASE}/hearing-assignment`, {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      hearing_id: hearingId,
+      assignee_email: assigneeEmail,
+      bill_number: billNumber || null,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? "Failed to create assignment");
+  }
+  return res.json();
+}
+
+export async function addWorkflowAction(workflowId, actionType, token, { newAssigneeEmail } = {}) {
+  const body = { type: actionType };
+  if (newAssigneeEmail) body.new_assignee_email = newAssigneeEmail;
   const res = await apiFetch(`${BASE}/${workflowId}/actions`, {
     method: "POST",
     headers: { ...authHeaders(token), "Content-Type": "application/json" },
-    body: JSON.stringify({ type: actionType }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

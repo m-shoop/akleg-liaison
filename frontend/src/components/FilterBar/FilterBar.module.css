@@ -1,0 +1,274 @@
+.bar {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted, #64748b);
+  padding-bottom: 4px;
+}
+
+.summaryPart {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.summarySep {
+  color: var(--color-border, #cbd5e1);
+  font-size: 0.9rem;
+  user-select: none;
+}
+
+.basicRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.advancedRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border, #e2e8f0);
+}
+
+.filterGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: var(--color-surface-raised, #f8fafc);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  padding: 8px 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #64748b);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid var(--color-border, #cbd5e1);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.seg {
+  padding: 4px 12px;
+  font-size: 0.85rem;
+  background: var(--color-surface-raised, #f8f9fa);
+  border: none;
+  border-right: 1px solid var(--color-border, #cbd5e1);
+  cursor: pointer;
+  color: var(--color-text, #334155);
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+.seg:last-child {
+  border-right: none;
+}
+
+.seg:hover {
+  background: var(--color-surface-hover, #f1f5f9);
+}
+
+.seg.segActive {
+  background: var(--color-rainy-sky);
+  color: #fff;
+}
+
+.seg.segActive:hover {
+  background: var(--color-glacial-water);
+}
+
+.rangePair {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rangeSep {
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #64748b);
+}
+
+.dateInput {
+  font-size: 0.85rem;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border, #cbd5e1);
+  border-radius: 6px;
+  background: var(--color-surface-raised);
+  color: var(--color-text, #334155);
+}
+
+.dateInput.dateInputFilled {
+  background: var(--color-rainy-sky);
+  border-color: var(--color-rainy-sky);
+  color: #fff;
+  color-scheme: dark;
+}
+
+.textInput {
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border, #cbd5e1);
+  border-radius: 6px;
+  background: var(--color-surface-raised);
+  color: var(--color-text, #334155);
+  width: 180px;
+}
+
+.select {
+  font-size: 0.85rem;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border, #cbd5e1);
+  border-radius: 6px;
+  background: var(--color-surface-raised);
+  color: var(--color-text, #334155);
+}
+
+.advancedToggle {
+  margin-right: auto;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-primary, var(--color-rainy-sky));
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.advancedToggle:hover {
+  color: var(--color-primary-hover, var(--color-glacial-water));
+}
+
+.multiSelect {
+  position: relative;
+}
+
+.multiSelectTrigger {
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border, #cbd5e1);
+  border-radius: 6px;
+  background: var(--color-surface-raised);
+  color: var(--color-text, #334155);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.multiSelectTriggerActive {
+  border-color: var(--color-primary, var(--color-glacial-water));
+  color: var(--color-primary, var(--color-glacial-water));
+}
+
+.multiSelectDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #cbd5e1);
+  border-radius: 6px;
+  padding: 6px 0;
+  min-width: 180px;
+  max-height: 240px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.multiSelectOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--color-text, #334155);
+}
+
+.multiSelectOption:hover {
+  background: var(--color-surface-hover, #f1f5f9);
+}
+
+.multiSelectOption input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.multiSelectActions {
+  display: flex;
+  gap: 4px;
+  padding: 6px 10px 4px;
+}
+
+.multiSelectActionBtn {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border: 1px solid var(--color-border, #cbd5e1);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-primary, var(--color-glacial-water));
+  cursor: pointer;
+}
+
+.multiSelectActionBtn:hover {
+  background: var(--color-surface-hover, #f1f5f9);
+}
+
+.multiSelectDivider {
+  height: 1px;
+  background: var(--color-border, #e2e8f0);
+  margin: 4px 0;
+}
+
+.filterGroupSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  background: var(--color-surface, #fff);
+}
+
+.filterGroupLabel {
+  margin: 0;
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--color-text-muted, #64748b);
+}
+
+.filterGroupBody {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+}

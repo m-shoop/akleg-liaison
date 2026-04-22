@@ -44,7 +44,7 @@ function CalendarIcon({ isoDate, billNumber }) {
   );
 }
 
-export default function BillCard({ bill, showDescription, selectedOutcomes, selectedDepts = null, showKeywords = false, abbreviated = false, allTags = [], upcomingHearingDates = [], onRefreshed: _onRefreshed, onTrackingChanged, onTrackingRequested }) {
+export default function BillCard({ bill, showDescription, selectedOutcomes, selectedDepts = null, showKeywords = false, abbreviated = false, allTags = [], upcomingHearingDates = [], onRefreshed, onTrackingChanged, onTrackingRequested }) {
   const { can, token } = useAuth();
   const [tracking, setTracking] = useState(false);
   const [requesting, setRequesting] = useState(false);
@@ -215,7 +215,11 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, sele
       )}
       <div className={styles.bottomRow}>
         <div className={styles.bottomLeft}>
-          <BillTags bill={bill} allTags={allTags} />
+          <BillTags
+            bill={bill}
+            allTags={allTags}
+            onTagsChanged={(newTags) => onRefreshed?.({ ...bill, tags: newTags })}
+          />
           {showKeywords && bill.keywords?.length > 0 && (
             <div className={styles.keywords}>
               {bill.keywords.map((s) =>

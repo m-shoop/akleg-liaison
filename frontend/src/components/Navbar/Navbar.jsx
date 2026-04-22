@@ -7,10 +7,10 @@ import styles from "./Navbar.module.css";
 export default function Navbar() {
   const { isLoggedIn, can, username, logout, isTokenExpired, token } = useAuth();
   const navigate = useNavigate();
-  const [hasOpenRequests, setHasOpenRequests] = useState(false);
+  const [hasOpenTasks, setHasOpenTasks] = useState(false);
 
   useEffect(() => {
-    fetchHasOpen(token).then((data) => setHasOpenRequests(data.has_open ?? false));
+    fetchHasOpen(token).then((data) => setHasOpenTasks(data.has_open ?? false));
   }, [token]);
 
   function handleLogout() {
@@ -85,8 +85,8 @@ export default function Navbar() {
                         : styles.dropdownItem
                     }
                   >
-                    Requests
-                    {hasOpenRequests && <span className={styles.openBadge} />}
+                    Tasks
+                    {hasOpenTasks && <span className={styles.openBadge} />}
                   </NavLink>
                 </li>
                 {can("bill:query") && (

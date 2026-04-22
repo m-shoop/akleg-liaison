@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { fetchHearings, scrapeHearings } from "../../api/hearings";
+import { scrapeHearings } from "../../api/hearings";
+import { fetchReport, fetchReportMeta } from "../../api/reports";
 import { useJob } from "../../hooks/useJob";
 import SyncSchedule from "../../components/SyncSchedule/SyncSchedule";
 import Toast from "../../components/Toast/Toast";
 import HearingCard from "../../components/HearingCard/HearingCard";
 import CalendarView from "../../components/CalendarView/CalendarView";
+import HearingsFilterBar from "../../components/HearingsFilterBar/HearingsFilterBar";
 import { createHearingsTour } from "../../tours/hearingsTour";
-import { todayJuneau, weekBounds, weekBoundsTitle, addDays } from "../../utils/weekBounds";
+import { todayJuneau, weekBounds, addDays } from "../../utils/weekBounds";
 import styles from "./Hearings.module.css";
 
 function fmt(isoDate) {
@@ -19,15 +21,116 @@ function fmt(isoDate) {
   });
 }
 
+const DEFAULT_FILTERS = {
+  hearingDateMode: "range",
+  hearingDateOn: "",
+  hearingDateFrom: weekBounds().start,
+  hearingDateTo: weekBounds().end,
+  chamber: [],
+  legislature_session: [],
+  showInactive: false,
+  showHidden: false,
+  advanced: {},
+};
+
+function buildFilterGroup(filters, { canHide, canNotes }) {
+  const conditions = [];
+
+  if (filters.hearingDateMode === "on" && filters.hearingDateOn) {
+    conditions.push({ field: "hearing_date", op: "equals", value: filters.hearingDateOn });
+  } else if (filters.hearingDateMode === "range") {
+    const { hearingDateFrom: from, hearingDateTo: to } = filters;
+    if (from && to) conditions.push({ field: "hearing_date", op: "between", value: [from, to] });
+    else if (from) conditions.push({ field: "hearing_date", op: "after", value: from });
+    else if (to) conditions.push({ field: "hearing_date", op: "before", value: to });
+  }
+
+  if (filters.chamber?.length > 0) {
+    conditions.push({ field: "chamber", op: "in", value: filters.chamber });
+  }
+  if (filters.legislature_session?.length > 0) {
+    conditions.push({ field: "legislature_session", op: "in", value: filters.legislature_session });
+  }
+
+  if (!filters.showInactive) {
+    conditions.push({ field: "is_active", op: "equals", value: true });
+  }
+  if (!canHide || !filters.showHidden) {
+    conditions.push({ field: "hidden", op: "equals", value: false });
+  }
+
+  const adv = filters.advanced ?? {};
+  if (adv.agenda_bill_number?.trim()) conditions.push({ field: "agenda_bill_number", op: "contains", value: adv.agenda_bill_number.trim() });
+  if (adv.hearing_type?.length > 0) conditions.push({ field: "hearing_type", op: "in", value: adv.hearing_type });
+  if (adv.location) conditions.push({ field: "location", op: "contains", value: adv.location });
+  if (adv.committee_name) conditions.push({ field: "committee_name", op: "contains", value: adv.committee_name });
+  if (adv.committee_type) conditions.push({ field: "committee_type", op: "contains", value: adv.committee_type });
+  if (canNotes) {
+    const notesMode = adv.dps_notes_mode ?? "any";
+    if (notesMode === "has") conditions.push({ field: "dps_notes", op: "is_not_empty" });
+    else if (notesMode === "empty") conditions.push({ field: "dps_notes", op: "is_empty" });
+    else if (notesMode === "contains" && adv.dps_notes) conditions.push({ field: "dps_notes", op: "contains", value: adv.dps_notes });
+  }
+
+  if (adv.has_tracked_bill_without_assignment === true) {
+    conditions.push({ field: "has_tracked_bill_without_assignment", op: "equals", value: true });
+  }
+
+  return { logic: "AND", conditions };
+}
+
+function buildCalendarFilterGroup(calendarFrom, calendarTo, filters, permissions) {
+  const calendarFilters = {
+    ...filters,
+    hearingDateMode: "range",
+    hearingDateFrom: calendarFrom,
+    hearingDateTo: calendarTo,
+  };
+  return buildFilterGroup(calendarFilters, permissions);
+}
+
+function rowToHearing(row) {
+  return {
+    id: row.id,
+    hearing_date: row.hearing_date,
+    hearing_time: row.hearing_time ?? null,
+    chamber: row.chamber,
+    hearing_type: row.hearing_type,
+    location: row.location ?? null,
+    committee_name: row.committee_name ?? null,
+    committee_type: row.committee_type ?? null,
+    committee_url: row.committee_url ?? null,
+    legislature_session: row.legislature_session,
+    is_active: row.is_active,
+    hidden: row.hidden ?? false,
+    dps_notes: row.dps_notes ?? null,
+    last_sync: row.last_sync ?? null,
+    has_prior_agendas: false,
+    agenda_items: Array.isArray(row.agenda_items)
+      ? [...row.agenda_items].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      : [],
+    hearing_assignments_summary: Array.isArray(row.hearing_assignments_summary)
+      ? row.hearing_assignments_summary
+      : [],
+  };
+}
+
+function getColumns(can) {
+  const cols = [
+    "id", "hearing_date", "hearing_time", "chamber", "hearing_type", "location",
+    "legislature_session", "is_active", "last_sync", "committee_name",
+    "committee_type", "committee_url", "agenda_items",
+  ];
+  if (can("hearing:hide")) cols.push("hidden");
+  if (can("hearing-notes:view")) cols.push("dps_notes");
+  if (can("hearing-assignment:view")) cols.push("hearing_assignments_summary");
+  return cols;
+}
+
 export default function Hearings() {
-  const { can, isLoggedIn, token, isTokenExpired } = useAuth();
+  const { can, token, isTokenExpired } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // ─── List view state ───────────────────────────────────────────────────────
-  const [startDate, setStartDate] = useState(() => searchParams.get("start") || sessionStorage.getItem("hearings_startDate") || weekBounds().start);
-  const [endDate, setEndDate] = useState(() => searchParams.get("end") || sessionStorage.getItem("hearings_endDate") || weekBounds().end);
-
-  // ─── Calendar view state ───────────────────────────────────────────────────
   const [activeView, setActiveView] = useState(() => {
     if (searchParams.get("view") === "calendar") return "calendar";
     return sessionStorage.getItem("hearings_view") === "calendar" ? "calendar" : "list";
@@ -37,37 +140,79 @@ export default function Hearings() {
   );
   const [daysShown, setDaysShown] = useState(3);
 
-  // ─── Shared state ─────────────────────────────────────────────────────────
+  const [hearingFilters, setHearingFilters] = useState(() => {
+    const stored = sessionStorage.getItem("hearings_filters");
+    if (stored) { try { return JSON.parse(stored); } catch { /* ignore */ } }
+    return DEFAULT_FILTERS;
+  });
+
+  const [reportFields, setReportFields] = useState(null);
   const [allHearings, setAllHearings] = useState(null);
   const [loading, setLoading] = useState(false);
   const [scrapeJobId, setScrapeJobId] = useState(null);
   const [toast, setToast] = useState(null);
   const [error, setError] = useState(null);
-  const [showInactive, setShowInactive] = useState(false);
-  const [showHidden, setShowHidden] = useState(() => {
-    if (searchParams.get("show_hidden") === "1") return true;
-    return sessionStorage.getItem("hearings_showHidden") === "true";
-  });
-  const [hideWithoutNotes, setHideWithoutNotes] = useState(false);
-  const [additionalFiltersOpen, setAdditionalFiltersOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || sessionStorage.getItem("hearings_searchQuery") || "");
   const [globalExpanded, setGlobalExpanded] = useState(() => sessionStorage.getItem("hearings_globalExpanded") === "true");
+  const [reportCriteriaOpen, setReportCriteriaOpen] = useState(() => sessionStorage.getItem("hearings_reportCriteriaOpen") === "true");
   const [collapsedDates, setCollapsedDates] = useState(new Set());
+  const fetchTimerRef = useRef(null);
 
-  // ─── Derived fetch dates ───────────────────────────────────────────────────
   const calendarEndDate = calendarStartDate ? addDays(calendarStartDate, daysShown - 1) : null;
-  const effectiveStart = activeView === "calendar" ? calendarStartDate : startDate;
-  const effectiveEnd = activeView === "calendar" ? calendarEndDate : endDate;
+  const permissions = { canHide: can("hearing:hide"), canNotes: can("hearing-notes:view") };
+
+  // ─── Load report field metadata (for enum options in FilterBar) ───────────
+  useEffect(() => {
+    fetchReportMeta(token)
+      .then((data) => {
+        const meta = data.reports?.find((r) => r.id === "hearings");
+        setReportFields(meta?.fields ?? null);
+      })
+      .catch(() => {});
+  }, [token]);
+
+  // ─── Persist filters and UI state ─────────────────────────────────────────
+  useEffect(() => {
+    sessionStorage.setItem("hearings_filters", JSON.stringify(hearingFilters));
+  }, [hearingFilters]);
+
+  useEffect(() => {
+    if (globalExpanded) sessionStorage.setItem("hearings_globalExpanded", "true");
+    else sessionStorage.removeItem("hearings_globalExpanded");
+    if (reportCriteriaOpen) sessionStorage.setItem("hearings_reportCriteriaOpen", "true");
+    else sessionStorage.removeItem("hearings_reportCriteriaOpen");
+  }, [globalExpanded, reportCriteriaOpen]);
+
+  useEffect(() => {
+    if (activeView === "calendar") {
+      sessionStorage.setItem("hearings_view", "calendar");
+      if (calendarStartDate) sessionStorage.setItem("hearings_calStart", calendarStartDate);
+      else sessionStorage.removeItem("hearings_calStart");
+    } else {
+      sessionStorage.removeItem("hearings_view");
+      sessionStorage.removeItem("hearings_calStart");
+    }
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (activeView === "calendar") {
+        next.set("view", "calendar");
+        if (calendarStartDate) next.set("calStart", calendarStartDate);
+        else next.delete("calStart");
+      } else {
+        next.delete("view");
+        next.delete("calStart");
+      }
+      return next;
+    }, { replace: true });
+  }, [activeView, calendarStartDate]);
 
   // ─── View switching ────────────────────────────────────────────────────────
   function switchView(view) {
     if (view === "calendar" && activeView === "list") {
-      setCalendarStartDate(startDate || todayJuneau());
+      setCalendarStartDate(hearingFilters.hearingDateFrom || todayJuneau());
       setActiveView("calendar");
     } else if (view === "list" && activeView === "calendar") {
       if (calendarStartDate) {
-        setStartDate(calendarStartDate);
-        setEndDate(calendarEndDate);
+        setHearingFilters((f) => ({ ...f, hearingDateMode: "range", hearingDateFrom: calendarStartDate, hearingDateTo: calendarEndDate }));
       }
       setActiveView("list");
     }
@@ -99,23 +244,39 @@ export default function Hearings() {
   }, [jobStatus]);
 
   // ─── Data fetching ─────────────────────────────────────────────────────────
-  async function loadHearings() {
-    if (!effectiveStart) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchHearings({ startDate: effectiveStart, endDate: effectiveEnd, includeInactive: true, token });
-      setAllHearings(data);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+  function loadHearings() {
+    clearTimeout(fetchTimerRef.current);
+    fetchTimerRef.current = setTimeout(async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const filters =
+          activeView === "calendar" && calendarStartDate
+            ? buildCalendarFilterGroup(calendarStartDate, calendarEndDate, hearingFilters, permissions)
+            : buildFilterGroup(hearingFilters, permissions);
+
+        const data = await fetchReport({
+          reportId: "hearings",
+          columns: getColumns(can),
+          filters,
+          sortBy: ["hearing_date", "hearing_time"],
+          sortDir: "asc",
+          pageSize: 2000,
+          token,
+        });
+        setAllHearings(data.rows.map(rowToHearing));
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
   }
 
   useEffect(() => {
     loadHearings();
-  }, [effectiveStart, effectiveEnd, token]);
+    return () => clearTimeout(fetchTimerRef.current);
+  }, [JSON.stringify(hearingFilters), activeView, calendarStartDate, calendarEndDate, token]);
 
   useEffect(() => {
     if (isTokenExpired && allHearings) {
@@ -123,112 +284,38 @@ export default function Hearings() {
     }
   }, [isTokenExpired]);
 
-  // ─── Sync view/calendar date to URL + sessionStorage ─────────────────────
-  useEffect(() => {
-    if (activeView === "calendar") {
-      sessionStorage.setItem("hearings_view", "calendar");
-      if (calendarStartDate) sessionStorage.setItem("hearings_calStart", calendarStartDate);
-      else sessionStorage.removeItem("hearings_calStart");
-    } else {
-      sessionStorage.removeItem("hearings_view");
-      sessionStorage.removeItem("hearings_calStart");
-    }
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (activeView === "calendar") {
-        next.set("view", "calendar");
-        if (calendarStartDate) next.set("calStart", calendarStartDate);
-        else next.delete("calStart");
-      } else {
-        next.delete("view");
-        next.delete("calStart");
-      }
-      return next;
-    }, { replace: true });
-  }, [activeView, calendarStartDate]);
-
-  // ─── Persist Hearings tab settings to sessionStorage ─────────────────────
-  useEffect(() => {
-    if (searchQuery) sessionStorage.setItem("hearings_searchQuery", searchQuery);
-    else sessionStorage.removeItem("hearings_searchQuery");
-    sessionStorage.setItem("hearings_startDate", startDate);
-    sessionStorage.setItem("hearings_endDate", endDate);
-    if (showHidden) sessionStorage.setItem("hearings_showHidden", "true");
-    else sessionStorage.removeItem("hearings_showHidden");
-    if (globalExpanded) sessionStorage.setItem("hearings_globalExpanded", "true");
-    else sessionStorage.removeItem("hearings_globalExpanded");
-  }, [searchQuery, startDate, endDate, showHidden, globalExpanded]);
-
-  function resetToDefaults() {
-    setSearchQuery("");
-    setStartDate(weekBounds().start);
-    setEndDate(weekBounds().end);
-    setShowHidden(false);
-    setHideWithoutNotes(false);
-    setGlobalExpanded(false);
-    setActiveView("list");
-    setCalendarStartDate(null);
-  }
-
   // ─── Scrape handler ────────────────────────────────────────────────────────
   async function handleScrape() {
     setError(null);
+    const from = activeView === "calendar" ? calendarStartDate : hearingFilters.hearingDateFrom;
+    const to = activeView === "calendar" ? calendarEndDate : hearingFilters.hearingDateTo;
     try {
-      const job = await scrapeHearings({ startDate: effectiveStart, endDate: effectiveEnd }, token);
+      const job = await scrapeHearings({ startDate: from, endDate: to }, token);
       setScrapeJobId(job.id);
     } catch (e) {
       setToast({ message: e.message, type: "error" });
     }
   }
 
-  // ─── Filtering ─────────────────────────────────────────────────────────────
-  const hasInactive = allHearings?.some((h) => !h.is_active) ?? false;
-  const hearings = allHearings
-    ? allHearings
-        .filter((h) => showInactive || h.is_active)
-        .filter((h) => showHidden || !h.hidden)
-        .filter((h) => !hideWithoutNotes || h.dps_notes)
-    : null;
-
-  const query = searchQuery.trim().toLowerCase();
-
-  function matchesQuery(h) {
-    const agendaText = h.agenda_items
-      .flatMap((i) => [i.bill_number, i.content])
-      .filter(Boolean)
-      .join(" ");
-    const title = h.committee_name ?? "Floor Session";
-    const haystack = [title, h.committee_type, h.location, h.dps_notes, agendaText]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    return haystack.includes(query);
+  function resetToDefaults() {
+    setHearingFilters(DEFAULT_FILTERS);
+    setGlobalExpanded(false);
+    setActiveView("list");
+    setCalendarStartDate(null);
   }
 
-  const filteredHearings = hearings && query ? hearings.filter(matchesQuery) : hearings;
+  // ─── Derived data (list view) ──────────────────────────────────────────────
+  const hearings = allHearings ?? [];
 
-  const hiddenMatchCount =
-    !showHidden && query && allHearings
-      ? allHearings.filter((h) => h.hidden && matchesQuery(h)).length
-      : 0;
+  const byDate = hearings.reduce((acc, h) => {
+    const key = h.hearing_date;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(h);
+    return acc;
+  }, {});
 
-  // Group by date (list view only)
-  const byDate = filteredHearings
-    ? filteredHearings.reduce((acc, h) => {
-        const key = h.hearing_date;
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(h);
-        return acc;
-      }, {})
-    : {};
-
-  const today = todayJuneau();
-  const isToday = startDate === today && endDate === today;
-  const activeWeek =
-    [-1, 0, 1].find((o) => {
-      const b = weekBounds(o);
-      return startDate === b.start && endDate === b.end;
-    }) ?? null;
+  const effectiveFrom = activeView === "calendar" ? calendarStartDate : hearingFilters.hearingDateFrom;
+  const effectiveTo = activeView === "calendar" ? calendarEndDate : hearingFilters.hearingDateTo;
 
   return (
     <div className={styles.page}>
@@ -236,94 +323,12 @@ export default function Hearings() {
         {/* ── Left column ── */}
         <div className={styles.headerCol}>
           <h1 className={styles.title}>Hearing Schedule</h1>
-          {hearings !== null && (
+          {allHearings !== null && (
             <p className={styles.subtitle}>
-              {query
-                ? `${filteredHearings.length} of ${hearings.length} hearing${hearings.length !== 1 ? "s" : ""}`
-                : `${hearings.length} hearing${hearings.length !== 1 ? "s" : ""}`}
+              {hearings.length} hearing{hearings.length !== 1 ? "s" : ""}
             </p>
           )}
 
-          {/* Date inputs — layout changes per view */}
-          {activeView === "list" ? (
-            <>
-              <div id="tour-date-range" className={styles.dateRow}>
-                <label>
-                  From
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className={styles.dateInput}
-                  />
-                </label>
-                <label>
-                  To
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className={styles.dateInput}
-                  />
-                </label>
-              </div>
-              <div className={styles.weekShortcuts}>
-                <button
-                  className={`${styles.loadBtn} ${isToday ? styles.loadBtnActive : ""}`}
-                  onClick={() => { setStartDate(today); setEndDate(today); }}
-                >
-                  Today
-                </button>
-                <button
-                  className={`${styles.loadBtn} ${activeWeek === -1 ? styles.loadBtnActive : ""}`}
-                  onClick={() => { const b = weekBounds(-1); setStartDate(b.start); setEndDate(b.end); }}
-                  title={weekBoundsTitle(-1)}
-                >
-                  Last Week
-                </button>
-                <button
-                  className={`${styles.loadBtn} ${activeWeek === 0 ? styles.loadBtnActive : ""}`}
-                  onClick={() => { const b = weekBounds(0); setStartDate(b.start); setEndDate(b.end); }}
-                  title={weekBoundsTitle(0)}
-                >
-                  This Week
-                </button>
-                <button
-                  className={`${styles.loadBtn} ${activeWeek === 1 ? styles.loadBtnActive : ""}`}
-                  onClick={() => { const b = weekBounds(1); setStartDate(b.start); setEndDate(b.end); }}
-                  title={weekBoundsTitle(1)}
-                >
-                  Next Week
-                </button>
-                {(startDate || endDate) && (
-                  <button
-                    className={styles.clearDatesBtn}
-                    onClick={() => { setStartDate(""); setEndDate(""); }}
-                  >
-                    Clear Dates
-                  </button>
-                )}
-              </div>
-            </>
-          ) : (
-            <div id="tour-calendar-start-date" className={styles.dateRow}>
-              <label>
-                Starting Date
-                <input
-                  type="date"
-                  value={calendarStartDate ?? ""}
-                  onChange={(e) => setCalendarStartDate(e.target.value)}
-                  className={styles.dateInput}
-                />
-              </label>
-              <button
-                className={`${styles.loadBtn} ${calendarStartDate === today ? styles.loadBtnActive : ""}`}
-                onClick={() => setCalendarStartDate(today)}
-              >
-                Today
-              </button>
-            </div>
-          )}
           <button className={styles.defaultBtn} onClick={resetToDefaults}>
             Default Settings
           </button>
@@ -331,7 +336,7 @@ export default function Hearings() {
 
         {/* ── Right column ── */}
         <div className={styles.headerCol}>
-          {/* View toggle — desktop only */}
+          {/* View toggle */}
           <div id="tour-view-toggle" className={styles.viewToggle}>
             <button
               className={`${styles.toggleOption} ${activeView === "list" ? styles.toggleSelected : ""}`}
@@ -365,16 +370,17 @@ export default function Hearings() {
             <span className={styles.legendItem}><code>+</code> teleconferenced</span>
             <span className={styles.legendItem}><code>=</code> previously heard / scheduled</span>
           </div>
+
           <div id="tour-controls" className={styles.btnRow}>
             {can("hearing:query") && (
               <button
                 className={styles.scrapeBtn}
                 onClick={handleScrape}
-                disabled={!!scrapeJobId || !effectiveStart || !effectiveEnd}
+                disabled={!!scrapeJobId || !effectiveFrom || !effectiveTo}
                 title={
                   scrapeJobId
-                    ? `Refreshing for dates: ${effectiveStart} through ${effectiveEnd}`
-                    : (!effectiveStart || !effectiveEnd)
+                    ? `Refreshing for dates: ${effectiveFrom} through ${effectiveTo}`
+                    : (!effectiveFrom || !effectiveTo)
                     ? "Select dates to refresh hearings"
                     : undefined
                 }
@@ -382,8 +388,7 @@ export default function Hearings() {
                 {scrapeJobId ? "Refreshing..." : "Refresh hearings from akleg.gov"}
               </button>
             )}
-            {/* Expand agendas — list view only, but state is preserved on switch */}
-            {activeView === "list" && hearings !== null && hearings.length > 0 && (
+            {activeView === "list" && allHearings !== null && hearings.length > 0 && (
               <button
                 id="tour-expand-agendas"
                 className={`${styles.loadBtn} ${globalExpanded ? styles.loadBtnActive : ""}`}
@@ -392,132 +397,65 @@ export default function Hearings() {
                 {globalExpanded ? "Collapse agendas" : "Expand agendas"}
               </button>
             )}
+            <button
+              className={styles.helpBtn}
+              onClick={() => createHearingsTour({ isEditor: can("hearing:query"), activeView }).drive()}
+              title="Tour the Hearings page"
+            >
+              ?
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Additional Filters collapsible */}
+      {/* Report Criteria collapsible */}
       <div className={styles.additionalFilters}>
         <button
           className={styles.additionalFiltersHeader}
-          onClick={() => setAdditionalFiltersOpen((v) => !v)}
+          onClick={() => setReportCriteriaOpen((v) => !v)}
         >
-          <span>Additional Filters</span>
-          <span className={`${styles.collapseArrow} ${additionalFiltersOpen ? styles.collapseArrowOpen : ""}`}>▾</span>
+          <span>Report Criteria</span>
+          <span className={`${styles.collapseArrow} ${reportCriteriaOpen ? styles.collapseArrowOpen : ""}`}>▾</span>
         </button>
-        {additionalFiltersOpen && (
-          <div className={styles.filtersRow}>
-            {isLoggedIn && hasInactive && (
-              <div id="tour-show-inactive" className={styles.toggleGroup}>
-                <button
-                  className={`${styles.toggleOption} ${!showInactive ? styles.toggleSelected : ""}`}
-                  onClick={() => setShowInactive(false)}
-                  disabled={loading}
-                >
-                  Hide inactive
-                </button>
-                <button
-                  className={`${styles.toggleOption} ${showInactive ? styles.toggleSelected : ""}`}
-                  onClick={() => setShowInactive(true)}
-                  disabled={loading}
-                >
-                  Show inactive
-                </button>
-              </div>
-            )}
-            {can("hearing:hide") && (
-              <div className={styles.toggleGroup}>
-                <button
-                  className={`${styles.toggleOption} ${!showHidden ? styles.toggleSelected : ""}`}
-                  onClick={() => setShowHidden(false)}
-                >
-                  Hide hidden
-                </button>
-                <button
-                  className={`${styles.toggleOption} ${showHidden ? styles.toggleSelected : ""}`}
-                  onClick={() => setShowHidden(true)}
-                >
-                  Display hidden
-                </button>
-              </div>
-            )}
-            <div className={styles.toggleGroup}>
-              <button
-                className={`${styles.toggleOption} ${!hideWithoutNotes ? styles.toggleSelected : ""}`}
-                onClick={() => setHideWithoutNotes(false)}
-              >
-                Display Hearings Without Notes
-              </button>
-              <button
-                className={`${styles.toggleOption} ${hideWithoutNotes ? styles.toggleSelected : ""}`}
-                onClick={() => setHideWithoutNotes(true)}
-              >
-                Hide Hearings Without Notes
-              </button>
-            </div>
-          </div>
+        {reportCriteriaOpen && (
+          <HearingsFilterBar
+            filters={hearingFilters}
+            onChange={setHearingFilters}
+            fields={reportFields}
+            canHide={can("hearing:hide")}
+            canNotes={can("hearing-notes:view")}
+            hideDateFilter={activeView === "calendar"}
+          />
         )}
       </div>
 
-      {/* Search row */}
-      <div className={styles.searchRow}>
-        <input
-          id="tour-meetings-search"
-          className={styles.searchInput}
-          type="search"
-          placeholder="Search floor and committee hearings…"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-        <button
-          className={styles.helpBtn}
-          onClick={() =>
-            createHearingsTour({ isEditor: can("hearing:query"), activeView }).drive()
-          }
-          title="Tour the Hearings page"
-        >
-          ?
-        </button>
-      </div>
-
       {/* Notices */}
-      {hiddenMatchCount > 0 && (
-        <p className={styles.notice}>
-          {hiddenMatchCount} hidden hearing{hiddenMatchCount !== 1 ? "s" : ""}{" "}
-          {hiddenMatchCount !== 1 ? "match" : "matches"} your search — turn on &ldquo;Display
-          hidden&rdquo; to view {hiddenMatchCount !== 1 ? "them" : "it"}.
-        </p>
-      )}
-      {loading && activeView === "list" && <p className={styles.loading}>Loading hearings…</p>}
+      {loading && activeView === "list" && <div className={styles.loadingOverlay}><span className={styles.loadingText}>Loading…</span></div>}
       {error && <p className={styles.error}>{error}</p>}
       <Toast message={toast?.message} type={toast?.type} onDismiss={() => setToast(null)} />
 
-      {/* Empty state messages — list view only */}
-      {activeView === "list" && hearings !== null && hearings.length === 0 && (
+      {activeView === "list" && allHearings !== null && hearings.length === 0 && !loading && (
         <p className={styles.notice}>
           No hearings found for this date range.
           {can("hearing:query") && ' Use "Refresh hearings from akleg.gov" to import them.'}
         </p>
       )}
-      {hearings !== null && hearings.length > 0 && filteredHearings.length === 0 && (
-        <p className={styles.notice}>No hearings match your search.</p>
-      )}
 
       {/* ── Calendar view ── */}
       {activeView === "calendar" && calendarStartDate && (
         <CalendarView
-          hearings={filteredHearings ?? []}
+          hearings={hearings}
           startDate={calendarStartDate}
           daysShown={daysShown}
           onDaysShownChange={setDaysShown}
           onNavigate={setCalendarStartDate}
-          isFiltered={!!query}
+          isFiltered={false}
           loading={loading}
-          noHearingsInRange={hearings !== null && hearings.length === 0}
+          noHearingsInRange={allHearings !== null && hearings.length === 0}
           onHearingReload={loadHearings}
-          showHidden={showHidden}
+          showHidden={hearingFilters.showHidden}
           onHiddenChanged={(updated) =>
-            setAllHearings((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))
+            setAllHearings((prev) => prev.map((x) => (x.id === updated.id ? { ...x, hidden: updated.hidden } : x)))
           }
         />
       )}
@@ -549,11 +487,12 @@ export default function Hearings() {
                           hearing={h}
                           isFirst={isFirst}
                           globalExpanded={globalExpanded}
-                          showHidden={showHidden}
+                          showHidden={hearingFilters.showHidden}
                           onNotesSaved={() => loadHearings()}
+                          onAssignmentCreated={() => loadHearings()}
                           onHiddenChanged={(updated) =>
                             setAllHearings((prev) =>
-                              prev.map((x) => (x.id === updated.id ? updated : x))
+                              prev.map((x) => (x.id === updated.id ? { ...x, hidden: updated.hidden } : x))
                             )
                           }
                         />

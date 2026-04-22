@@ -57,4 +57,5 @@ export const DEFAULT_SELECTED = new Set([
   "signed_into_law",
   "vetoed",
   "pocket_vetoed",
+  "amended",
 ]);

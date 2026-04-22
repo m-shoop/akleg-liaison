@@ -6,6 +6,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import Permission, Role, RolePermission, TokenType, User, UserRoles, UserStatus, UserToken
 
 
+async def search_users_by_email(session: AsyncSession, query: str, limit: int = 20) -> list[User]:
+    result = await session.execute(
+        select(User)
+        .where(
+            User.user_status == UserStatus.active,
+            User.email.ilike(f"%{query}%"),
+        )
+        .order_by(User.email)
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
 async def get_user_by_email(session: AsyncSession, email: str) -> User | None:
     result = await session.execute(
         select(User).where(User.email == email.lower())

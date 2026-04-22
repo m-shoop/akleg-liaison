@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { updateDpsNotes, updateHidden } from "../../api/hearings";
-import { addDays } from "../../utils/weekBounds";
+import { addDays, todayJuneau } from "../../utils/weekBounds";
 import { alaskaLocalToUtc, exportToCalendar } from "../../utils/hearingCalendar";
 import PriorAgendasModal from "../PriorAgendasModal/PriorAgendasModal";
 import styles from "./CalendarView.module.css";
@@ -387,6 +387,23 @@ export default function CalendarView({
     <div className={styles.calendarWrapper}>
       {/* Navigation */}
       <div id="tour-calendar-nav" className={styles.calendarNav}>
+        <div id="tour-calendar-start-date" className={styles.navStartDate}>
+          <label className={styles.navStartDateLabel}>
+            Starting Date
+            <input
+              type="date"
+              className={styles.navDateInput}
+              value={startDate ?? ""}
+              onChange={(e) => onNavigate(e.target.value)}
+            />
+          </label>
+          <button
+            className={`${styles.navBtn} ${startDate === todayJuneau() ? styles.navBtnActive : ""}`}
+            onClick={() => onNavigate(todayJuneau())}
+          >
+            Today
+          </button>
+        </div>
         <button
           className={styles.navBtn}
           onClick={() => onNavigate(addDays(startDate, -daysShown))}
