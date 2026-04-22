@@ -94,37 +94,60 @@ async def upsert_committee_hearing(
     to target a partial index that excludes NULL committee_code rows.
     """
     if committee_code is not None:
-        stmt = (
-            insert(Hearing)
-            .values(
-                chamber=chamber,
-                hearing_type="Committee",
-                length=60,
-                hearing_date=hearing_date,
-                hearing_time=hearing_time,
-                location=location,
-                committee_code=committee_code,
-                legislature_session=legislature_session,
-                is_active=True,
-                last_sync=func.now(),
+        # If an inactive record exists for this key, reactivate it directly.
+        # The ON CONFLICT target is a partial index (is_active = TRUE), so inactive
+        # rows are invisible to conflict detection and would cause a stale duplicate
+        # or a constraint violation instead of being reactivated.
+        inactive = await session.scalar(
+            select(Hearing).where(
+                Hearing.chamber == chamber,
+                Hearing.committee_code == committee_code,
+                Hearing.hearing_date == hearing_date,
+                Hearing.legislature_session == legislature_session,
+                Hearing.hearing_type == "Committee",
+                Hearing.is_active == False,  # noqa: E712
             )
-            .on_conflict_do_update(
-                index_elements=["chamber", "committee_code", "hearing_date", "legislature_session"],
-                index_where=text(
-                    "hearing_type = 'Committee' AND is_active = TRUE AND committee_code IS NOT NULL"
-                ),
-                set_=dict(
-                    location=location,
-                    hearing_time=hearing_time,
-                    is_active=True,
-                    updated_at=func.now(),
-                    last_sync=func.now(),
-                ),
-            )
-            .returning(Hearing.id)
         )
-        result = await session.execute(stmt)
-        hearing_id = result.scalar_one()
+        if inactive:
+            inactive.hearing_time = hearing_time
+            inactive.location = location
+            inactive.is_active = True
+            inactive.updated_at = func.now()
+            inactive.last_sync = func.now()
+            await session.flush()
+            hearing_id = inactive.id
+        else:
+            stmt = (
+                insert(Hearing)
+                .values(
+                    chamber=chamber,
+                    hearing_type="Committee",
+                    length=60,
+                    hearing_date=hearing_date,
+                    hearing_time=hearing_time,
+                    location=location,
+                    committee_code=committee_code,
+                    legislature_session=legislature_session,
+                    is_active=True,
+                    last_sync=func.now(),
+                )
+                .on_conflict_do_update(
+                    index_elements=["chamber", "committee_code", "hearing_date", "legislature_session"],
+                    index_where=text(
+                        "hearing_type = 'Committee' AND is_active = TRUE AND committee_code IS NOT NULL"
+                    ),
+                    set_=dict(
+                        location=location,
+                        hearing_time=hearing_time,
+                        is_active=True,
+                        updated_at=func.now(),
+                        last_sync=func.now(),
+                    ),
+                )
+                .returning(Hearing.id)
+            )
+            result = await session.execute(stmt)
+            hearing_id = result.scalar_one()
     else:
         # Fallback: manual upsert for committees without a code.
         existing = await session.scalar(
