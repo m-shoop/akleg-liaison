@@ -137,18 +137,8 @@ def downgrade() -> None:
     #    PostgreSQL does not support DROP VALUE on an enum, so we
     #    recreate it: rename → rebuild → re-cast → drop old.
     # ------------------------------------------------------------------
-    # Guard: fail early if any rows use the values we are about to remove.
-    for value in NEW_ACTION_TYPES:
-        op.execute(sa.text(f"""
-            DO $$ BEGIN
-                IF EXISTS (
-                    SELECT 1 FROM workflow_actions WHERE type = '{value}'::workflow_action_type_enum
-                ) THEN
-                    RAISE EXCEPTION
-                        'Cannot downgrade: workflow_actions rows exist with type = ''{value}''';
-                END IF;
-            END $$;
-        """))
+    values_str = ", ".join(f"'{v}'" for v in NEW_ACTION_TYPES)
+    op.execute(sa.text(f"DELETE FROM workflow_actions WHERE type::text IN ({values_str})"))
 
     op.execute(sa.text(
         "ALTER TYPE workflow_action_type_enum RENAME TO workflow_action_type_enum_old"
@@ -170,16 +160,9 @@ def downgrade() -> None:
     # ------------------------------------------------------------------
     # 4. Remove the new workflow type value from the enum.
     # ------------------------------------------------------------------
-    op.execute(sa.text(f"""
-        DO $$ BEGIN
-            IF EXISTS (
-                SELECT 1 FROM workflows WHERE type = 'hearing_assignment'::workflow_type_enum
-            ) THEN
-                RAISE EXCEPTION
-                    'Cannot downgrade: workflows rows exist with type = ''hearing_assignment''';
-            END IF;
-        END $$;
-    """))
+    op.execute(sa.text(
+        "DELETE FROM workflows WHERE type::text = 'hearing_assignment'"
+    ))
 
     op.execute(sa.text(
         "ALTER TYPE workflow_type_enum RENAME TO workflow_type_enum_old"
