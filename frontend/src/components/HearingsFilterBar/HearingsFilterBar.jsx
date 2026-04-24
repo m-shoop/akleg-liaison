@@ -203,36 +203,26 @@ export default function HearingsFilterBar({ filters, onChange, fields, canHide, 
           )}
         </div>}
 
-        {/* notes - permission gated, in basic */}
-        {canNotes && fields?.dps_notes && (
+        {/* bill coverage - permission-gated by backend field availability */}
+        {fields?.has_tracked_bill_without_assignment && (
           <div className={styles.filterGroup}>
-            <span className={styles.label}>Notes</span>
+            <span className={styles.label}>Bill Coverage</span>
             <div className={styles.segmented}>
-              {[
-                { value: "any", label: "Any" },
-                { value: "has", label: "Has Notes" },
-                { value: "empty", label: "No Notes" },
-                { value: "contains", label: "Contains…" },
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  className={`${styles.seg} ${(filters.advanced?.dps_notes_mode ?? "any") === opt.value ? styles.segActive : ""}`}
-                  onClick={() => setAdvanced("dps_notes_mode", opt.value)}
-                >
-                  {opt.label}
-                </button>
-              ))}
+              <button
+                type="button"
+                className={`${styles.seg} ${!filters.advanced?.has_tracked_bill_without_assignment ? styles.segActive : ""}`}
+                onClick={() => setAdvanced("has_tracked_bill_without_assignment", false)}
+              >
+                Any
+              </button>
+              <button
+                type="button"
+                className={`${styles.seg} ${filters.advanced?.has_tracked_bill_without_assignment ? styles.segActive : ""}`}
+                onClick={() => setAdvanced("has_tracked_bill_without_assignment", true)}
+              >
+                Has Unassigned Tracked Bills
+              </button>
             </div>
-            {(filters.advanced?.dps_notes_mode ?? "any") === "contains" && (
-              <input
-                type="text"
-                className={styles.textInput}
-                placeholder="Search notes…"
-                value={filters.advanced?.dps_notes ?? ""}
-                onChange={(e) => setAdvanced("dps_notes", e.target.value)}
-              />
-            )}
           </div>
         )}
 
@@ -330,26 +320,36 @@ export default function HearingsFilterBar({ filters, onChange, fields, canHide, 
             );
           })}
 
-          {/* has_tracked_bill_without_assignment - permission-gated by backend field availability */}
-          {fields?.has_tracked_bill_without_assignment && (
+          {/* notes - permission gated */}
+          {canNotes && fields?.dps_notes && (
             <div className={styles.filterGroup}>
-              <span className={styles.label}>Bill Coverage</span>
+              <span className={styles.label}>Notes</span>
               <div className={styles.segmented}>
-                <button
-                  type="button"
-                  className={`${styles.seg} ${!filters.advanced?.has_tracked_bill_without_assignment ? styles.segActive : ""}`}
-                  onClick={() => setAdvanced("has_tracked_bill_without_assignment", false)}
-                >
-                  Any
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.seg} ${filters.advanced?.has_tracked_bill_without_assignment ? styles.segActive : ""}`}
-                  onClick={() => setAdvanced("has_tracked_bill_without_assignment", true)}
-                >
-                  Has Unassigned Tracked Bills
-                </button>
+                {[
+                  { value: "any", label: "Any" },
+                  { value: "has", label: "Has Notes" },
+                  { value: "empty", label: "No Notes" },
+                  { value: "contains", label: "Contains…" },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={`${styles.seg} ${(filters.advanced?.dps_notes_mode ?? "any") === opt.value ? styles.segActive : ""}`}
+                    onClick={() => setAdvanced("dps_notes_mode", opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
               </div>
+              {(filters.advanced?.dps_notes_mode ?? "any") === "contains" && (
+                <input
+                  type="text"
+                  className={styles.textInput}
+                  placeholder="Search notes…"
+                  value={filters.advanced?.dps_notes ?? ""}
+                  onChange={(e) => setAdvanced("dps_notes", e.target.value)}
+                />
+              )}
             </div>
           )}
 

@@ -330,8 +330,8 @@ function HearingAssignmentCard({ assignment, canManage, canViewSuggestions, toke
             </button>
           </>
         )}
-        <button className={styles.expandBtn} onClick={() => setExpanded((v) => !v)}>
-          {expanded ? "Hide actions ▲" : "Show actions ▼"}
+        <button className={styles.expandBtn} onClick={() => setExpanded((v) => !v)} style={{ marginLeft: "auto" }}>
+          {expanded ? "Hide history ▲" : "Show history ▼"}
         </button>
       </div>
 

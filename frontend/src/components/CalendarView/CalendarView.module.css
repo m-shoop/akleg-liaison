@@ -634,6 +634,12 @@
   cursor: not-allowed;
 }
 
+/* ─── Overlay: assignments ────────────────────────────────────────────────────── */
+
+.overlayAssignments {
+  margin-bottom: 1rem;
+}
+
 /* ─── Overlay: footer ─────────────────────────────────────────────────────────── */
 
 .overlayLastSynced {

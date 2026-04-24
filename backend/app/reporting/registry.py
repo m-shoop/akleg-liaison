@@ -581,9 +581,10 @@ REPORTS: dict[str, ReportDefinition] = {
                     'prefix',           agenda_items.prefix,
                     'is_bill',          agenda_items.is_bill,
                     'is_teleconferenced', agenda_items.is_teleconferenced,
-                    'sort_order',       agenda_items.sort_order
+                    'sort_order',       agenda_items.sort_order,
+                    'bill_is_tracked',  bills.is_tracked
                 )) FILTER (WHERE agenda_items.id IS NOT NULL)""",
-                join="agenda_items",
+                join="bills",
                 operators=[],
                 filterable=False,
                 selectable=True,

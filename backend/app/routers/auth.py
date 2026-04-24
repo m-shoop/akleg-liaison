@@ -218,7 +218,7 @@ async def forgot_password_request(
 # ---------------------------------------------------------------------------
 
 @router.post("/validate-token", status_code=200)
-@limiter.limit("10/hour")
+@limiter.limit("15/hour")
 async def validate_token(
     request: Request,
     body: ValidateTokenRequest,

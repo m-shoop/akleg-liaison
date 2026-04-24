@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { validateToken } from "../../api/auth";
 import styles from "./ActivateToken.module.css";
@@ -13,6 +13,7 @@ export default function ActivateToken() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [state, setState] = useState(STATE.VALIDATING);
+  const called = useRef(false);
 
   const token = searchParams.get("token");
   const type  = searchParams.get("type"); // "registration" | "password_reset"
@@ -23,14 +24,13 @@ export default function ActivateToken() {
       return;
     }
 
-    let cancelled = false;
+    // Ref persists across StrictMode remounts; prevents double-consuming the token
+    if (called.current) return;
+    called.current = true;
 
     validateToken(token, type)
-      .then(() => {
-        if (!cancelled) navigate("/set-password", { replace: true });
-      })
+      .then(() => navigate("/set-password", { replace: true }))
       .catch((err) => {
-        if (cancelled) return;
         if (err.message === "token_expired") {
           // Redirect to login with a banner indicating which workflow expired
           const tokenType = err.tokenType ?? type;
@@ -40,8 +40,6 @@ export default function ActivateToken() {
           setState(STATE.INVALID);
         }
       });
-
-    return () => { cancelled = true; };
   }, []); // run once on mount
 
   if (state === STATE.VALIDATING) {

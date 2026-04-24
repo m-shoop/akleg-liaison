@@ -5,6 +5,7 @@ import { updateDpsNotes, updateHidden } from "../../api/hearings";
 import { addDays, todayJuneau } from "../../utils/weekBounds";
 import { alaskaLocalToUtc, exportToCalendar } from "../../utils/hearingCalendar";
 import PriorAgendasModal from "../PriorAgendasModal/PriorAgendasModal";
+import HearingAssignmentsPanel from "../HearingAssignmentsPanel/HearingAssignmentsPanel";
 import styles from "./CalendarView.module.css";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -82,7 +83,7 @@ function computeDayLayout(dayHearings) {
 
 // ─── Hearing detail overlay ───────────────────────────────────────────────────
 
-function HearingDetailOverlay({ hearing, showHidden, onClose, onNotesReload, onHiddenChanged }) {
+function HearingDetailOverlay({ hearing, showHidden, onClose, onNotesReload, onHiddenChanged, onAssignmentCreated }) {
   const { can, token } = useAuth();
   const [notes, setNotes] = useState(hearing.dps_notes ?? "");
   const [saving, setSaving] = useState(false);
@@ -271,6 +272,12 @@ function HearingDetailOverlay({ hearing, showHidden, onClose, onNotesReload, onH
           />
         )}
 
+        {can("hearing-assignment:view") && (
+          <div className={styles.overlayAssignments}>
+            <HearingAssignmentsPanel hearing={hearing} onAssignmentCreated={onAssignmentCreated} />
+          </div>
+        )}
+
         {can("hearing-notes:view") && (
           <div className={styles.overlayNotes}>
             <div className={styles.overlaySectionTitle}>Notes</div>
@@ -326,6 +333,7 @@ function HearingDetailOverlay({ hearing, showHidden, onClose, onNotesReload, onH
           <p className={styles.overlayLastSynced}>Synced {lastSynced}</p>
         )}
       </div>
+
     </>
   );
 }
@@ -614,6 +622,7 @@ export default function CalendarView({
             onHiddenChanged(updated);
             setSelectedHearing(null);
           }}
+          onAssignmentCreated={onHearingReload}
         />
       )}
     </div>

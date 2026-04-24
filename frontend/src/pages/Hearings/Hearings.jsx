@@ -419,7 +419,11 @@ export default function Hearings() {
         </button>
         {reportCriteriaOpen && (
           <HearingsFilterBar
-            filters={hearingFilters}
+            filters={
+              activeView === "calendar" && calendarStartDate
+                ? { ...hearingFilters, hearingDateMode: "range", hearingDateFrom: calendarStartDate, hearingDateTo: calendarEndDate ?? "" }
+                : hearingFilters
+            }
             onChange={setHearingFilters}
             fields={reportFields}
             canHide={can("hearing:hide")}
