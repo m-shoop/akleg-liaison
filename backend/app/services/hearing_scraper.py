@@ -421,15 +421,15 @@ def parse_floor_calendar(
                 if bill_match and link:
                     has_bill_rows = True
             else:
-                div = item.find("div")
-                if div:
-                    section_headers.append(div.get_text(strip=True).upper())
+                text = item.get_text(strip=True)
+                if text:
+                    section_headers.append(text.upper())
 
-        # Skip if the only content is a "NOT IN SESSION" header.
+        # Skip if the only content is a 'no session' header.
         if (
             not has_bill_rows
             and len(section_headers) == 1
-            and (("NOT IN SESSION" in section_headers[0]) 
+            and (("NOT IN SESSION" in section_headers[0])
                  or ("NO CALENDAR ENTRIES" in section_headers[0]))
         ):
             continue
@@ -472,14 +472,12 @@ def parse_floor_calendar(
                             )
                         )
             else:
-                div = item.find("div")
-                if div:
-                    content = div.get_text(strip=True)
-                    if content:
-                        agenda_items.append(
-                            ScrapedAgendaItem(content=content, is_bill=False)
-                        )
-                        current_bill_number = None
+                content = item.get_text(strip=True)
+                if content:
+                    agenda_items.append(
+                        ScrapedAgendaItem(content=content, is_bill=False)
+                    )
+                    current_bill_number = None
 
         hearings.append(
             ScrapedFloorHearing(
