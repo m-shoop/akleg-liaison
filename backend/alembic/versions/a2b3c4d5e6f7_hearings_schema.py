@@ -226,6 +226,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # The pre-a2b3c4 schema has no concept of Floor hearings. Drop them first;
+    # ON DELETE CASCADE on hearing_agenda_versions.hearing_id cleans up their
+    # agenda versions.
+    op.execute("DELETE FROM hearings WHERE hearing_type = 'Floor'")
+
     # ── Restore meetings table ───────────────────────────────────────────────
     op.create_table(
         "meetings",

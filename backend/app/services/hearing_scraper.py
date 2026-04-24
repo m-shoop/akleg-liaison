@@ -107,42 +107,47 @@ def build_floor_calendar_url(target_date: date) -> str:
 # Fetch helpers
 # ---------------------------------------------------------------------------
 
-async def fetch_committee_schedule_html(start: date, end: date) -> str:
-    """Fetch the committee schedule page using Playwright."""
+async def fetch_committee_schedule_html(start: date, end: date) -> str | None:
+    """Fetch the committee schedule page. Returns None if the fetch failed —
+    callers use this to distinguish a legitimately empty page from a failure,
+    so they can skip deactivation when the data can't be trusted.
+    """
     from playwright.async_api import async_playwright
 
     url = build_committee_schedule_url(start, end)
     async with async_playwright() as p:
         browser = await p.chromium.launch()
         page = await browser.new_page()
-        await page.goto(url, wait_until="domcontentloaded", timeout=90_000)
         try:
-            await page.wait_for_selector(
-                "#IndexResults2 > div > table", timeout=15_000
-            )
+            await page.goto(url, wait_until="domcontentloaded", timeout=90_000)
+            # Wait for the container (not the inner table) — the container
+            # renders on a successful load even with zero hearings, so its
+            # absence means fetch failure rather than an empty range.
+            await page.wait_for_selector("#IndexResults2", timeout=15_000)
+            return await page.content()
         except Exception:
-            pass
-        html = await page.content()
-        await browser.close()
-    return html
+            return None
+        finally:
+            await browser.close()
 
 
-async def fetch_floor_calendar_html(target_date: date) -> str:
-    """Fetch the floor calendar page for a single date using Playwright."""
+async def fetch_floor_calendar_html(target_date: date) -> str | None:
+    """Fetch the floor calendar page for a single date. Returns None if the
+    fetch failed. See `fetch_committee_schedule_html` for the rationale."""
     from playwright.async_api import async_playwright
 
     url = build_floor_calendar_url(target_date)
     async with async_playwright() as p:
         browser = await p.chromium.launch()
         page = await browser.new_page()
-        await page.goto(url, wait_until="domcontentloaded", timeout=90_000)
         try:
-            await page.wait_for_selector("#flrCalendar form", timeout=15_000)
+            await page.goto(url, wait_until="domcontentloaded", timeout=90_000)
+            await page.wait_for_selector("#flrCalendar", timeout=15_000)
+            return await page.content()
         except Exception:
-            pass
-        html = await page.content()
-        await browser.close()
-    return html
+            return None
+        finally:
+            await browser.close()
 
 
 # ---------------------------------------------------------------------------
@@ -421,15 +426,15 @@ def parse_floor_calendar(
                 if bill_match and link:
                     has_bill_rows = True
             else:
-                div = item.find("div")
-                if div:
-                    section_headers.append(div.get_text(strip=True).upper())
+                text = item.get_text(strip=True)
+                if text:
+                    section_headers.append(text.upper())
 
-        # Skip if the only content is a "NOT IN SESSION" header.
+        # Skip if the only content is a 'no session' header.
         if (
             not has_bill_rows
             and len(section_headers) == 1
-            and (("NOT IN SESSION" in section_headers[0]) 
+            and (("NOT IN SESSION" in section_headers[0])
                  or ("NO CALENDAR ENTRIES" in section_headers[0]))
         ):
             continue
@@ -472,14 +477,12 @@ def parse_floor_calendar(
                             )
                         )
             else:
-                div = item.find("div")
-                if div:
-                    content = div.get_text(strip=True)
-                    if content:
-                        agenda_items.append(
-                            ScrapedAgendaItem(content=content, is_bill=False)
-                        )
-                        current_bill_number = None
+                content = item.get_text(strip=True)
+                if content:
+                    agenda_items.append(
+                        ScrapedAgendaItem(content=content, is_bill=False)
+                    )
+                    current_bill_number = None
 
         hearings.append(
             ScrapedFloorHearing(
@@ -536,7 +539,12 @@ async def scrape_and_store_hearings(
 
     # ── Committee hearings ────────────────────────────────────────────────
     committee_html = await fetch_committee_schedule_html(start, end)
-    committee_hearings = parse_committee_schedule(committee_html, start=start, end=end)
+    committee_fetched_ok = committee_html is not None
+    committee_hearings = (
+        parse_committee_schedule(committee_html, start=start, end=end)
+        if committee_fetched_ok
+        else []
+    )
 
     for h in committee_hearings:
         if h.hearing_date is None:
@@ -583,9 +591,14 @@ async def scrape_and_store_hearings(
         saved += 1
 
     # ── Floor hearings — one fetch per date in the range ─────────────────
+    all_floor_fetched_ok = True
     current_date = start
     while current_date <= end:
         floor_html = await fetch_floor_calendar_html(current_date)
+        if floor_html is None:
+            all_floor_fetched_ok = False
+            current_date += timedelta(days=1)
+            continue
         floor_hearings = parse_floor_calendar(floor_html, current_date)
 
         for fh in floor_hearings:
@@ -631,10 +644,11 @@ async def scrape_and_store_hearings(
 
         current_date += timedelta(days=1)
 
-    # Deactivate hearings in the range not returned by this scrape.
-    # Guard: if both scrapers returned nothing, the page likely failed —
-    # skip deactivation to avoid wiping existing data.
-    if committee_hearings or saved > 0:
+    # Deactivate hearings in the range not returned by this scrape — but only
+    # when every fetch in the range succeeded. If any fetch failed we can't
+    # tell an empty range apart from a broken page, so we leave existing rows
+    # alone and let the next tick retry.
+    if committee_fetched_ok and all_floor_fetched_ok:
         await deactivate_removed_hearings(
             db, start, end, legislature_session, active_ids
         )
