@@ -21,7 +21,8 @@ Within the form, each chamber appears as a ``div.area-holder`` identified by
 agenda items in a ``ul.list``. Adjournment times are in ``ul.box-list > li``.
 
 If a chamber's only section header reads "HOUSE/SENATE NOT IN SESSION ON THIS
-DATE" (and there are no bill rows), that chamber is skipped entirely.
+DATE" OR "NO CALENDAR ENTRIES" (and there are no bill rows), that chamber is skipped 
+entirely.
 """
 
 from __future__ import annotations
@@ -428,7 +429,8 @@ def parse_floor_calendar(
         if (
             not has_bill_rows
             and len(section_headers) == 1
-            and "NOT IN SESSION" in section_headers[0]
+            and (("NOT IN SESSION" in section_headers[0]) 
+                 or ("NO CALENDAR ENTRIES" in section_headers[0]))
         ):
             continue
 
