@@ -395,60 +395,64 @@ export default function CalendarView({
     <div className={styles.calendarWrapper}>
       {/* Navigation */}
       <div id="tour-calendar-nav" className={styles.calendarNav}>
-        <div id="tour-calendar-start-date" className={styles.navStartDate}>
-          <label className={styles.navStartDateLabel}>
-            Starting Date
-            <input
-              type="date"
-              className={styles.navDateInput}
-              value={startDate ?? ""}
-              onChange={(e) => onNavigate(e.target.value)}
-            />
-          </label>
+        <div className={styles.calendarNavRow}>
+          <div id="tour-calendar-start-date" className={styles.navStartDate}>
+            <label className={styles.navStartDateLabel}>
+              Starting Date
+              <input
+                type="date"
+                className={styles.navDateInput}
+                value={startDate ?? ""}
+                onChange={(e) => onNavigate(e.target.value)}
+              />
+            </label>
+            <button
+              className={`${styles.navBtn} ${startDate === todayJuneau() ? styles.navBtnActive : ""}`}
+              onClick={() => onNavigate(todayJuneau())}
+            >
+              Today
+            </button>
+          </div>
+          {loading && <span className={styles.navLoading}>Loading…</span>}
+          {!loading && noHearingsInRange && (
+            <span className={styles.navLoading}>No hearings found for this date range.</span>
+          )}
+          {isFiltered && (
+            <span className={styles.filterBanner}>
+              Search filter active — some hearings may have been hidden.
+            </span>
+          )}
+        </div>
+        <div className={styles.calendarNavRow}>
           <button
-            className={`${styles.navBtn} ${startDate === todayJuneau() ? styles.navBtnActive : ""}`}
-            onClick={() => onNavigate(todayJuneau())}
+            className={styles.navBtn}
+            onClick={() => onNavigate(addDays(startDate, -daysShown))}
+            title={`Back ${daysShown} ${dayLabel}`}
           >
-            Today
+            &lt;&lt; {daysShown} {dayLabel}
+          </button>
+          <div className={styles.daysToggle}>
+            <button
+              className={`${styles.daysOption} ${daysShown === 1 ? styles.daysSelected : ""}`}
+              onClick={() => onDaysShownChange(1)}
+            >
+              1 day
+            </button>
+            <button
+              className={`${styles.daysOption} ${daysShown === 3 ? styles.daysSelected : ""}`}
+              onClick={() => onDaysShownChange(3)}
+            >
+              3 days
+            </button>
+          </div>
+          <button
+            className={styles.navBtn}
+            onClick={() => onNavigate(addDays(startDate, daysShown))}
+            title={`Forward ${daysShown} ${dayLabel}`}
+          >
+            {daysShown} {dayLabel} &gt;&gt;
           </button>
         </div>
-        <button
-          className={styles.navBtn}
-          onClick={() => onNavigate(addDays(startDate, -daysShown))}
-          title={`Back ${daysShown} ${dayLabel}`}
-        >
-          &lt;&lt; {daysShown} {dayLabel}
-        </button>
-        <div className={styles.daysToggle}>
-          <button
-            className={`${styles.daysOption} ${daysShown === 1 ? styles.daysSelected : ""}`}
-            onClick={() => onDaysShownChange(1)}
-          >
-            1 day
-          </button>
-          <button
-            className={`${styles.daysOption} ${daysShown === 3 ? styles.daysSelected : ""}`}
-            onClick={() => onDaysShownChange(3)}
-          >
-            3 days
-          </button>
-        </div>
-        <button
-          className={styles.navBtn}
-          onClick={() => onNavigate(addDays(startDate, daysShown))}
-          title={`Forward ${daysShown} ${dayLabel}`}
-        >
-          {daysShown} {dayLabel} &gt;&gt;
-        </button>
-        {loading && <span className={styles.navLoading}>Loading…</span>}
-        {!loading && noHearingsInRange && (
-          <span className={styles.navLoading}>No hearings found for this date range.</span>
-        )}
-        {isFiltered && (
-          <span className={styles.filterBanner}>
-            Search filter active — some hearings may have been hidden.
-          </span>
-        )}
       </div>
 
       {/* Calendar grid */}

@@ -30,10 +30,21 @@ class JoinDefinition(BaseModel):
     alias: str | None = None
 
 
+class SecurityFilter(BaseModel):
+    """Implicit WHERE predicate applied when the caller lacks a given permission.
+
+    Ensures rows that would otherwise be hidden from privileged view cannot leak
+    to callers who are also blocked from filtering the relevant field themselves.
+    """
+    requires_permission: str
+    fallback_sql: str
+
+
 class ReportDefinition(BaseModel):
     label: str
     base_entity: str
     base_conditions: list[str] = []
+    security_filters: list[SecurityFilter] = []
     joins: dict[str, JoinDefinition] = {}
     fields: dict[str, FieldDefinition]
     default_columns: list[str]
@@ -516,7 +527,6 @@ REPORTS: dict[str, ReportDefinition] = {
                 selectable=True,
                 label="Hidden",
                 render_as="text",
-                requires_permission="hearing:hide",
             ),
             "dps_notes": FieldDefinition(
                 column="hearings.dps_notes",
@@ -612,6 +622,57 @@ REPORTS: dict[str, ReportDefinition] = {
                 join="agenda_items",
                 filter_strategy="exists",
                 label="Bill on Agenda",
+            ),
+            "assignment_assignee_email": FieldDefinition(
+                column="(SELECT email FROM users WHERE id = hearing_assignments.assignee_id)",
+                filter_tier="advanced",
+                type="text",
+                operators=["contains", "equals"],
+                filterable=True,
+                selectable=False,
+                join="hearing_assignments",
+                filter_strategy="exists",
+                filter_group="Assignment criteria",
+                label="Assignment Assignee",
+                requires_permission="hearing-assignment:view",
+            ),
+            "assignment_bill_number": FieldDefinition(
+                column="(SELECT bill_number FROM bills WHERE id = hearing_assignments.bill_id)",
+                filter_tier="advanced",
+                type="text",
+                operators=["contains", "equals"],
+                filterable=True,
+                selectable=False,
+                join="hearing_assignments",
+                filter_strategy="exists",
+                filter_group="Assignment criteria",
+                label="Assignment Bill Number",
+                requires_permission="hearing-assignment:view",
+            ),
+            "assignment_status": FieldDefinition(
+                column=(
+                    "(SELECT type FROM workflow_actions"
+                    " WHERE workflow_id = hearing_assignments.workflow_id"
+                    " ORDER BY action_timestamp DESC LIMIT 1)"
+                ),
+                filter_tier="advanced",
+                type="enum",
+                enum_source=[
+                    "hearing_assigned",
+                    "reassignment_request",
+                    "auto_suggested_hearing_assignment",
+                    "hearing_assignment_complete",
+                    "hearing_assignment_canceled",
+                    "hearing_assignment_discarded",
+                ],
+                operators=["equals", "in"],
+                filterable=True,
+                selectable=False,
+                join="hearing_assignments",
+                filter_strategy="exists",
+                filter_group="Assignment criteria",
+                label="Assignment Status",
+                requires_permission="hearing-assignment:view",
             ),
             "hearing_assignments_summary": FieldDefinition(
                 column="hearing_assignments.id",

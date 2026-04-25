@@ -102,7 +102,9 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated }
     }
   }
 
-  const hearingInfo = `${fmtDate(hearing.hearing_date)}${hearing.hearing_time ? ` · ${fmtTime(hearing.hearing_time)}` : ""}${hearing.committee_name ? ` · ${hearing.committee_name}` : " · Floor Session"}`;
+  const chamberPrefix = hearing.chamber ? `(${hearing.chamber}) ` : "";
+  const hearingName = `${chamberPrefix}${hearing.committee_name || "Floor Session"}`;
+  const hearingInfo = `${fmtDate(hearing.hearing_date)}${hearing.hearing_time ? ` · ${fmtTime(hearing.hearing_time)}` : ""} · ${hearingName}`;
 
   return (
     <>
@@ -121,30 +123,51 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated }
       {visible.length === 0 ? (
         <p className={styles.empty}>No current assignments</p>
       ) : (
-        <ul className={styles.list}>
-          {visible.map((a) => (
-            <li key={a.id} className={styles.item}>
-              <button
-                className={styles.itemBtn}
-                onClick={() => { setAssignmentActionError(null); setSelectedAssignment(a); }}
-              >
-                <span className={styles.itemBadges}>
-                  <span className={styles.emailBadge}>{a.assignee_email}</span>
-                  {a.bill_number && <span className={styles.billBadge}>{a.bill_number}</span>}
-                </span>
-                {a.latest_action_type === "auto_suggested_hearing_assignment" && (
-                  <span className={styles.suggestedTag}>suggested</span>
-                )}
-                {a.latest_action_type === "hearing_assignment_complete" && (
-                  <span className={styles.completeTag}>complete</span>
-                )}
-                {a.latest_action_type === "reassignment_request" && (
-                  <span className={styles.reassignTag}>reassign requested</span>
-                )}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Assigned To</th>
+              <th>Bill Number</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((a) => {
+              const statusLabel = {
+                hearing_assigned: "Open",
+                hearing_assignment_complete: "Complete",
+                reassignment_request: "Reassign requested",
+                auto_suggested_hearing_assignment: "Suggested",
+              }[a.latest_action_type];
+              const statusClass = {
+                hearing_assigned: styles.openTag,
+                hearing_assignment_complete: styles.completeTag,
+                reassignment_request: styles.reassignTag,
+                auto_suggested_hearing_assignment: styles.suggestedTag,
+              }[a.latest_action_type];
+              const openAssignment = () => { setAssignmentActionError(null); setSelectedAssignment(a); };
+              return (
+                <tr
+                  key={a.id}
+                  className={styles.row}
+                  onClick={openAssignment}
+                  tabIndex={0}
+                  role="button"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openAssignment();
+                    }
+                  }}
+                >
+                  <td className={styles.cellEmail}>{a.assignee_email}</td>
+                  <td className={styles.cellBill}>{a.bill_number || ""}</td>
+                  <td><span className={statusClass}>{statusLabel}</span></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       )}
 
       {trackedWithoutAssignment.length > 0 && (

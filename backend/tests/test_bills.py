@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from httpx import AsyncClient
 
-from tests.conftest import login_user, register_user
+from tests.conftest import login_user, seed_active_user
 
 
 async def _seed_bill(db, uid: str, *, tracked: bool = True) -> int:
@@ -17,14 +17,16 @@ async def _seed_bill(db, uid: str, *, tracked: bool = True) -> int:
     return bill.id
 
 
-async def _editor_token(client: AsyncClient, uid: str) -> str:
-    await register_user(client, f"editor_{uid}", "pass", role="admin")
-    return await login_user(client, f"editor_{uid}", "pass")
+async def _editor_token(client: AsyncClient, db, uid: str) -> str:
+    email = f"editor_{uid}@example.com"
+    await seed_active_user(db, email, "pass", role="admin")
+    return await login_user(client, email, "pass")
 
 
-async def _viewer_token(client: AsyncClient, uid: str) -> str:
-    await register_user(client, f"viewer_{uid}", "pass", role="viewer")
-    return await login_user(client, f"viewer_{uid}", "pass")
+async def _viewer_token(client: AsyncClient, db, uid: str) -> str:
+    email = f"viewer_{uid}@example.com"
+    await seed_active_user(db, email, "pass", role="viewer")
+    return await login_user(client, email, "pass")
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +63,7 @@ async def test_list_bills_include_untracked(client: AsyncClient, db, uid: str):
 
 async def test_editor_can_untrack_bill(client: AsyncClient, db, uid: str):
     bill_id = await _seed_bill(db, uid, tracked=True)
-    token = await _editor_token(client, uid)
+    token = await _editor_token(client, db, uid)
 
     resp = await client.patch(
         f"/bills/{bill_id}/tracked",
@@ -74,7 +76,7 @@ async def test_editor_can_untrack_bill(client: AsyncClient, db, uid: str):
 
 async def test_editor_can_track_bill(client: AsyncClient, db, uid: str):
     bill_id = await _seed_bill(db, uid, tracked=False)
-    token = await _editor_token(client, uid)
+    token = await _editor_token(client, db, uid)
 
     with patch("app.routers.bills._run_refresh_job", new_callable=AsyncMock):
         resp = await client.patch(
@@ -88,7 +90,7 @@ async def test_editor_can_track_bill(client: AsyncClient, db, uid: str):
 
 async def test_viewer_cannot_change_tracked(client: AsyncClient, db, uid: str):
     bill_id = await _seed_bill(db, uid)
-    token = await _viewer_token(client, uid)
+    token = await _viewer_token(client, db, uid)
 
     resp = await client.patch(
         f"/bills/{bill_id}/tracked",
@@ -111,7 +113,7 @@ async def test_unauthenticated_cannot_change_tracked(client: AsyncClient, db, ui
 
 async def test_editor_can_enqueue_refresh(client: AsyncClient, db, uid: str):
     bill_id = await _seed_bill(db, uid)
-    token = await _editor_token(client, uid)
+    token = await _editor_token(client, db, uid)
 
     with patch("app.routers.bills._run_refresh_job", new_callable=AsyncMock):
         resp = await client.post(
@@ -127,7 +129,7 @@ async def test_editor_can_enqueue_refresh(client: AsyncClient, db, uid: str):
 
 async def test_viewer_cannot_enqueue_refresh(client: AsyncClient, db, uid: str):
     bill_id = await _seed_bill(db, uid)
-    token = await _viewer_token(client, uid)
+    token = await _viewer_token(client, db, uid)
 
     resp = await client.post(
         f"/bills/{bill_id}/refresh",
@@ -143,8 +145,8 @@ async def test_unauthenticated_cannot_enqueue_refresh(client: AsyncClient, db, u
     assert resp.status_code == 401
 
 
-async def test_refresh_nonexistent_bill_returns_404(client: AsyncClient, uid: str):
-    token = await _editor_token(client, uid)
+async def test_refresh_nonexistent_bill_returns_404(client: AsyncClient, db, uid: str):
+    token = await _editor_token(client, db, uid)
 
     resp = await client.post(
         "/bills/999999/refresh",

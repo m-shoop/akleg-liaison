@@ -27,7 +27,7 @@ from app.repositories.workflow_repository import (
 logger = logging.getLogger(__name__)
 
 _JUNEAU_TZ = ZoneInfo("America/Anchorage")
-_SUGGESTION_TIMES = [(5, 54), (16, 45)]  # 4:45 AM and 4:45 PM Juneau
+_SUGGESTION_TIMES = [(7, 1), (16, 45)]  # 4:45 AM and 4:45 PM Juneau
 
 
 def _seconds_until_next_suggestion_run() -> float:

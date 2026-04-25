@@ -55,7 +55,7 @@ function buildFilterGroup(filters, { canHide, canNotes }) {
   if (!filters.showInactive) {
     conditions.push({ field: "is_active", op: "equals", value: true });
   }
-  if (!canHide || !filters.showHidden) {
+  if (!filters.showHidden) {
     conditions.push({ field: "hidden", op: "equals", value: false });
   }
 
@@ -74,6 +74,16 @@ function buildFilterGroup(filters, { canHide, canNotes }) {
 
   if (adv.has_tracked_bill_without_assignment === true) {
     conditions.push({ field: "has_tracked_bill_without_assignment", op: "equals", value: true });
+  }
+
+  if (adv.assignment_assignee_email?.trim()) {
+    conditions.push({ field: "assignment_assignee_email", op: "contains", value: adv.assignment_assignee_email.trim() });
+  }
+  if (adv.assignment_bill_number?.trim()) {
+    conditions.push({ field: "assignment_bill_number", op: "contains", value: adv.assignment_bill_number.trim() });
+  }
+  if (adv.assignment_status?.length > 0) {
+    conditions.push({ field: "assignment_status", op: "in", value: adv.assignment_status });
   }
 
   return { logic: "AND", conditions };
@@ -118,10 +128,9 @@ function rowToHearing(row) {
 function getColumns(can) {
   const cols = [
     "id", "hearing_date", "hearing_time", "chamber", "hearing_type", "location",
-    "legislature_session", "is_active", "last_sync", "committee_name",
+    "legislature_session", "is_active", "hidden", "last_sync", "committee_name",
     "committee_type", "committee_url", "agenda_items",
   ];
-  if (can("hearing:hide")) cols.push("hidden");
   if (can("hearing-notes:view")) cols.push("dps_notes");
   if (can("hearing-assignment:view")) cols.push("hearing_assignments_summary");
   return cols;
@@ -145,6 +154,7 @@ export default function Hearings() {
     if (stored) { try { return JSON.parse(stored); } catch { /* ignore */ } }
     return DEFAULT_FILTERS;
   });
+  const [searchQuery, setSearchQuery] = useState(() => sessionStorage.getItem("hearings_searchQuery") ?? "");
 
   const [reportFields, setReportFields] = useState(null);
   const [allHearings, setAllHearings] = useState(null);
@@ -160,6 +170,44 @@ export default function Hearings() {
   const calendarEndDate = calendarStartDate ? addDays(calendarStartDate, daysShown - 1) : null;
   const permissions = { canHide: can("hearing:hide"), canNotes: can("hearing-notes:view") };
 
+  // ─── Consume legacy URL params from "Upcoming Hearings" bill links ────────
+  // e.g. /hearings?search=HB+62&start=2026-04-19&end=2026-04-25&show_hidden=1
+  // Resets all other Hearings filters so the user lands on a clean view.
+  useEffect(() => {
+    const search = searchParams.get("search");
+    const start = searchParams.get("start");
+    const end = searchParams.get("end");
+    const hasShowHidden = searchParams.has("show_hidden");
+    if (!search && !start && !end && !hasShowHidden) return;
+
+    setSearchQuery(search ?? "");
+
+    setHearingFilters({
+      ...DEFAULT_FILTERS,
+      ...(start || end
+        ? {
+            hearingDateMode: "range",
+            ...(start ? { hearingDateFrom: start } : {}),
+            ...(end ? { hearingDateTo: end } : {}),
+          }
+        : {}),
+      ...(hasShowHidden ? { showHidden: searchParams.get("show_hidden") === "1" } : {}),
+    });
+
+    setActiveView("list");
+    setCalendarStartDate(null);
+
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("search");
+      next.delete("start");
+      next.delete("end");
+      next.delete("show_hidden");
+      return next;
+    }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ─── Load report field metadata (for enum options in FilterBar) ───────────
   useEffect(() => {
     fetchReportMeta(token)
@@ -174,6 +222,11 @@ export default function Hearings() {
   useEffect(() => {
     sessionStorage.setItem("hearings_filters", JSON.stringify(hearingFilters));
   }, [hearingFilters]);
+
+  useEffect(() => {
+    if (searchQuery) sessionStorage.setItem("hearings_searchQuery", searchQuery);
+    else sessionStorage.removeItem("hearings_searchQuery");
+  }, [searchQuery]);
 
   useEffect(() => {
     if (globalExpanded) sessionStorage.setItem("hearings_globalExpanded", "true");
@@ -299,15 +352,31 @@ export default function Hearings() {
 
   function resetToDefaults() {
     setHearingFilters(DEFAULT_FILTERS);
+    setSearchQuery("");
     setGlobalExpanded(false);
     setActiveView("list");
     setCalendarStartDate(null);
   }
 
   // ─── Derived data (list view) ──────────────────────────────────────────────
-  const hearings = allHearings ?? [];
+  const query = searchQuery.trim().toLowerCase();
+  function matchesQuery(h) {
+    const agendaText = h.agenda_items
+      .flatMap((i) => [i.bill_number, i.content])
+      .filter(Boolean)
+      .join(" ");
+    const title = h.committee_name ?? "Floor Session";
+    const haystack = [title, h.committee_type, h.location, h.dps_notes, agendaText]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(query);
+  }
 
-  const byDate = hearings.reduce((acc, h) => {
+  const hearings = allHearings ?? [];
+  const visibleHearings = query ? hearings.filter(matchesQuery) : hearings;
+
+  const byDate = visibleHearings.reduce((acc, h) => {
     const key = h.hearing_date;
     if (!acc[key]) acc[key] = [];
     acc[key].push(h);
@@ -325,7 +394,9 @@ export default function Hearings() {
           <h1 className={styles.title}>Hearing Schedule</h1>
           {allHearings !== null && (
             <p className={styles.subtitle}>
-              {hearings.length} hearing{hearings.length !== 1 ? "s" : ""}
+              {query
+                ? `${visibleHearings.length} of ${hearings.length} hearing${hearings.length !== 1 ? "s" : ""}`
+                : `${hearings.length} hearing${hearings.length !== 1 ? "s" : ""}`}
             </p>
           )}
 
@@ -426,7 +497,6 @@ export default function Hearings() {
             }
             onChange={setHearingFilters}
             fields={reportFields}
-            canHide={can("hearing:hide")}
             canNotes={can("hearing-notes:view")}
             hideDateFilter={activeView === "calendar"}
           />
@@ -445,15 +515,31 @@ export default function Hearings() {
         </p>
       )}
 
+      {allHearings !== null && hearings.length > 0 && (
+        <div className={styles.searchRow}>
+          <input
+            className={styles.searchInput}
+            type="search"
+            placeholder="Search hearings on this page…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+      )}
+
+      {activeView === "list" && query && hearings.length > 0 && visibleHearings.length === 0 && (
+        <p className={styles.notice}>No hearings match your search.</p>
+      )}
+
       {/* ── Calendar view ── */}
       {activeView === "calendar" && calendarStartDate && (
         <CalendarView
-          hearings={hearings}
+          hearings={visibleHearings}
           startDate={calendarStartDate}
           daysShown={daysShown}
           onDaysShownChange={setDaysShown}
           onNavigate={setCalendarStartDate}
-          isFiltered={false}
+          isFiltered={Boolean(query)}
           loading={loading}
           noHearingsInRange={allHearings !== null && hearings.length === 0}
           onHearingReload={loadHearings}

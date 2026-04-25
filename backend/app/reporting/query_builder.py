@@ -279,6 +279,15 @@ async def run_report(
         base_sql = " AND ".join(report.base_conditions)
         where_sql = f"{base_sql} AND ({where_sql})" if where_sql != "TRUE" else base_sql
 
+    missing_security_sql = [
+        sf.fallback_sql
+        for sf in report.security_filters
+        if sf.requires_permission not in user_permissions
+    ]
+    if missing_security_sql:
+        security_sql = " AND ".join(missing_security_sql)
+        where_sql = f"{security_sql} AND ({where_sql})" if where_sql != "TRUE" else security_sql
+
     sort_fields: list[FieldDefinition] = []
     for sort_key in request.sort_by:
         sf = report.fields.get(sort_key)

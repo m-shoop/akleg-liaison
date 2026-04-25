@@ -273,3 +273,27 @@
   background: var(--color-border, #e2e8f0);
   margin: 4px 0;
 }
+
+.filterGroupSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  background: var(--color-surface, #fff);
+}
+
+.filterGroupLabel {
+  margin: 0;
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--color-text-muted, #64748b);
+}
+
+.filterGroupBody {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+}

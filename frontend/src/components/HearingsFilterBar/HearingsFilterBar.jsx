@@ -7,6 +7,13 @@ function EnumMultiSelect({ options, selected, onChange }) {
   const ref = useRef(null);
   const safeSelected = Array.isArray(selected) ? selected : [];
 
+  // Normalize: accept either string[] or {value, label}[].
+  const normalized = options.map((o) =>
+    typeof o === "object" && o !== null
+      ? { value: String(o.value), label: String(o.label ?? o.value) }
+      : { value: String(o), label: String(o) }
+  );
+
   useEffect(() => {
     function handleClick(e) {
       if (ref.current && !ref.current.contains(e.target)) setOpen(false);
@@ -37,18 +44,18 @@ function EnumMultiSelect({ options, selected, onChange }) {
       {open && (
         <div className={styles.multiSelectDropdown}>
           <div className={styles.multiSelectActions}>
-            <button type="button" className={styles.multiSelectActionBtn} onClick={() => onChange(options.map(String))}>All</button>
+            <button type="button" className={styles.multiSelectActionBtn} onClick={() => onChange(normalized.map((o) => o.value))}>All</button>
             <button type="button" className={styles.multiSelectActionBtn} onClick={() => onChange([])}>None</button>
           </div>
           <div className={styles.multiSelectDivider} />
-          {options.map((opt) => (
-            <label key={opt} className={styles.multiSelectOption}>
+          {normalized.map((opt) => (
+            <label key={opt.value} className={styles.multiSelectOption}>
               <input
                 type="checkbox"
-                checked={safeSelected.includes(String(opt))}
-                onChange={() => toggle(String(opt))}
+                checked={safeSelected.includes(opt.value)}
+                onChange={() => toggle(opt.value)}
               />
-              <span>{opt}</span>
+              <span>{opt.label}</span>
             </label>
           ))}
         </div>
@@ -62,6 +69,15 @@ const DATE_MODES = [
   { value: "on", label: "On Date" },
   { value: "range", label: "In Range" },
 ];
+
+const ASSIGNMENT_STATUS_LABELS = {
+  hearing_assigned: "Assigned",
+  reassignment_request: "Reassign",
+  auto_suggested_hearing_assignment: "Suggested",
+  hearing_assignment_complete: "Completed",
+  hearing_assignment_canceled: "Canceled",
+  hearing_assignment_discarded: "Discarded",
+};
 
 function formatDate(str) {
   if (!str) return "";
@@ -107,8 +123,9 @@ function buildSummary(filters, fields) {
       if (val) parts.push(`${field.label}: "${val}"`);
     } else if (field.type === "enum") {
       const vals = adv[key];
-      if (Array.isArray(vals) && vals.length > 0) parts.push(`${field.label}: ${vals.join(", ")}`);
-      else if (typeof vals === "string" && vals) parts.push(`${field.label}: ${vals}`);
+      const labelFor = (v) => (key === "assignment_status" ? ASSIGNMENT_STATUS_LABELS[v] ?? v : v);
+      if (Array.isArray(vals) && vals.length > 0) parts.push(`${field.label}: ${vals.map(labelFor).join(", ")}`);
+      else if (typeof vals === "string" && vals) parts.push(`${field.label}: ${labelFor(vals)}`);
     }
   }
 
@@ -195,9 +212,9 @@ export default function HearingsFilterBar({ filters, onChange, fields, canHide, 
               </span>
               <div className={styles.weekShortcuts}>
                 <button type="button" className={`${styles.shortcut} ${filters.hearingDateFrom === today && filters.hearingDateTo === today ? styles.shortcutActive : ""}`} onClick={() => applyDateRange(today, today)}>Today</button>
-                <button type="button" className={styles.shortcut} onClick={() => { const b = weekBounds(-1); applyDateRange(b.start, b.end); }} title={weekBoundsTitle(-1)}>Last Week</button>
+                <button type="button" className={`${styles.shortcut} ${filters.hearingDateFrom === weekBounds(-1).start && filters.hearingDateTo === weekBounds(-1).end ? styles.shortcutActive : ""}`} onClick={() => { const b = weekBounds(-1); applyDateRange(b.start, b.end); }} title={weekBoundsTitle(-1)}>Last Week</button>
                 <button type="button" className={`${styles.shortcut} ${filters.hearingDateFrom === weekBounds(0).start && filters.hearingDateTo === weekBounds(0).end ? styles.shortcutActive : ""}`} onClick={() => { const b = weekBounds(0); applyDateRange(b.start, b.end); }} title={weekBoundsTitle(0)}>This Week</button>
-                <button type="button" className={styles.shortcut} onClick={() => { const b = weekBounds(1); applyDateRange(b.start, b.end); }} title={weekBoundsTitle(1)}>Next Week</button>
+                <button type="button" className={`${styles.shortcut} ${filters.hearingDateFrom === weekBounds(1).start && filters.hearingDateTo === weekBounds(1).end ? styles.shortcutActive : ""}`} onClick={() => { const b = weekBounds(1); applyDateRange(b.start, b.end); }} title={weekBoundsTitle(1)}>Next Week</button>
               </div>
             </>
           )}
@@ -290,6 +307,15 @@ export default function HearingsFilterBar({ filters, onChange, fields, canHide, 
             </div>
           </div>
 
+          {/* hidden */}
+          <div className={styles.filterGroup}>
+            <span className={styles.label}>Visibility</span>
+            <div className={styles.segmented}>
+              <button type="button" className={`${styles.seg} ${!filters.showHidden ? styles.segActive : ""}`} onClick={() => set("showHidden", false)}>Hide hidden</button>
+              <button type="button" className={`${styles.seg} ${filters.showHidden ? styles.segActive : ""}`} onClick={() => set("showHidden", true)}>Show hidden</button>
+            </div>
+          </div>
+
           {/* hearing_type */}
           {hearingTypeOptions.length > 0 && (
             <div className={styles.filterGroup}>
@@ -353,13 +379,48 @@ export default function HearingsFilterBar({ filters, onChange, fields, canHide, 
             </div>
           )}
 
-          {/* hidden - permission gated */}
-          {canHide && (
-            <div className={styles.filterGroup}>
-              <span className={styles.label}>Visibility</span>
-              <div className={styles.segmented}>
-                <button type="button" className={`${styles.seg} ${!filters.showHidden ? styles.segActive : ""}`} onClick={() => set("showHidden", false)}>Hide hidden</button>
-                <button type="button" className={`${styles.seg} ${filters.showHidden ? styles.segActive : ""}`} onClick={() => set("showHidden", true)}>Show hidden</button>
+          {/* Assignment criteria (permission-gated by backend field availability) */}
+          {(fields?.assignment_assignee_email || fields?.assignment_bill_number || fields?.assignment_status) && (
+            <div className={styles.filterGroupSection}>
+              <p className={styles.filterGroupLabel}>Assignment criteria — all must match the same assignment</p>
+              <div className={styles.filterGroupBody}>
+                {fields.assignment_assignee_email && (
+                  <div className={styles.filterGroup}>
+                    <span className={styles.label}>Assignee</span>
+                    <input
+                      type="text"
+                      className={styles.textInput}
+                      placeholder="email…"
+                      value={filters.advanced?.assignment_assignee_email ?? ""}
+                      onChange={(e) => setAdvanced("assignment_assignee_email", e.target.value)}
+                    />
+                  </div>
+                )}
+                {fields.assignment_bill_number && (
+                  <div className={styles.filterGroup}>
+                    <span className={styles.label}>Bill Number</span>
+                    <input
+                      type="text"
+                      className={styles.textInput}
+                      placeholder="e.g. HB 62"
+                      value={filters.advanced?.assignment_bill_number ?? ""}
+                      onChange={(e) => setAdvanced("assignment_bill_number", e.target.value)}
+                    />
+                  </div>
+                )}
+                {fields.assignment_status && (
+                  <div className={styles.filterGroup}>
+                    <span className={styles.label}>Status</span>
+                    <EnumMultiSelect
+                      options={(fields.assignment_status.enum_options ?? Object.keys(ASSIGNMENT_STATUS_LABELS)).map((v) => ({
+                        value: v,
+                        label: ASSIGNMENT_STATUS_LABELS[v] ?? v,
+                      }))}
+                      selected={filters.advanced?.assignment_status ?? []}
+                      onChange={(val) => setAdvanced("assignment_status", val)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           )}

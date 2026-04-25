@@ -52,7 +52,7 @@ function assignmentStatusLabel(latestActionType) {
   switch (latestActionType) {
     case "auto_suggested_hearing_assignment": return "Suggested";
     case "hearing_assigned":                 return "Assigned";
-    case "reassignment_request":             return "Reassignment Requested";
+    case "reassignment_request":             return "Reassign";
     case "hearing_assignment_complete":      return "Completed";
     case "hearing_assignment_canceled":      return "Canceled";
     case "hearing_assignment_discarded":     return "Discarded";
@@ -61,7 +61,8 @@ function assignmentStatusLabel(latestActionType) {
 }
 
 function assignmentStatusClass(latestActionType, styles) {
-  if (latestActionType === "auto_suggested_hearing_assignment") return styles.statusSuggested;
+  if (latestActionType === "auto_suggested_hearing_assignment"
+      || latestActionType === "reassignment_request")           return styles.statusSuggested;
   if (CLOSED_ASSIGNMENT_ACTIONS.has(latestActionType))          return styles.statusClosed;
   return styles.statusOpen;
 }
@@ -250,7 +251,7 @@ function AssignmentsFilterBar({ filters, onChange, canViewAll, canViewSuggestion
   );
 }
 
-function HearingAssignmentCard({ assignment, canManage, canViewSuggestions, token, onActionTaken, username }) {
+function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onActionTaken, username }) {
   const [expanded, setExpanded] = useState(false);
   const [acting, setActing] = useState(null);
   const [error, setError] = useState(null);
@@ -258,8 +259,11 @@ function HearingAssignmentCard({ assignment, canManage, canViewSuggestions, toke
   const [reassignEmail, setReassignEmail] = useState("");
 
   const { latest_action_type, assignee_email, hearing_date, hearing_time, hearing_chamber, committee_name, bill_number } = assignment;
-  const chamberLabel = hearing_chamber === "H" ? "House" : hearing_chamber === "S" ? "Senate" : null;
-  const hearingName = committee_name || (chamberLabel ? `${chamberLabel} Floor Session` : "Floor Session");
+  const chamberPrefix = hearing_chamber ? `(${hearing_chamber}) ` : "";
+  const hearingName = `${chamberPrefix}${committee_name || "Floor Session"}`;
+  const hearingInfo = hearing_date
+    ? `${formatDate(hearing_date)}${hearing_time ? ` · ${formatTime(hearing_time)}` : ""} · ${hearingName}`
+    : "";
   const isClosed = CLOSED_ASSIGNMENT_ACTIONS.has(latest_action_type);
   const isSuggested = latest_action_type === "auto_suggested_hearing_assignment";
   const isReassignRequest = latest_action_type === "reassignment_request";
@@ -281,106 +285,122 @@ function HearingAssignmentCard({ assignment, canManage, canViewSuggestions, toke
   }
 
   return (
-    <div className={`${styles.assignmentCard} ${isClosed ? styles.assignmentCardClosed : ""} ${isSuggested ? styles.assignmentCardSuggested : ""}`}>
-      {/* Top: status + email + bill + hearing details */}
-      <div className={styles.assignmentTopSection}>
-        <span className={`${styles.statusBadge} ${assignmentStatusClass(latest_action_type, styles)}`}>
-          {assignmentStatusLabel(latest_action_type)}
-        </span>
-        <span className={styles.emailBadge}>{assignee_email}</span>
-        {bill_number && <span className={styles.billBadge}>{bill_number}</span>}
-        {hearing_date && (
-          <span className={styles.assignmentHearing}>
-            {formatDate(hearing_date)}{hearing_time ? ` · ${formatTime(hearing_time)}` : ""} · {hearingName}
+    <>
+      <tr className={`${styles.assignmentRow} ${isClosed ? styles.assignmentRowClosed : ""}`}>
+        <td className={styles.cellEmail}>{assignee_email}</td>
+        <td className={styles.cellBill}>{bill_number || ""}</td>
+        <td>
+          <span className={`${styles.statusBadge} ${assignmentStatusClass(latest_action_type, styles)}`}>
+            {assignmentStatusLabel(latest_action_type)}
           </span>
-        )}
-      </div>
-
-      <div className={styles.assignmentDivider} />
-
-      {/* Bottom: action buttons */}
-      <div className={styles.assignmentActionsSection}>
-        {canManage && isSuggested && (
-          <>
-            <button className={styles.assignBtn} onClick={() => handleAction("hearing_assigned")} disabled={acting !== null}>
-              {acting === "hearing_assigned" ? "…" : "Assign"}
-            </button>
-            <button className={styles.discardBtn} onClick={() => handleAction("hearing_assignment_discarded")} disabled={acting !== null}>
-              {acting === "hearing_assignment_discarded" ? "…" : "Discard"}
-            </button>
-          </>
-        )}
-        {canManage && isReassignRequest && !showReassignForm && (
-          <>
-            <button className={styles.assignBtn} onClick={() => { setReassignEmail(assignee_email ?? ""); setShowReassignForm(true); }} disabled={acting !== null}>
-              Reassign
-            </button>
-            <button className={styles.discardBtn} onClick={() => handleAction("hearing_assignment_canceled")} disabled={acting !== null}>
-              {acting === "hearing_assignment_canceled" ? "…" : "Cancel"}
-            </button>
-          </>
-        )}
-        {isAssignee && !isClosed && latest_action_type === "hearing_assigned" && (
-          <>
-            <button className={styles.completeBtn} onClick={() => handleAction("hearing_assignment_complete")} disabled={acting !== null}>
-              {acting === "hearing_assignment_complete" ? "…" : "Mark Complete"}
-            </button>
-            <button className={styles.reassignRequestBtn} onClick={() => handleAction("reassignment_request")} disabled={acting !== null}>
-              {acting === "reassignment_request" ? "…" : "Request Reassignment"}
-            </button>
-          </>
-        )}
-        <button className={styles.expandBtn} onClick={() => setExpanded((v) => !v)} style={{ marginLeft: "auto" }}>
-          {expanded ? "Hide history ▲" : "Show history ▼"}
-        </button>
-      </div>
+        </td>
+        <td className={styles.cellHearing}>{hearingInfo}</td>
+        <td className={styles.cellActions}>
+          <div className={styles.actionsCell}>
+            {canManage && isSuggested && (
+              <>
+                <button className={styles.assignBtn} onClick={() => handleAction("hearing_assigned")} disabled={acting !== null}>
+                  {acting === "hearing_assigned" ? "…" : "Assign"}
+                </button>
+                <button className={styles.discardBtn} onClick={() => handleAction("hearing_assignment_discarded")} disabled={acting !== null}>
+                  {acting === "hearing_assignment_discarded" ? "…" : "Discard"}
+                </button>
+              </>
+            )}
+            {canManage && isReassignRequest && !showReassignForm && (
+              <>
+                <button className={styles.assignBtn} onClick={() => { setReassignEmail(assignee_email ?? ""); setShowReassignForm(true); }} disabled={acting !== null}>
+                  Reassign
+                </button>
+                <button className={styles.discardBtn} onClick={() => handleAction("hearing_assignment_canceled")} disabled={acting !== null}>
+                  {acting === "hearing_assignment_canceled" ? "…" : "Cancel"}
+                </button>
+              </>
+            )}
+            {isAssignee && !isClosed && latest_action_type === "hearing_assigned" && (
+              <>
+                <button className={styles.completeBtn} onClick={() => handleAction("hearing_assignment_complete")} disabled={acting !== null}>
+                  {acting === "hearing_assignment_complete" ? "…" : "Mark Complete"}
+                </button>
+                <button className={styles.reassignRequestBtn} onClick={() => handleAction("reassignment_request")} disabled={acting !== null}>
+                  {acting === "reassignment_request" ? "…" : "Request Reassignment"}
+                </button>
+              </>
+            )}
+          </div>
+        </td>
+        <td className={styles.cellHistoryToggle}>
+          <button
+            className={styles.historyToggle}
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            title={expanded ? "Hide history" : "Show history"}
+          >
+            {expanded ? "▲" : "▼"}
+          </button>
+        </td>
+      </tr>
 
       {showReassignForm && (
-        <div className={styles.reassignForm}>
-          <span className={styles.reassignFormLabel}>New assignee</span>
-          <UserCombobox
-            value={reassignEmail}
-            onChange={setReassignEmail}
-            token={token}
-            placeholder="staff@dps.alaska.gov"
-            autoFocus
-          />
-          <button
-            className={styles.assignBtn}
-            onClick={() => handleAction("hearing_assigned", { newAssigneeEmail: reassignEmail.trim() })}
-            disabled={!reassignEmail.trim() || acting !== null}
-          >
-            {acting === "hearing_assigned" ? "…" : "Confirm"}
-          </button>
-          <button
-            className={styles.expandBtn}
-            onClick={() => { setShowReassignForm(false); setReassignEmail(""); }}
-            disabled={acting !== null}
-          >
-            Cancel
-          </button>
-        </div>
+        <tr className={styles.assignmentSubRow}>
+          <td colSpan={6}>
+            <div className={styles.reassignForm}>
+              <span className={styles.reassignFormLabel}>New assignee</span>
+              <UserCombobox
+                value={reassignEmail}
+                onChange={setReassignEmail}
+                token={token}
+                placeholder="staff@dps.alaska.gov"
+                autoFocus
+              />
+              <button
+                className={styles.assignBtn}
+                onClick={() => handleAction("hearing_assigned", { newAssigneeEmail: reassignEmail.trim() })}
+                disabled={!reassignEmail.trim() || acting !== null}
+              >
+                {acting === "hearing_assigned" ? "…" : "Confirm"}
+              </button>
+              <button
+                className={styles.expandBtn}
+                onClick={() => { setShowReassignForm(false); setReassignEmail(""); }}
+                disabled={acting !== null}
+              >
+                Cancel
+              </button>
+            </div>
+          </td>
+        </tr>
       )}
 
-      {error && <p className={styles.error}>{error}</p>}
+      {error && (
+        <tr className={styles.assignmentSubRow}>
+          <td colSpan={6}>
+            <p className={styles.error}>{error}</p>
+          </td>
+        </tr>
+      )}
 
       {expanded && (
-        <table className={styles.actionsTable}>
-          <thead>
-            <tr><th>Action</th><th>User</th><th>Timestamp</th></tr>
-          </thead>
-          <tbody>
-            {assignment.actions.map((action, i) => (
-              <tr key={i}>
-                <td><span className={styles.actionBadge}>{assignmentStatusLabel(action.type)}</span></td>
-                <td className={styles.actionUser}>{action.actor}</td>
-                <td className={styles.actionTimestamp}>{formatTimestamp(action.at)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <tr className={styles.assignmentSubRow}>
+          <td colSpan={6}>
+            <table className={styles.actionsTable}>
+              <thead>
+                <tr><th>Action</th><th>User</th><th>Timestamp</th></tr>
+              </thead>
+              <tbody>
+                {assignment.actions.map((action, i) => (
+                  <tr key={i}>
+                    <td><span className={styles.actionBadge}>{assignmentStatusLabel(action.type)}</span></td>
+                    <td className={styles.actionUser}>{action.actor}</td>
+                    <td className={styles.actionTimestamp}>{formatTimestamp(action.at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </td>
+        </tr>
       )}
-    </div>
+    </>
   );
 }
 
@@ -804,12 +824,12 @@ export default function Tasks() {
             </button>
             <button className={styles.quickBtn}
               onClick={() => setAssignmentFilters(makePresetFilters("all_open", username, canViewSuggestions))}>
-              All Open Assignments
+              All Open
             </button>
             {canViewSuggestions && (
               <button className={styles.quickBtn}
                 onClick={() => setAssignmentFilters(makePresetFilters("unassigned", username, canViewSuggestions))}>
-                Unassigned Assignments
+                Unassigned
               </button>
             )}
           </div>
@@ -840,19 +860,31 @@ export default function Tasks() {
         )}
 
         {!assignmentsLoading && !assignmentsError && assignments.length > 0 && (
-          <div className={styles.assignmentList}>
-            {assignments.map((a) => (
-              <HearingAssignmentCard
-                key={a.id}
-                assignment={a}
-                canManage={canManageAssignments}
-                canViewSuggestions={canViewSuggestions}
-                token={token}
-                onActionTaken={handleActionTaken}
-                username={username}
-              />
-            ))}
-          </div>
+          <table className={styles.assignmentTable}>
+            <thead>
+              <tr>
+                <th>Assigned To</th>
+                <th>Bill Number</th>
+                <th>Status</th>
+                <th>Hearing Info</th>
+                <th>Actions to Take</th>
+                <th className={styles.cellHistoryToggle}>Show History</th>
+              </tr>
+            </thead>
+            <tbody>
+              {assignments.map((a) => (
+                <AssignmentRow
+                  key={a.id}
+                  assignment={a}
+                  canManage={canManageAssignments}
+                  canViewSuggestions={canViewSuggestions}
+                  token={token}
+                  onActionTaken={handleActionTaken}
+                  username={username}
+                />
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
 

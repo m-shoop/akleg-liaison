@@ -567,58 +567,103 @@
   color: var(--color-rainforest);
 }
 
-/* ── Hearing assignment cards ─────────────────────────────────────────────── */
+/* ── Hearing assignment table ─────────────────────────────────────────────── */
 
-.assignmentList {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.assignmentCard {
+.assignmentTable {
+  width: 100%;
+  border-collapse: collapse;
   border: 1px solid var(--color-border);
-  border-left: 4px solid var(--color-glacial-water);
   border-radius: 6px;
   overflow: hidden;
   background-color: var(--color-surface-raised);
+  font-size: 0.85rem;
 }
 
-.assignmentCardSuggested {
-  border-left-color: var(--color-lichen);
+.assignmentTable > thead > tr > th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  border-bottom: 2px solid var(--color-border);
+  white-space: nowrap;
 }
 
-.assignmentCardClosed {
+.assignmentTable > tbody > tr > td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.assignmentTable > tbody > tr:last-child > td {
+  border-bottom: none;
+}
+
+.assignmentRow {
+  transition: background-color 0.12s;
+}
+
+.assignmentRow:hover {
+  background-color: rgba(120, 175, 195, 0.05);
+}
+
+.assignmentRowClosed {
   opacity: 0.65;
-  border-left-color: var(--color-border);
 }
 
-.assignmentTopSection {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  padding: 0.65rem 1rem;
-  flex-wrap: wrap;
+.cellEmail {
+  color: #2a5490;
+  word-break: break-word;
 }
 
-.assignmentDivider {
-  height: 1px;
-  background-color: var(--color-border);
+.cellBill {
+  font-family: "Lora", Georgia, serif;
+  font-weight: 600;
+  color: var(--color-rainforest);
+  white-space: nowrap;
 }
 
-.assignmentActionsSection {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.65rem 1rem;
-  flex-wrap: wrap;
-}
-
-.assignmentHearing {
+.cellHearing {
   font-size: 0.8rem;
   color: var(--color-text-secondary);
-  margin-left: auto;
-  text-align: right;
-  white-space: nowrap;
+}
+
+.cellActions {
+  min-width: 180px;
+}
+
+.actionsCell {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.cellHistoryToggle {
+  text-align: center;
+  width: 110px;
+}
+
+.historyToggle {
+  background: none;
+  border: none;
+  padding: 0.15rem 0.45rem;
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  letter-spacing: -3px;
+  cursor: pointer;
+  transition: color 0.12s;
+}
+
+.historyToggle:hover {
+  color: var(--color-rainforest);
+}
+
+.assignmentSubRow > td {
+  padding: 0.5rem 1rem;
+  background: var(--color-surface);
 }
 
 .statusSuggested {
@@ -751,35 +796,3 @@
   border-color: var(--color-rainy-sky);
 }
 
-/* ── Assignment card badge rows ───────────────────────────────────────────── */
-
-.emailBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.15rem 0.55rem;
-  border-radius: 999px;
-  background-color: rgba(60, 110, 180, 0.1);
-  color: #2a5490;
-  font-size: 0.75rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.emailBadge::before {
-  content: "✉";
-  font-size: 0.65rem;
-}
-
-.billBadge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.15rem 0.55rem;
-  border-radius: 999px;
-  background-color: rgba(42, 82, 66, 0.1);
-  color: var(--color-rainforest);
-  font-family: "Lora", Georgia, serif;
-  font-size: 0.75rem;
-  font-weight: 600;
-  white-space: nowrap;
-}

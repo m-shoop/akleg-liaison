@@ -37,90 +37,74 @@
   margin: 0;
 }
 
-.list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.item {
-  list-style: none;
-}
-
-.itemBtn {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
+.table {
   width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.table th {
   text-align: left;
-  padding: 0.4rem 0.6rem;
-  border: 1px solid var(--color-border);
-  border-radius: 5px;
-  background: var(--color-surface);
-  cursor: pointer;
-  font-size: inherit;
-  font-family: inherit;
-  transition: border-color 0.15s, background-color 0.15s;
-}
-
-.itemBtn:hover {
-  border-color: var(--color-glacial-water);
-  background-color: rgba(120, 175, 195, 0.06);
-}
-
-.itemBadges {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  flex-wrap: wrap;
-  flex: 1;
-}
-
-.emailBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  padding: 0.1rem 0.45rem;
-  border-radius: 999px;
-  background-color: rgba(60, 110, 180, 0.1);
-  color: #2a5490;
-  font-size: 0.72rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.emailBadge::before {
-  content: "✉";
-  font-size: 0.62rem;
-}
-
-.billBadge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.1rem 0.45rem;
-  border-radius: 999px;
-  background-color: rgba(42, 82, 66, 0.1);
-  color: var(--color-rainforest);
-  font-family: "Lora", Georgia, serif;
-  font-size: 0.72rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.suggestedTag,
-.completeTag,
-.reassignTag {
   font-size: 0.65rem;
   font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  padding: 0.2rem 0.35rem;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 0.3rem 0.35rem;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.row {
+  cursor: pointer;
+  transition: background-color 0.12s;
+}
+
+.row:hover,
+.row:focus-visible {
+  background-color: rgba(120, 175, 195, 0.08);
+  outline: none;
+}
+
+.cellEmail {
+  color: #2a5490;
+  word-break: break-word;
+}
+
+.cellBill {
+  font-family: "Lora", Georgia, serif;
+  font-weight: 600;
+  color: var(--color-rainforest);
+  white-space: nowrap;
+}
+
+.openTag,
+.suggestedTag,
+.completeTag,
+.reassignTag {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
   letter-spacing: 0.03em;
-  padding: 0.1rem 0.35rem;
+  padding: 0.1rem 0.4rem;
   border-radius: 999px;
   white-space: nowrap;
+}
+
+.openTag {
+  background-color: rgba(60, 110, 180, 0.1);
+  color: #2a5490;
 }
 
 .suggestedTag {

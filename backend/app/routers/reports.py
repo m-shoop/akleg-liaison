@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import CurrentUser, get_current_user
+from app.dependencies import CurrentUser, get_optional_current_user
 from app.reporting.query_builder import ReportPermissionError, ReportValidationError, run_report
 from app.reporting.registry import REPORTS
 from app.schemas.report import (
@@ -42,7 +42,7 @@ async def _resolve_enum_options(db: AsyncSession, enum_source: dict | str | list
 @router.get("", response_model=ReportsListResponse)
 async def list_reports(
     db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_optional_current_user),
 ) -> ReportsListResponse:
     """Return all available reports with field metadata for client tooling."""
     report_metas = []
@@ -51,7 +51,7 @@ async def list_reports(
         for field_key, field_def in report_def.fields.items():
             if (
                 field_def.requires_permission
-                and not current_user.can(field_def.requires_permission)
+                and (current_user is None or not current_user.can(field_def.requires_permission))
             ):
                 continue
             fields[field_key] = FieldMeta(
@@ -82,12 +82,13 @@ async def run_report_route(
     report_id: str,
     body: ReportRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_optional_current_user), 
 ) -> ReportResponse:
     """Execute a report with the given filter criteria and column selection."""
     request = body.model_copy(update={"report": report_id})
+    permissions = current_user.permissions if current_user else frozenset()
     try:
-        return await run_report(db, request, current_user.permissions)
+        return await run_report(db, request, permissions)
     except ReportPermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ReportValidationError as exc:

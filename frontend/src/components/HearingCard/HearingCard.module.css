@@ -260,8 +260,8 @@ a.committeeName:hover {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  width: max(200px, 16vw);
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
   border-left: 1px solid var(--color-border);
   padding-left: 0.75rem;
 }
@@ -296,8 +296,8 @@ a.committeeName:hover {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  width: max(220px, 18vw);
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
   border-left: 1px solid var(--color-border);
   padding-left: 0.75rem;
 }

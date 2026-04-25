@@ -4,7 +4,7 @@ import datetime
 import pytest
 from httpx import AsyncClient
 
-from tests.conftest import login_user, register_user
+from tests.conftest import login_user, seed_active_user
 
 
 async def _seed_hearing(db, uid: str) -> int:
@@ -29,14 +29,16 @@ async def _seed_hearing(db, uid: str) -> int:
     return hearing.id
 
 
-async def _editor_token(client: AsyncClient, uid: str) -> str:
-    await register_user(client, f"editor_{uid}", "pass", role="admin")
-    return await login_user(client, f"editor_{uid}", "pass")
+async def _editor_token(client: AsyncClient, db, uid: str) -> str:
+    email = f"editor_{uid}@example.com"
+    await seed_active_user(db, email, "pass", role="admin")
+    return await login_user(client, email, "pass")
 
 
-async def _viewer_token(client: AsyncClient, uid: str) -> str:
-    await register_user(client, f"viewer_{uid}", "pass", role="viewer")
-    return await login_user(client, f"viewer_{uid}", "pass")
+async def _viewer_token(client: AsyncClient, db, uid: str) -> str:
+    email = f"viewer_{uid}@example.com"
+    await seed_active_user(db, email, "pass", role="viewer")
+    return await login_user(client, email, "pass")
 
 
 # ---------------------------------------------------------------------------
@@ -45,7 +47,7 @@ async def _viewer_token(client: AsyncClient, uid: str) -> str:
 
 async def test_editor_can_save_notes(client: AsyncClient, db, uid: str):
     hearing_id = await _seed_hearing(db, uid)
-    token = await _editor_token(client, uid)
+    token = await _editor_token(client, db, uid)
 
     resp = await client.patch(
         f"/hearings/{hearing_id}/dps-notes",
@@ -58,7 +60,7 @@ async def test_editor_can_save_notes(client: AsyncClient, db, uid: str):
 
 async def test_editor_can_clear_notes(client: AsyncClient, db, uid: str):
     hearing_id = await _seed_hearing(db, uid)
-    token = await _editor_token(client, uid)
+    token = await _editor_token(client, db, uid)
 
     await client.patch(
         f"/hearings/{hearing_id}/dps-notes",
@@ -76,7 +78,7 @@ async def test_editor_can_clear_notes(client: AsyncClient, db, uid: str):
 
 async def test_viewer_cannot_save_notes(client: AsyncClient, db, uid: str):
     hearing_id = await _seed_hearing(db, uid)
-    token = await _viewer_token(client, uid)
+    token = await _viewer_token(client, db, uid)
 
     resp = await client.patch(
         f"/hearings/{hearing_id}/dps-notes",
@@ -96,8 +98,8 @@ async def test_unauthenticated_cannot_save_notes(client: AsyncClient, db, uid: s
     assert resp.status_code == 401
 
 
-async def test_notes_on_nonexistent_hearing_returns_404(client: AsyncClient, uid: str):
-    token = await _editor_token(client, uid)
+async def test_notes_on_nonexistent_hearing_returns_404(client: AsyncClient, db, uid: str):
+    token = await _editor_token(client, db, uid)
 
     resp = await client.patch(
         "/hearings/999999/dps-notes",
@@ -113,7 +115,7 @@ async def test_notes_on_nonexistent_hearing_returns_404(client: AsyncClient, uid
 
 async def test_editor_can_hide_hearing(client: AsyncClient, db, uid: str):
     hearing_id = await _seed_hearing(db, uid)
-    token = await _editor_token(client, uid)
+    token = await _editor_token(client, db, uid)
 
     resp = await client.patch(
         f"/hearings/{hearing_id}/hidden",
@@ -126,7 +128,7 @@ async def test_editor_can_hide_hearing(client: AsyncClient, db, uid: str):
 
 async def test_editor_can_unhide_hearing(client: AsyncClient, db, uid: str):
     hearing_id = await _seed_hearing(db, uid)
-    token = await _editor_token(client, uid)
+    token = await _editor_token(client, db, uid)
 
     await client.patch(
         f"/hearings/{hearing_id}/hidden",
@@ -144,7 +146,7 @@ async def test_editor_can_unhide_hearing(client: AsyncClient, db, uid: str):
 
 async def test_viewer_cannot_hide_hearing(client: AsyncClient, db, uid: str):
     hearing_id = await _seed_hearing(db, uid)
-    token = await _viewer_token(client, uid)
+    token = await _viewer_token(client, db, uid)
 
     resp = await client.patch(
         f"/hearings/{hearing_id}/hidden",

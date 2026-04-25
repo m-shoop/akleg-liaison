@@ -13,7 +13,14 @@ from tests.conftest import (
     seed_user_token,
 )
 
-VIEWER_PERMISSIONS = {"hearing-notes:view", "bill-tags:view", "hearing:export-ics"}
+VIEWER_PERMISSIONS = {
+    "hearing-notes:view",
+    "bill-tags:view",
+    "hearing:export-ics",
+    "prior-hearing-agendas:view",
+    "bill:request-tracking",
+    "hearing-assignment:view",
+}
 ADMIN_ONLY_PERMISSIONS = {
     "bill:track", "hearing:query", "bill:query", "hearing:hide",
     "hearing-notes:edit", "bill-tags:edit",
