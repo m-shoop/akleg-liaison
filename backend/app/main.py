@@ -7,9 +7,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from app.config import settings
 from app.database import Base, engine
 from app.limiter import limiter
-from app.routers import auth, bills, hearings, jobs, reports, tags, workflows
+from app.routers import (
+    auth,
+    bills,
+    comm_prefs,
+    email_notifications,
+    email_templates,
+    hearings,
+    jobs,
+    opt_out,
+    reports,
+    saved_reports,
+    tags,
+    workflows,
+)
+from app.services.email_notification_worker import email_notification_worker_loop
 from app.services.hearing_assignment_suggester import hearing_assignment_suggester_loop
 from app.services.scheduler import hearing_scheduler_loop, scheduler_loop
 
@@ -22,11 +37,13 @@ async def lifespan(app: FastAPI):
     bill_task = asyncio.create_task(scheduler_loop())
     hearing_task = asyncio.create_task(hearing_scheduler_loop())
     suggestion_task = asyncio.create_task(hearing_assignment_suggester_loop())
+    tasks = [bill_task, hearing_task, suggestion_task]
+    if settings.email_notification_worker_enabled:
+        tasks.append(asyncio.create_task(email_notification_worker_loop()))
     yield
-    bill_task.cancel()
-    hearing_task.cancel()
-    suggestion_task.cancel()
-    for task in (bill_task, hearing_task, suggestion_task):
+    for task in tasks:
+        task.cancel()
+    for task in tasks:
         try:
             await task
         except asyncio.CancelledError:
@@ -58,6 +75,11 @@ app.include_router(hearings.router)
 app.include_router(jobs.router)
 app.include_router(workflows.router)
 app.include_router(reports.router)
+app.include_router(saved_reports.router)
+app.include_router(email_templates.router)
+app.include_router(email_notifications.router)
+app.include_router(comm_prefs.router)
+app.include_router(opt_out.router)
 
 
 @app.get("/health")

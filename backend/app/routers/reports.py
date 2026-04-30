@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +8,7 @@ from app.database import get_db
 from app.dependencies import CurrentUser, get_optional_current_user
 from app.reporting.query_builder import ReportPermissionError, ReportValidationError, run_report
 from app.reporting.registry import REPORTS
+from app.repositories.audit_log_repository import log_action, log_system_action
 from app.schemas.report import (
     FieldMeta,
     ReportMeta,
@@ -81,14 +82,16 @@ async def list_reports(
 async def run_report_route(
     report_id: str,
     body: ReportRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_optional_current_user), 
+    current_user: CurrentUser = Depends(get_optional_current_user),
 ) -> ReportResponse:
     """Execute a report with the given filter criteria and column selection."""
-    request = body.model_copy(update={"report": report_id})
+    report_request = body.model_copy(update={"report": report_id})
     permissions = current_user.permissions if current_user else frozenset()
+    user_id = current_user.user.id if current_user else None
     try:
-        return await run_report(db, request, permissions)
+        response = await run_report(db, report_request, permissions, current_user_id=user_id)
     except ReportPermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ReportValidationError as exc:
@@ -99,3 +102,29 @@ async def run_report_route(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Report execution failed",
         )
+
+    audit_details = {
+        "registry_name": report_id,
+        "filters": body.filters.model_dump(),
+        "columns": body.columns,
+        "row_count": response.total,
+    }
+    if current_user is not None:
+        await log_action(
+            db,
+            current_user.user,
+            "report_run",
+            entity_type="report",
+            details=audit_details,
+            request=request,
+        )
+    else:
+        await log_system_action(
+            db,
+            "report_run",
+            entity_type="report",
+            details=audit_details,
+            request=request,
+        )
+    await db.commit()
+    return response

@@ -1,14 +1,24 @@
 /* ── AI legend ──────────────────────────────────────────────── */
 
+.headerLegend {
+  flex: 0 1 22rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-self: center;
+}
+
 .aiLegend {
-  margin: 0 0 1rem;
+  margin: 0;
   font-size: 0.75rem;
   color: var(--color-text-secondary);
   text-align: right;
+  line-height: 1.35;
 }
 
 @media print {
-  .aiLegend {
+  .aiLegend,
+  .headerLegend {
     display: none;
   }
 }
@@ -197,6 +207,15 @@
 
   .titleRow {
     flex-direction: column;
+  }
+
+  .headerLegend {
+    flex-basis: auto;
+    align-self: stretch;
+  }
+
+  .aiLegend {
+    text-align: left;
   }
 
   .controls {

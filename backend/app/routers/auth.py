@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.limiter import limiter
 from app.models.user import TokenType, UserStatus
-from app.repositories.audit_log_repository import log_action
+from app.repositories.audit_log_repository import log_action, log_system_action
 from app.repositories.user_repository import (
     activate_user_with_password,
     delete_user_token,
@@ -83,6 +83,7 @@ def _cookie_kwargs(secure: bool) -> dict:
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
+    request: Request,
     form: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
@@ -104,7 +105,7 @@ async def login(
         )
 
     permissions = await get_user_permissions(db, user.id)
-    await log_action(db, user, "login")
+    await log_action(db, user, "login", request=request)
     await db.commit()
     return TokenResponse(
         access_token=create_access_token(user.email, permissions),
@@ -135,9 +136,29 @@ async def register_request(
         return {"status": "not_found"}
 
     if user.user_status == UserStatus.deleted:
+        await log_system_action(
+            db,
+            "registration_request_rejected",
+            entity_type="user",
+            entity_id=user.id,
+            target_user_id=user.id,
+            details={"reason": "deleted"},
+            request=request,
+        )
+        await db.commit()
         return {"status": "deleted"}
 
     if user.user_status == UserStatus.active:
+        await log_system_action(
+            db,
+            "registration_request_rejected",
+            entity_type="user",
+            entity_id=user.id,
+            target_user_id=user.id,
+            details={"reason": "already_active"},
+            request=request,
+        )
+        await db.commit()
         return {"status": "already_active"}
 
     # Inactive — generate token, store hash, send email
@@ -146,6 +167,14 @@ async def register_request(
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=_TOKEN_TTL_MINUTES)
 
     await upsert_user_token(db, user.id, TokenType.registration, hashed, expires_at)
+    await log_system_action(
+        db,
+        "registration_email_sent",
+        entity_type="user",
+        entity_id=user.id,
+        target_user_id=user.id,
+        request=request,
+    )
     await db.commit()
 
     await send_registration_email(email, raw_token)
@@ -206,6 +235,14 @@ async def forgot_password_request(
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=_TOKEN_TTL_MINUTES)
 
     await upsert_user_token(db, user.id, TokenType.password_reset, hashed, expires_at)
+    await log_system_action(
+        db,
+        "password_reset_email_sent",
+        entity_type="user",
+        entity_id=user.id,
+        target_user_id=user.id,
+        request=request,
+    )
     await db.commit()
 
     await send_password_reset_email(email, raw_token)
@@ -288,6 +325,7 @@ async def validate_token(
 
 @router.post("/set-password", status_code=200)
 async def set_password(
+    request: Request,
     body: SetPasswordRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
@@ -316,11 +354,21 @@ async def set_password(
         )
 
     user_id: int = session_data["user_id"]
+    purpose: str = session_data["purpose"]
     user = await get_user_by_id(db, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
     await activate_user_with_password(db, user_id, hash_password(body.password))
+    action = "account_activated" if purpose == "registration" else "password_reset"
+    await log_action(
+        db,
+        user,
+        action,
+        entity_type="user",
+        entity_id=user.id,
+        request=request,
+    )
     await db.commit()
 
     # Clear the cookie

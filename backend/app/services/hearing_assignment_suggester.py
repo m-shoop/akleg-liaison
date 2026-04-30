@@ -21,13 +21,13 @@ from app.models.workflow import WorkflowActionType
 from app.repositories.workflow_repository import (
     create_hearing_assignment_workflow,
     get_hearing_bill_combos_needing_suggestion,
-    get_most_recent_assignee_for_bill,
+    get_most_recent_assignment_for_bill,
 )
 
 logger = logging.getLogger(__name__)
 
 _JUNEAU_TZ = ZoneInfo("America/Anchorage")
-_SUGGESTION_TIMES = [(7, 1), (16, 45)]  # 4:45 AM and 4:45 PM Juneau
+_SUGGESTION_TIMES = [(4, 15), (16, 15)]  # 4:15 AM and 4:15 PM Juneau
 
 
 def _seconds_until_next_suggestion_run() -> float:
@@ -59,8 +59,8 @@ async def _run_suggestions() -> None:
 
         for hearing_id, bill_id in combos:
             try:
-                assignee_id = await get_most_recent_assignee_for_bill(db, bill_id)
-                if assignee_id is None:
+                prior = await get_most_recent_assignment_for_bill(db, bill_id)
+                if prior is None:
                     logger.info(
                         "[suggester] No prior assignee for bill_id=%d, hearing_id=%d — skipping.",
                         bill_id,
@@ -68,6 +68,8 @@ async def _run_suggestions() -> None:
                     )
                     skipped += 1
                     continue
+
+                assignee_id, assignment_type = prior
 
                 await create_hearing_assignment_workflow(
                     db,
@@ -77,6 +79,7 @@ async def _run_suggestions() -> None:
                     created_by_user_id=assignee_id,
                     initial_action_type=WorkflowActionType.AUTO_SUGGESTED_HEARING_ASSIGNMENT,
                     action_actor_user_id=assignee_id,
+                    assignment_type=assignment_type,
                 )
                 created += 1
 

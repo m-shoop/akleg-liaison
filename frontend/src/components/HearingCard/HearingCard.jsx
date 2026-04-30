@@ -23,7 +23,7 @@ function fmtTime(timeStr) {
   return `${hour}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
-export default function HearingCard({ hearing, isFirst, globalExpanded, showHidden, onNotesSaved, onHiddenChanged, onAssignmentCreated }) {
+export default function HearingCard({ hearing, isFirst, globalExpanded, onNotesSaved, onHiddenChanged, onAssignmentCreated, showCanceledAssignments = false }) {
   const { can, token } = useAuth();
   const [notes, setNotes] = useState(hearing.dps_notes ?? "");
   const [saving, setSaving] = useState(false);
@@ -145,7 +145,7 @@ export default function HearingCard({ hearing, isFirst, globalExpanded, showHidd
                       )}
                       {" "}<Link
                         to="/"
-                        state={{ search: item.bill_number, showUntracked: true }}
+                        state={{ billNumber: item.bill_number, showUntracked: true }}
                         className={styles.legLink}
                         title={`Find ${item.bill_number} in Legislation tab`}
                       >
@@ -213,12 +213,12 @@ export default function HearingCard({ hearing, isFirst, globalExpanded, showHidd
 
       {can("hearing-assignment:view") && (
         <div className={styles.assignmentsRow}>
-          <HearingAssignmentsPanel hearing={hearing} onAssignmentCreated={onAssignmentCreated} />
+          <HearingAssignmentsPanel hearing={hearing} onAssignmentCreated={onAssignmentCreated} showCanceled={showCanceledAssignments} />
           {can("hearing:hide") && (
             <>
               <div className={styles.visibilityDivider} />
               <span className={styles.assignmentsLabel}>Visibility</span>
-              {hearing.hidden && showHidden && (
+              {hearing.hidden && (
                 <p className={styles.hiddenNote}>Hidden from view and PDF</p>
               )}
               <button
@@ -237,7 +237,7 @@ export default function HearingCard({ hearing, isFirst, globalExpanded, showHidd
       {can("hearing:hide") && !can("hearing-assignment:view") && (
         <div className={styles.hideRow}>
           <label className={styles.dpsLabel}>Visibility</label>
-          {hearing.hidden && showHidden && (
+          {hearing.hidden && (
             <p className={styles.hiddenNote}>Hidden from view and PDF</p>
           )}
           <button

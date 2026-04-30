@@ -9,7 +9,7 @@ Covers:
 
 from httpx import AsyncClient
 
-from tests.conftest import login_user, seed_active_user
+from tests.conftest import audit_actions_for, login_user, seed_active_user
 
 
 # ---------------------------------------------------------------------------
@@ -373,3 +373,97 @@ async def test_bill_tracking_state_reports_denial_per_user(client: AsyncClient, 
     )
     [state] = resp.json()
     assert state["user_tracking_request_denied"] is True
+
+
+# ---------------------------------------------------------------------------
+# Audit log assertions — guard the rename of workflow_created to
+# bill_tracking_requested and the per-decision approve/deny names. A future
+# rename should fail these tests rather than quietly drop rows from analytics.
+# ---------------------------------------------------------------------------
+
+
+async def test_audit_request_logs_bill_tracking_requested(client: AsyncClient, db, uid: str):
+    bill_id = await _seed_bill(db, uid)
+    _, viewer_tok = await _viewer_token(client, db, uid)
+
+    resp = await client.post(
+        "/workflows",
+        json={"bill_id": bill_id},
+        headers={"Authorization": f"Bearer {viewer_tok}"},
+    )
+    workflow_id = resp.json()["id"]
+
+    actions = await audit_actions_for(db, entity_type="workflow", entity_id=workflow_id)
+    assert actions == ["bill_tracking_requested"]
+    # Old generic name must be gone.
+    assert "workflow_created" not in actions
+
+
+async def test_audit_approve_logs_bill_tracked_and_bill_tracking_approved(
+    client: AsyncClient, db, uid: str
+):
+    bill_id = await _seed_bill(db, uid, tracked=False)
+    _, viewer_tok = await _viewer_token(client, db, uid)
+    _, admin_tok = await _admin_token(client, db, uid)
+
+    resp = await client.post(
+        "/workflows",
+        json={"bill_id": bill_id},
+        headers={"Authorization": f"Bearer {viewer_tok}"},
+    )
+    workflow_id = resp.json()["id"]
+
+    resp = await client.post(
+        f"/workflows/{workflow_id}/actions",
+        json={"type": "approve_bill_tracking"},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert resp.status_code == 201
+
+    workflow_actions = await audit_actions_for(
+        db, entity_type="workflow", entity_id=workflow_id
+    )
+    assert workflow_actions == ["bill_tracking_requested", "bill_tracking_approved"]
+    assert "workflow_action_added" not in workflow_actions
+
+    # The 'bill_tracked' row carries source=workflow_approval to distinguish
+    # it from the direct PATCH /tracked toggle path.
+    from sqlalchemy import select
+    from app.models.audit_log import AuditLog
+    result = await db.execute(
+        select(AuditLog.action, AuditLog.details)
+        .where(AuditLog.entity_type == "bill", AuditLog.entity_id == bill_id)
+        .order_by(AuditLog.id)
+    )
+    bill_rows = list(result.all())
+    assert [a for a, _ in bill_rows] == ["bill_tracked"]
+    assert bill_rows[0][1]["source"] == "workflow_approval"
+    assert bill_rows[0][1]["workflow_id"] == workflow_id
+
+
+async def test_audit_deny_logs_bill_tracking_denied(client: AsyncClient, db, uid: str):
+    bill_id = await _seed_bill(db, uid, tracked=False)
+    _, viewer_tok = await _viewer_token(client, db, uid)
+    _, admin_tok = await _admin_token(client, db, uid)
+
+    resp = await client.post(
+        "/workflows",
+        json={"bill_id": bill_id},
+        headers={"Authorization": f"Bearer {viewer_tok}"},
+    )
+    workflow_id = resp.json()["id"]
+
+    resp = await client.post(
+        f"/workflows/{workflow_id}/actions",
+        json={"type": "deny_bill_tracking"},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert resp.status_code == 201
+
+    workflow_actions = await audit_actions_for(
+        db, entity_type="workflow", entity_id=workflow_id
+    )
+    assert workflow_actions == ["bill_tracking_requested", "bill_tracking_denied"]
+    # No bill row should be written for denials.
+    bill_actions = await audit_actions_for(db, entity_type="bill", entity_id=bill_id)
+    assert bill_actions == []

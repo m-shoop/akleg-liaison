@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models.workflow import WorkflowActionType, WorkflowStatus, WorkflowType
+from app.models.workflow import AssignmentType, WorkflowActionType, WorkflowStatus, WorkflowType
 
 
 class WorkflowActionRead(BaseModel):
@@ -84,6 +84,7 @@ class CreateWorkflowRequest(BaseModel):
 class AddActionRequest(BaseModel):
     type: WorkflowActionType
     new_assignee_email: str | None = None
+    cancellation_reason: str | None = None
 
 
 class BillTrackingStateRequest(BaseModel):
@@ -100,6 +101,11 @@ class CreateHearingAssignmentRequest(BaseModel):
     hearing_id: int
     assignee_email: str
     bill_number: str | None = None
+    assignment_type: AssignmentType = AssignmentType.MONITORING
+
+
+class UpdateHearingAssignmentTypeRequest(BaseModel):
+    assignment_type: AssignmentType
 
 
 class HearingAssignmentRead(BaseModel):
@@ -110,3 +116,4 @@ class HearingAssignmentRead(BaseModel):
     assignee_id: int
     hearing_id: int
     bill_id: int | None
+    assignment_type: AssignmentType

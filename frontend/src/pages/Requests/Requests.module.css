@@ -5,6 +5,58 @@
   padding: 2.5rem 1.5rem 4rem;
 }
 
+@media (max-width: 720px) {
+  .page {
+    min-width: 0;
+    padding: 1.25rem 1rem 3rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .requestorLabel {
+    display: none;
+  }
+}
+
+.assignmentRowMobile {
+  cursor: pointer;
+}
+
+.assignmentRowMobile:hover {
+  background-color: rgba(120, 175, 195, 0.08);
+}
+
+.mobileChevron {
+  margin-left: 0.4rem;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+}
+
+.mobileDetails {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 0.75rem;
+  row-gap: 0.5rem;
+  margin: 0;
+  padding: 0.25rem 0;
+}
+
+.mobileDetails dt {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  align-self: center;
+}
+
+.mobileDetails dd {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-primary);
+  min-width: 0;
+}
+
 .pageHeader {
   margin-bottom: 2rem;
   padding-bottom: 1.25rem;
@@ -216,6 +268,16 @@
 .statusClosed {
   background-color: var(--color-lichen);
   color: var(--color-text-secondary);
+}
+
+.statusApproved {
+  background-color: rgba(46, 125, 82, 0.12);
+  color: #2e7d52;
+}
+
+.statusDenied {
+  background-color: rgba(179, 58, 58, 0.1);
+  color: #b33a3a;
 }
 
 .requestActions {
@@ -535,38 +597,6 @@
   color: var(--color-rainy-sky);
 }
 
-/* ── Quick filter buttons ─────────────────────────────────────────────────── */
-
-.quickButtons {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-
-.quickBtn {
-  padding: 0.3rem 0.85rem;
-  border-radius: 999px;
-  border: 1.5px solid var(--color-border);
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-
-.quickBtn:hover {
-  border-color: var(--color-glacial-water);
-  color: var(--color-text-primary);
-}
-
-.quickBtnActive {
-  border-color: var(--color-rainforest);
-  background-color: rgba(46, 74, 53, 0.08);
-  color: var(--color-rainforest);
-}
-
 /* ── Hearing assignment table ─────────────────────────────────────────────── */
 
 .assignmentTable {
@@ -616,7 +646,19 @@
 
 .cellEmail {
   color: #2a5490;
-  word-break: break-word;
+  white-space: nowrap;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cellType {
+  white-space: nowrap;
+}
+
+.typeLabel {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
 }
 
 .cellBill {
@@ -666,21 +708,46 @@
   background: var(--color-surface);
 }
 
+.optOutWarning {
+  font-size: 0.78rem;
+  color: #7a6435;
+  background-color: rgba(200, 184, 154, 0.25);
+  border: 1px solid rgba(200, 184, 154, 0.6);
+  border-radius: 4px;
+  padding: 0.45rem 0.6rem;
+  margin: 0;
+}
+
 .statusSuggested {
   background-color: rgba(200, 184, 154, 0.25);
   color: #7a6435;
 }
 
 .assignBtn {
-  padding: 0.3rem 0.8rem;
+  padding: 0.255rem 0.68rem;
   border-radius: 4px;
   border: 1.5px solid #2e7d52;
   background: transparent;
   color: #2e7d52;
-  font-size: 0.8rem;
+  font-size: 0.68rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
+}
+
+.typeSelect {
+  padding: 0.2125rem 0.425rem;
+  border-radius: 4px;
+  border: 1px solid var(--color-border, #d4cfc7);
+  background: white;
+  color: var(--color-text-primary, #1c2b22);
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.typeSelect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .assignBtn:hover:not(:disabled) {
@@ -694,12 +761,12 @@
 }
 
 .discardBtn {
-  padding: 0.3rem 0.8rem;
+  padding: 0.255rem 0.68rem;
   border-radius: 4px;
   border: 1.5px solid #b33a3a;
   background: transparent;
   color: #b33a3a;
-  font-size: 0.8rem;
+  font-size: 0.68rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
@@ -716,12 +783,12 @@
 }
 
 .completeBtn {
-  padding: 0.3rem 0.8rem;
+  padding: 0.255rem 0.68rem;
   border-radius: 4px;
   border: 1.5px solid #2e7d52;
   background: transparent;
   color: #2e7d52;
-  font-size: 0.8rem;
+  font-size: 0.68rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
@@ -738,12 +805,12 @@
 }
 
 .reassignRequestBtn {
-  padding: 0.3rem 0.8rem;
+  padding: 0.255rem 0.68rem;
   border-radius: 4px;
   border: 1.5px solid var(--color-border);
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 0.8rem;
+  font-size: 0.68rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;

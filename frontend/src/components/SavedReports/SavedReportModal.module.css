@@ -1,0 +1,87 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 1.25rem 1.5rem;
+  min-width: 320px;
+  max-width: 480px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.heading {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.error {
+  padding: 0.4rem 0.6rem;
+  background: #FFF6D6;
+  border: 1px solid #E8D78A;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  color: #8a6d1f;
+}
+
+.checkboxLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.cancel {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--color-rainy-sky);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.cancel:hover {
+  background: var(--color-surface-raised);
+}
+
+.save {
+  padding: 0.45rem 0.9rem;
+  border: none;
+  background: var(--color-rainforest);
+  color: var(--color-text-on-dark);
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.save:disabled {
+  background: var(--color-border);
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+}

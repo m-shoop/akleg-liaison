@@ -1,0 +1,171 @@
+.page {
+  padding: 1.5rem 2rem;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.title {
+  font-size: 1.5rem;
+  color: var(--color-rainforest);
+  margin-bottom: 1rem;
+}
+
+.section {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.sectionTitle {
+  font-size: 1.1rem;
+  color: var(--color-rainforest);
+  margin: 0 0 1rem;
+}
+
+.h3 {
+  font-size: 0.9rem;
+  margin: 1.25rem 0 0.5rem;
+  color: var(--color-text-secondary);
+}
+
+.commPrefsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.label {
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: var(--color-text-primary);
+}
+
+.muted {
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.error {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #b33a3a;
+}
+
+.adminLookup {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.input {
+  padding: 0.45rem 0.6rem;
+  border: 1.5px solid var(--color-border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.primaryBtn {
+  background-color: var(--color-rainforest);
+  color: var(--color-text-on-dark);
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.primaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.subjectLine {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  margin: 0 0 0.75rem;
+}
+
+.subjectLine strong {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.historyDetails {
+  margin-top: 1.25rem;
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.75rem;
+}
+
+.historySummary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  user-select: none;
+}
+
+.historySummary::before {
+  content: "▸";
+  display: inline-block;
+  font-size: 0.8rem;
+  transition: transform 0.15s ease;
+}
+
+.historyDetails[open] .historySummary::before {
+  transform: rotate(90deg);
+}
+
+.historySummary::-webkit-details-marker {
+  display: none;
+}
+
+.historyCount {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+  font-size: 0.82rem;
+}
+
+.historyBody {
+  margin-top: 0.75rem;
+}
+
+.historyTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.historyTable th,
+.historyTable td {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.historyTable th {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

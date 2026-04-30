@@ -46,7 +46,13 @@ export async function fetchBillTrackingState({ billIds, token }) {
   return res.json();
 }
 
-export async function createHearingAssignment({ hearingId, assigneeEmail, billNumber = null, token }) {
+export async function createHearingAssignment({
+  hearingId,
+  assigneeEmail,
+  billNumber = null,
+  assignmentType = "monitoring",
+  token,
+}) {
   const res = await apiFetch(`${BASE}/hearing-assignment`, {
     method: "POST",
     headers: { ...authHeaders(token), "Content-Type": "application/json" },
@@ -54,6 +60,7 @@ export async function createHearingAssignment({ hearingId, assigneeEmail, billNu
       hearing_id: hearingId,
       assignee_email: assigneeEmail,
       bill_number: billNumber || null,
+      assignment_type: assignmentType,
     }),
   });
   if (!res.ok) {
@@ -63,9 +70,34 @@ export async function createHearingAssignment({ hearingId, assigneeEmail, billNu
   return res.json();
 }
 
-export async function addWorkflowAction(workflowId, actionType, token, { newAssigneeEmail } = {}) {
+export async function updateHearingAssignmentType({ assignmentId, assignmentType, token }) {
+  const res = await apiFetch(`${BASE}/hearing-assignments/${assignmentId}`, {
+    method: "PATCH",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ assignment_type: assignmentType }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? "Failed to update assignment type");
+  }
+  return res.json();
+}
+
+export async function fetchAssigneeCommPrefs(email, token) {
+  const qs = new URLSearchParams({ email });
+  const res = await apiFetch(`${BASE}/assignee-comm-prefs?${qs}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    return null;
+  }
+  return res.json();
+}
+
+export async function addWorkflowAction(workflowId, actionType, token, { newAssigneeEmail, cancellationReason } = {}) {
   const body = { type: actionType };
   if (newAssigneeEmail) body.new_assignee_email = newAssigneeEmail;
+  if (cancellationReason) body.cancellation_reason = cancellationReason;
   const res = await apiFetch(`${BASE}/${workflowId}/actions`, {
     method: "POST",
     headers: { ...authHeaders(token), "Content-Type": "application/json" },

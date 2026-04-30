@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.models.bill import Bill
 from app.models.hearing import AgendaItem, Hearing, HearingAgendaVersion
 from app.models.workflow import (
+    AssignmentType,
     BillTrackingRequest,
     HearingAssignment,
     Workflow,
@@ -321,18 +322,27 @@ async def get_hearing_bill_combos_needing_suggestion(
     return list(result.all())
 
 
-async def get_most_recent_assignee_for_bill(
+async def get_most_recent_assignment_for_bill(
     db: AsyncSession, bill_id: int
-) -> int | None:
-    """Return the assignee_id from the most recently created hearing_assignment for this bill."""
+) -> tuple[int, AssignmentType] | None:
+    """Return (assignee_id, assignment_type) from the most recently created
+    hearing_assignment for this bill, or None if there is no prior assignment.
+
+    The auto-suggester uses both: it inherits the assignee and the type so that
+    a bill that's historically been an awareness-only assignment keeps that
+    treatment when the next hearing is suggested.
+    """
     result = await db.execute(
-        select(HearingAssignment.assignee_id)
+        select(HearingAssignment.assignee_id, HearingAssignment.assignment_type)
         .join(Workflow, Workflow.id == HearingAssignment.workflow_id)
         .where(HearingAssignment.bill_id == bill_id)
         .order_by(Workflow.created_at.desc())
         .limit(1)
     )
-    return result.scalar_one_or_none()
+    row = result.first()
+    if row is None:
+        return None
+    return row[0], row[1]
 
 
 # ---------------------------------------------------------------------------
@@ -377,6 +387,7 @@ async def create_hearing_assignment_workflow(
     created_by_user_id: int,
     initial_action_type: WorkflowActionType = WorkflowActionType.HEARING_ASSIGNED,
     action_actor_user_id: int | None = None,
+    assignment_type: AssignmentType = AssignmentType.MONITORING,
 ) -> Workflow:
     """
     Create a new hearing_assignment workflow with its HearingAssignment record and initial action.
@@ -397,6 +408,7 @@ async def create_hearing_assignment_workflow(
         hearing_id=hearing_id,
         bill_id=bill_id,
         workflow_id=workflow.id,
+        assignment_type=assignment_type,
     )
     db.add(ha)
 
@@ -435,6 +447,32 @@ async def update_hearing_assignment_assignee(
         .where(HearingAssignment.id == hearing_assignment_id)
         .values(assignee_id=new_assignee_id)
     )
+
+
+async def update_hearing_assignment_type(
+    db: AsyncSession, hearing_assignment_id: int, new_type: AssignmentType
+) -> None:
+    await db.execute(
+        update(HearingAssignment)
+        .where(HearingAssignment.id == hearing_assignment_id)
+        .values(assignment_type=new_type)
+    )
+
+
+async def get_hearing_assignment_with_workflow(
+    db: AsyncSession, hearing_assignment_id: int
+) -> HearingAssignment | None:
+    """Load a HearingAssignment along with its workflow's actions, for callers
+    that need to inspect the current workflow state (e.g. is the latest action
+    still 'auto_suggested')."""
+    result = await db.execute(
+        select(HearingAssignment)
+        .where(HearingAssignment.id == hearing_assignment_id)
+        .options(
+            selectinload(HearingAssignment.workflow).selectinload(Workflow.actions),
+        )
+    )
+    return result.scalar_one_or_none()
 
 
 async def close_workflows(db: AsyncSession, workflow_ids: list[int]) -> None:

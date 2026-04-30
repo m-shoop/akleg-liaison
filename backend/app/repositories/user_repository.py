@@ -43,6 +43,16 @@ async def get_user_permissions(session: AsyncSession, user_id: int) -> list[str]
     return list(result.scalars().all())
 
 
+async def get_user_roles(session: AsyncSession, user_id: int) -> list[str]:
+    """Return all role names for a user."""
+    result = await session.execute(
+        select(Role.name)
+        .join(UserRoles, UserRoles.role_id == Role.id)
+        .where(UserRoles.user_id == user_id)
+    )
+    return list(result.scalars().all())
+
+
 async def _assign_user_role(session: AsyncSession, user_id: int, role_name: str) -> None:
     result = await session.execute(select(Role).where(Role.name == role_name))
     role = result.scalar_one_or_none()

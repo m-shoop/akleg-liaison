@@ -296,7 +296,8 @@ a.committeeName:hover {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  flex: 1;
+  flex: 0 0 25%;
+  max-width: 25%;
   min-width: 0;
   border-left: 1px solid var(--color-border);
   padding-left: 0.75rem;
@@ -467,7 +468,18 @@ a.committeeName:hover {
     flex-direction: column;
   }
 
+  .location {
+    white-space: normal;
+    margin-left: 0;
+  }
+
+  .priorAgendasRow {
+    display: none;
+  }
+
   .dpsRow {
+    flex: initial;
+    max-width: none;
     width: auto;
     border-left: none;
     border-top: 1px solid var(--color-border);

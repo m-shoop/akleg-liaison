@@ -90,49 +90,58 @@ def _parse_fiscal_note_links(html: str) -> list[dict]:
     Returns a list of dicts with keys:
       url, session_id, fn_department, fn_appropriation, fn_allocation.
 
-    Department, appropriation, and allocation are read from the HTML structure
-    by walking backwards from each fiscalNote.php link:
-      - <b> tag                          → department
-      - text with 4 leading &nbsp; chars → appropriation
+    Walks the document in order, tracking the current department/appropriation/
+    allocation as it reads. The HTML uses leading &nbsp; chars to denote nesting:
+      - <b> tag                          → department (resets appr + alloc)
+      - text with 4 leading &nbsp; chars → appropriation (resets alloc)
       - text with 8 leading &nbsp; chars → allocation
+      - <a href=fiscalNote.php ...>      → emit note with current state
+
+    Forward-walking is required because consecutive links may share the same
+    appropriation but have different allocations; walking backwards from a link
+    can mistake the previous note's 8-nbsp allocation for the current note's
+    appropriation.
     """
     soup = BeautifulSoup(html, "html.parser")
     notes = []
-    for a_tag in soup.find_all("a", href=re.compile(r"fiscalNote\.php")):
-        href = a_tag["href"]
-        full_url = urljoin(_BASE_URL, href)
-        params = parse_qs(urlparse(href).query)
-        sid = params.get("sid", [None])[0]
-        if not sid:
+    current_dept = None
+    current_appr = None
+    current_alloc = None
+
+    for node in soup.descendants:
+        if isinstance(node, NavigableString):
+            if node.parent.name in ("b", "a"):
+                continue
+            leading = len(node) - len(node.lstrip("\xa0"))
+            text = node.strip("\xa0").strip()
+            if not text:
+                continue
+            if leading >= 8:
+                current_alloc = text
+            elif leading >= 4:
+                current_appr = text
+                current_alloc = None
             continue
 
-        fn_department = None
-        fn_appropriation = None
-        fn_allocation = None
-
-        for sibling in a_tag.previous_siblings:
-            if fn_department and fn_appropriation and fn_allocation:
-                break
-            if getattr(sibling, "name", None) == "b":
-                if fn_department is None:
-                    fn_department = sibling.get_text(strip=True)
-            elif isinstance(sibling, NavigableString):
-                leading = len(sibling) - len(sibling.lstrip("\xa0"))
-                text = sibling.strip("\xa0").strip()
-                if not text:
-                    continue
-                if leading >= 8 and fn_allocation is None:
-                    fn_allocation = text
-                elif leading >= 4 and fn_appropriation is None:
-                    fn_appropriation = text
-
-        notes.append({
-            "url": full_url,
-            "session_id": sid,
-            "fn_department": fn_department,
-            "fn_appropriation": fn_appropriation,
-            "fn_allocation": fn_allocation,
-        })
+        if node.name == "b":
+            current_dept = node.get_text(strip=True)
+            current_appr = None
+            current_alloc = None
+        elif node.name == "a":
+            href = node.get("href", "")
+            if "fiscalNote.php" not in href:
+                continue
+            params = parse_qs(urlparse(href).query)
+            sid = params.get("sid", [None])[0]
+            if not sid:
+                continue
+            notes.append({
+                "url": urljoin(_BASE_URL, href),
+                "session_id": sid,
+                "fn_department": current_dept,
+                "fn_appropriation": current_appr,
+                "fn_allocation": current_alloc,
+            })
     return notes
 
 

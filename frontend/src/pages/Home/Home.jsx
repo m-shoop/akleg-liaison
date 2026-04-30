@@ -8,80 +8,68 @@ import { fetchBillTrackingState } from "../../api/workflows";
 import { useAuth } from "../../context/AuthContext";
 import BillCard from "../../components/BillCard/BillCard";
 import FilterBar from "../../components/FilterBar/FilterBar";
+import StackingCriteria from "../../components/StackingCriteria/StackingCriteria";
+import { compile } from "../../components/StackingCriteria/expression/compiler";
+import { validate } from "../../components/StackingCriteria/expression/validate";
+import SavedReportsBar from "../../components/SavedReports/SavedReportsBar";
+import SaveAsModal from "../../components/SavedReports/SaveAsModal";
+import SettingsModal from "../../components/SavedReports/SettingsModal";
+import { useSavedReports } from "../../hooks/useSavedReports";
 import FiscalDeptFilter from "../../components/FiscalDeptFilter/FiscalDeptFilter";
 import OutcomeFilter from "../../components/OutcomeFilter/OutcomeFilter";
 import PrintHearingsSection from "../../components/PrintHearingsSection/PrintHearingsSection";
 import ReportHeaderEditor from "../../components/ReportHeaderEditor/ReportHeaderEditor";
 import SyncSchedule from "../../components/SyncSchedule/SyncSchedule";
 import Toast from "../../components/Toast/Toast";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { createBillsTour } from "../../tours/billsTour";
 import { DEFAULT_SELECTED } from "../../utils/outcomeTypes";
 import { todayJuneau, weekBounds, weekBoundsTitle } from "../../utils/weekBounds";
+import {
+  makeDefaultBillsCriteria,
+  makeNewBillRowValue,
+  buildBillsRowFilterGroup,
+  summarizeBillsRow,
+} from "./stackingHelpers";
 import styles from "./Home.module.css";
 
-const DEFAULT_BILL_FILTERS = {
-  tracked: "tracked",
-  hearingDateMode: "any",
-  hearingDateOn: "",
-  hearingDateFrom: "",
-  hearingDateTo: "",
-  advanced: {},
-};
+const STORAGE_KEY = "leg_billsStacking";
+const LEGACY_STORAGE_KEY = "leg_billFilters";
 
-function buildFilterGroup(f) {
-  const conditions = [];
+function BillsRowEditor({ value, onChange, fields }) {
+  return (
+    <FilterBar
+      filters={value ?? makeNewBillRowValue()}
+      onChange={onChange}
+      fields={fields}
+    />
+  );
+}
 
-  if (f.tracked === "tracked") {
-    conditions.push({ field: "is_tracked", op: "equals", value: true });
-  } else if (f.tracked === "untracked") {
-    conditions.push({ field: "is_tracked", op: "equals", value: false });
+function loadStoredCriteria({ showUntracked, billNumber }) {
+  // Direct navigation from a Leg Up icon ignores stored criteria so the user
+  // lands on a clean filter focused on the bill they clicked through.
+  if (billNumber) {
+    return makeDefaultBillsCriteria({ showUntracked: true, billNumber });
   }
-
-  if (f.hearingDateMode === "on" && f.hearingDateOn) {
-    conditions.push({ field: "hearing_date", op: "equals", value: f.hearingDateOn });
-  } else if (f.hearingDateMode === "range") {
-    if (f.hearingDateFrom && f.hearingDateTo) {
-      conditions.push({ field: "hearing_date", op: "between", value: [f.hearingDateFrom, f.hearingDateTo] });
-    } else if (f.hearingDateFrom) {
-      conditions.push({ field: "hearing_date", op: "after", value: f.hearingDateFrom });
-    } else if (f.hearingDateTo) {
-      conditions.push({ field: "hearing_date", op: "before", value: f.hearingDateTo });
+  const stored = sessionStorage.getItem(STORAGE_KEY);
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (
+        parsed &&
+        Array.isArray(parsed.criteria) &&
+        typeof parsed.expression === "string" &&
+        Number.isInteger(parsed.nextLetterIndex)
+      ) {
+        return parsed;
+      }
+    } catch {
+      /* ignore */
     }
   }
-
-  const adv = f.advanced ?? {};
-  if (adv.bill_number) conditions.push({ field: "bill_number", op: "contains", value: adv.bill_number });
-  if (adv.title) conditions.push({ field: "title", op: "contains", value: adv.title });
-  if (adv.short_title) conditions.push({ field: "short_title", op: "contains", value: adv.short_title });
-  if (Array.isArray(adv.session) && adv.session.length > 0) conditions.push({ field: "session", op: "in", value: adv.session.map((v) => parseInt(v, 10)) });
-  if (Array.isArray(adv.status) && adv.status.length > 0) conditions.push({ field: "status", op: "in", value: adv.status });
-  if (Array.isArray(adv.outcome_type) && adv.outcome_type.length > 0) conditions.push({ field: "outcome_type", op: "in", value: adv.outcome_type });
-  if (Array.isArray(adv.outcome_committee) && adv.outcome_committee.length > 0) conditions.push({ field: "outcome_committee", op: "in", value: adv.outcome_committee });
-  if (adv.outcome_date_from && adv.outcome_date_to) {
-    conditions.push({ field: "outcome_date", op: "between", value: [adv.outcome_date_from, adv.outcome_date_to] });
-  } else if (adv.outcome_date_from) {
-    conditions.push({ field: "outcome_date", op: "after", value: adv.outcome_date_from });
-  } else if (adv.outcome_date_to) {
-    conditions.push({ field: "outcome_date", op: "before", value: adv.outcome_date_to });
-  }
-  if (adv.sponsor_name) conditions.push({ field: "sponsor_name", op: "contains", value: adv.sponsor_name });
-  if (Array.isArray(adv.fn_department) && adv.fn_department.length > 0) conditions.push({ field: "fn_department", op: "in", value: adv.fn_department });
-  if (adv.fn_publish_date_from && adv.fn_publish_date_to) {
-    conditions.push({ field: "fn_publish_date", op: "between", value: [adv.fn_publish_date_from, adv.fn_publish_date_to] });
-  } else if (adv.fn_publish_date_from) {
-    conditions.push({ field: "fn_publish_date", op: "after", value: adv.fn_publish_date_from });
-  } else if (adv.fn_publish_date_to) {
-    conditions.push({ field: "fn_publish_date", op: "before", value: adv.fn_publish_date_to });
-  }
-  if (adv.introduced_date_from && adv.introduced_date_to) {
-    conditions.push({ field: "introduced_date", op: "between", value: [adv.introduced_date_from, adv.introduced_date_to] });
-  } else if (adv.introduced_date_from) {
-    conditions.push({ field: "introduced_date", op: "after", value: adv.introduced_date_from });
-  } else if (adv.introduced_date_to) {
-    conditions.push({ field: "introduced_date", op: "before", value: adv.introduced_date_to });
-  }
-
-  return { logic: "AND", conditions };
+  sessionStorage.removeItem(LEGACY_STORAGE_KEY);
+  return makeDefaultBillsCriteria({ showUntracked });
 }
 
 function outcomesToEvents(outcomes) {
@@ -132,7 +120,8 @@ function rowToBill(row, workflowState) {
 
 export default function Home() {
   const location = useLocation();
-  const { can, token } = useAuth();
+  const { can, token, username } = useAuth();
+  const isMobile = useMediaQuery("(max-width: 640px)");
   const [toast, setToast] = useState(location.state?.toast ? { message: location.state.toast, type: "success" } : null);
   const [bills, setBills] = useState([]);
   const [allTags, setAllTags] = useState([]);
@@ -161,25 +150,33 @@ export default function Home() {
     );
     return depts;
   }, [bills]);
-  const [billFilters, setBillFilters] = useState(() => {
-    const stored = sessionStorage.getItem("leg_billFilters");
-    if (stored) { try { return JSON.parse(stored); } catch { /* ignore */ } }
-    return location.state?.showUntracked
-      ? { ...DEFAULT_BILL_FILTERS, tracked: "all" }
-      : DEFAULT_BILL_FILTERS;
-  });
+  const [billsCriteria, setBillsCriteria] = useState(() =>
+    loadStoredCriteria({
+      showUntracked: !!location.state?.showUntracked,
+      billNumber: location.state?.billNumber,
+    })
+  );
+  const [appliedCriteria, setAppliedCriteria] = useState(billsCriteria);
   const fetchTimerRef = useRef(null);
   const [sideBySide, setSideBySide] = useState(() => sessionStorage.getItem("leg_sideBySide") !== "false");
   const [showKeywords, setShowKeywords] = useState(() => sessionStorage.getItem("leg_showKeywords") === "true");
-  // location.state?.search (from bill-link navigation) takes priority over stored search
-  const [searchQuery, setSearchQuery] = useState(location.state?.search ?? sessionStorage.getItem("leg_searchQuery") ?? "");
+  // location.state?.billNumber drives the discrete bill_number chip filter; the
+  // page-level search box stays clean so substring matches don't widen the set.
+  // Legacy location.state?.search still seeds the search box for backwards compat.
+  const [searchQuery, setSearchQuery] = useState(
+    location.state?.billNumber
+      ? ""
+      : (location.state?.search ?? sessionStorage.getItem("leg_searchQuery") ?? "")
+  );
   const [printStartDate, setPrintStartDate] = useState(() => sessionStorage.getItem("leg_printStartDate") ?? "");
   const [printEndDate, setPrintEndDate] = useState(() => sessionStorage.getItem("leg_printEndDate") ?? "");
   const [printMeetings, setPrintMeetings] = useState(null);
   const [upcomingHearings, setUpcomingHearings] = useState({});
   const [pendingPrint, setPendingPrint] = useState(false);
-  const [reportCriteriaOpen, setReportCriteriaOpen] = useState(() => sessionStorage.getItem("leg_reportCriteriaOpen") === "true");
-  const [exportDisplayOpen, setExportDisplayOpen] = useState(() => sessionStorage.getItem("leg_exportDisplayOpen") === "true");
+  // Always collapsed on navigation to keep the page visually quiet; the panel
+  // contents (criteria, export/display) are still preserved between visits.
+  const [reportCriteriaOpen, setReportCriteriaOpen] = useState(false);
+  const [exportDisplayOpen, setExportDisplayOpen] = useState(false);
   const contentRef = useRef(null);
 
   // ─── Persist Legislation tab settings to sessionStorage ───────────────────
@@ -190,7 +187,7 @@ export default function Home() {
     else sessionStorage.removeItem("leg_showDescription");
     if (showKeywords) sessionStorage.setItem("leg_showKeywords", "true");
     else sessionStorage.removeItem("leg_showKeywords");
-    sessionStorage.setItem("leg_billFilters", JSON.stringify(billFilters));
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(billsCriteria));
     if (!sideBySide) sessionStorage.setItem("leg_sideBySide", "false");
     else sessionStorage.removeItem("leg_sideBySide");
     if (printStartDate) sessionStorage.setItem("leg_printStartDate", printStartDate);
@@ -199,23 +196,52 @@ export default function Home() {
     else sessionStorage.removeItem("leg_printEndDate");
     sessionStorage.setItem("leg_selectedOutcomes", JSON.stringify([...selectedOutcomes]));
     sessionStorage.setItem("leg_selectedDepts", selectedDepts === null ? "null" : JSON.stringify([...selectedDepts]));
-    if (reportCriteriaOpen) sessionStorage.setItem("leg_reportCriteriaOpen", "true");
-    else sessionStorage.removeItem("leg_reportCriteriaOpen");
-    if (exportDisplayOpen) sessionStorage.setItem("leg_exportDisplayOpen", "true");
-    else sessionStorage.removeItem("leg_exportDisplayOpen");
-  }, [searchQuery, showDescription, showKeywords, billFilters, sideBySide, printStartDate, printEndDate, selectedOutcomes, selectedDepts, reportCriteriaOpen, exportDisplayOpen]);
+    sessionStorage.removeItem("leg_reportCriteriaOpen");
+    sessionStorage.removeItem("leg_exportDisplayOpen");
+  }, [searchQuery, showDescription, showKeywords, billsCriteria, sideBySide, printStartDate, printEndDate, selectedOutcomes, selectedDepts]);
 
   function resetToDefaults() {
     setSearchQuery("");
     setShowDescription(false);
     setShowKeywords(false);
-    setBillFilters(DEFAULT_BILL_FILTERS);
     setSideBySide(true);
     setPrintStartDate("");
     setPrintEndDate("");
     setSelectedOutcomes(DEFAULT_SELECTED);
     setSelectedDepts(new Set(["Department of Public Safety"]));
+
+    // Auto-select the seeded "Tracked Bills" system report if it's active and
+    // visible to this user; otherwise leave the loaded report cleared and reset
+    // criteria to the local default.
+    const loadedSeed = savedReports.selectSystemReportByName("Tracked Bills");
+    if (!loadedSeed) {
+      const def = makeDefaultBillsCriteria();
+      setBillsCriteria(def);
+      setAppliedCriteria(def);
+      savedReports.clearLoadedReport();
+    }
   }
+
+  function handleStackingApply(_filterGroup, value) {
+    setAppliedCriteria(value);
+  }
+
+  const hadStoredCriteriaOnMount = useRef(!!sessionStorage.getItem(STORAGE_KEY));
+  // Skip default-report auto-load when arriving from a Leg Up icon — otherwise
+  // the default report would clobber the bill-chip seed before the user sees it.
+  const hasBillNumberSeed = useRef(!!location.state?.billNumber);
+  const savedReports = useSavedReports({
+    registryName: "bills",
+    currentCriteria: billsCriteria,
+    onLoad: (criteria) => {
+      setBillsCriteria(criteria);
+      setAppliedCriteria(criteria);
+    },
+    token,
+    username,
+    skipDefaultLoad: hadStoredCriteriaOnMount.current || hasBillNumberSeed.current,
+    canSystemEdit: can("system-report:edit"),
+  });
 
   // Fetch hearing bill IDs whenever the filter is on and both dates are set
   useEffect(() => {
@@ -243,7 +269,10 @@ export default function Home() {
         "sponsors", "keywords", "outcomes", "fiscal_notes",
         ...(can("bill-tags:view") ? ["tags"] : []),
       ];
-      const filters = buildFilterGroup(billFilters);
+      const { ast } = validate(appliedCriteria.expression, appliedCriteria.criteria);
+      const filters = compile(ast, appliedCriteria.criteria, (row) =>
+        buildBillsRowFilterGroup(row.value),
+      );
 
       Promise.all([
         fetchReport({ reportId: "bills", columns, filters, token }),
@@ -267,7 +296,7 @@ export default function Home() {
     }, 400);
     return () => clearTimeout(fetchTimerRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(billFilters)]);
+  }, [appliedCriteria, token]);
 
   const reportDate = new Date().toLocaleDateString("en-US", {
     month: "long",
@@ -375,13 +404,36 @@ export default function Home() {
                 : `${bills.length} measure${bills.length !== 1 ? "s" : ""}`}
             </p>
           </div>
-          <button className={styles.defaultBtn} onClick={resetToDefaults}>
-            Default Settings
+          <div className={styles.headerLegend}>
+            <p className={styles.aiLegend}>
+              This is a research tool and not an official legislative record.
+            </p>
+            <p className={styles.aiLegend}>
+              ✨ Content marked with this symbol is AI-generated and may contain false information. Please review for accuracy.
+            </p>
+          </div>
+          <button id="tour-default-settings" className={styles.defaultBtn} onClick={resetToDefaults}>
+            Default Page Settings
           </button>
         </div>
 
+        {/* ── Saved Reports ──────────────────────────────────────── */}
+        {!isMobile && token && (
+          <div id="tour-saved-reports">
+            <SavedReportsBar
+              reports={savedReports.reports}
+              defaultReportId={savedReports.defaultReportId}
+              loadedReportId={savedReports.loadedReportId}
+              includeInactive={savedReports.includeInactive}
+              onIncludeInactiveChange={savedReports.setIncludeInactive}
+              onSelectReport={savedReports.selectReport}
+              error={savedReports.error}
+            />
+          </div>
+        )}
+
         {/* ── Report Criteria ────────────────────────────────────── */}
-        <div className={styles.panelSection}>
+        <div id="tour-report-criteria" className={styles.panelSection}>
           <button
             type="button"
             className={styles.panelSectionHeader}
@@ -395,14 +447,56 @@ export default function Home() {
               <p className={styles.panelNote}>
                 <em>This section defines which measures are returned from the database.</em>
               </p>
-              <FilterBar
-                fields={reportMeta?.fields ?? {}}
-                filters={billFilters}
-                onChange={setBillFilters}
+              <StackingCriteria
+                value={billsCriteria}
+                onChange={setBillsCriteria}
+                appliedValue={appliedCriteria}
+                onApply={handleStackingApply}
+                RowEditor={BillsRowEditor}
+                rowEditorProps={{ fields: reportMeta?.fields ?? {} }}
+                compileRow={(row) => buildBillsRowFilterGroup(row.value)}
+                emptyRowValue={makeNewBillRowValue()}
+                summarizeRow={(rowValue) => summarizeBillsRow(rowValue, reportMeta?.fields ?? {})}
+                mobile={isMobile}
+                onSave={isMobile ? undefined : savedReports.save}
+                onSaveAs={isMobile ? undefined : savedReports.openSaveAs}
+                saveAvailable={savedReports.canSave}
+                saveAsAvailable={savedReports.canSaveAs}
+                canRunQuery={savedReports.canRunQuery}
+                loadedReportName={isMobile ? null : savedReports.loadedReportName}
+                isLoadedActive={savedReports.isLoadedActive}
+                isLoadedDefault={savedReports.isLoadedDefault}
+                onToggleActive={isMobile ? undefined : savedReports.toggleActive}
+                onToggleDefault={isMobile ? undefined : savedReports.toggleDefault}
+                editMode={savedReports.editMode}
+                editLocked={savedReports.editLocked}
+                loadedDirty={savedReports.loadedDirty}
+                onStartEdit={isMobile ? undefined : savedReports.startEdit}
+                onCancelEdit={isMobile ? undefined : savedReports.cancelEdit}
+                onNewReport={isMobile ? undefined : savedReports.newReport}
+                onOpenSettings={isMobile ? undefined : savedReports.openSettings}
               />
             </div>
           )}
         </div>
+
+        <SaveAsModal
+          open={savedReports.saveAsOpen}
+          onClose={savedReports.closeSaveAs}
+          onSave={savedReports.saveAs}
+          canCreateSystemReports={savedReports.canSystemEdit}
+          availableRoles={savedReports.availableRoles}
+        />
+        <SettingsModal
+          open={savedReports.settingsOpen}
+          onClose={savedReports.closeSettings}
+          onSave={savedReports.editSettings}
+          initialName={savedReports.loadedReport?.display_name ?? ""}
+          isSystemLevel={savedReports.loadedReport?.publication_level === "system"}
+          initialAllowedRoles={savedReports.loadedReport?.allowed_roles ?? []}
+          canEditRoles={savedReports.canSystemEdit}
+          availableRoles={savedReports.availableRoles}
+        />
 
         {/* ── Export and Display Options ─────────────────────────── */}
         <div className={styles.panelSection}>
@@ -546,13 +640,6 @@ export default function Home() {
         </div>
       </div>
 
-      <p className={styles.aiLegend}>
-        This is a research tool and not an official legislative record.
-      </p>
-      <p className={styles.aiLegend}>
-        ✨ Content marked with this symbol is AI-generated and may contain false information. Please review for accuracy.
-      </p>
-
       {error   && <p className={styles.error}>Error: {error}</p>}
       <Toast message={toast?.message} type={toast?.type} onDismiss={() => setToast(null)} />
 
@@ -575,7 +662,7 @@ export default function Home() {
             />
             <button
               className={styles.helpBtn}
-              onClick={() => createBillsTour().drive()}
+              onClick={() => createBillsTour({ isLoggedIn: !!token }).drive()}
               title="Tour the Bills page"
             >
               ?
@@ -629,15 +716,9 @@ export default function Home() {
                         onRefreshed={(updated) =>
                           setBills((prev) => prev.map((b) => b.id === updated.id ? updated : b))
                         }
-                        onTrackingChanged={(updated) => {
-                          if (billFilters.tracked === "tracked" && !updated.is_tracked) {
-                            setBills((prev) => prev.filter((b) => b.id !== updated.id));
-                          } else if (billFilters.tracked === "untracked" && updated.is_tracked) {
-                            setBills((prev) => prev.filter((b) => b.id !== updated.id));
-                          } else {
-                            setBills((prev) => prev.map((b) => b.id === updated.id ? updated : b));
-                          }
-                        }}
+                        onTrackingChanged={(updated) =>
+                          setBills((prev) => prev.map((b) => (b.id === updated.id ? updated : b)))
+                        }
                       />
                     </li>
                   ))}
@@ -660,15 +741,9 @@ export default function Home() {
                   onRefreshed={(updated) =>
                     setBills((prev) => prev.map((b) => b.id === updated.id ? updated : b))
                   }
-                  onTrackingChanged={(updated) => {
-                    if (billFilters.tracked === "tracked" && !updated.is_tracked) {
-                      setBills((prev) => prev.filter((b) => b.id !== updated.id));
-                    } else if (billFilters.tracked === "untracked" && updated.is_tracked) {
-                      setBills((prev) => prev.filter((b) => b.id !== updated.id));
-                    } else {
-                      setBills((prev) => prev.map((b) => b.id === updated.id ? updated : b));
-                    }
-                  }}
+                  onTrackingChanged={(updated) =>
+                    setBills((prev) => prev.map((b) => (b.id === updated.id ? updated : b)))
+                  }
                 />
               </li>
             ))}

@@ -67,7 +67,7 @@ function outcomeLabel(value) {
   return OUTCOME_OPTS.find((o) => o.value === value)?.label ?? value;
 }
 
-function buildSummary(filters, canViewAll) {
+export function buildSummary(filters, canViewAll) {
   const parts = [];
 
   if (filters.workflow_status?.length === 1) {

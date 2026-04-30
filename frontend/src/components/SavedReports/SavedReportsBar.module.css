@@ -1,0 +1,158 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--color-text-primary);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.empty {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.error {
+  padding: 0.4rem 0.6rem;
+  background: #FFF6D6;
+  border: 1px solid #E8D78A;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  color: #8a6d1f;
+}
+
+.badgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.7rem;
+  border: 2px solid var(--color-rainforest);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border-radius: 999px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.badge:hover {
+  background: var(--color-surface-raised);
+}
+
+.badgeUser {
+  border-color: var(--color-rainforest);
+}
+
+.badgeSystem {
+  border-color: #8a6d1f;
+}
+
+.badgeLoaded.badgeUser {
+  background: var(--color-rainforest);
+  color: var(--color-text-on-dark);
+  border-color: var(--color-rainforest);
+}
+
+.badgeLoaded.badgeSystem {
+  background: #8a6d1f;
+  color: var(--color-text-on-dark);
+  border-color: #8a6d1f;
+}
+
+.badgeLoaded:hover {
+  filter: brightness(1.05);
+}
+
+.badgeDefault {
+  font-weight: 600;
+}
+
+.badgeInactive {
+  opacity: 0.55;
+}
+
+.defaultMark {
+  color: inherit;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.badgeUser .defaultMark {
+  color: var(--color-rainforest);
+}
+
+.badgeSystem .defaultMark {
+  color: #8a6d1f;
+}
+
+.badgeLoaded .defaultMark {
+  color: var(--color-text-on-dark);
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  align-self: flex-end;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  flex-wrap: wrap;
+}
+
+.legendBadge {
+  display: inline-block;
+  width: 1.5rem;
+  height: 0.9rem;
+  border-width: 2px;
+  border-style: solid;
+  border-radius: 999px;
+  background: var(--color-surface);
+}
+
+.legendLabel {
+  margin-right: 0.6rem;
+}
+
+.legendLabel:last-child {
+  margin-right: 0;
+}
+
+.inactiveTag {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.badgeLoaded .inactiveTag {
+  color: var(--color-text-on-dark);
+  opacity: 0.85;
+}

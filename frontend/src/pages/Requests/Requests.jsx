@@ -1,11 +1,34 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { addWorkflowAction } from "../../api/workflows";
+import { addWorkflowAction, updateHearingAssignmentType } from "../../api/workflows";
+import { useAssigneeOptedOut, OPT_OUT_WARNING } from "../../hooks/useAssigneeOptedOut";
 import UserCombobox from "../../components/UserCombobox/UserCombobox";
 import { fetchReport, fetchReportMeta } from "../../api/reports";
 import Toast from "../../components/Toast/Toast";
 import RequestsFilterBar from "../../components/RequestsFilterBar/RequestsFilterBar";
+import StackingCriteria from "../../components/StackingCriteria/StackingCriteria";
+import { compile } from "../../components/StackingCriteria/expression/compiler";
+import { validate } from "../../components/StackingCriteria/expression/validate";
+import SavedReportsBar from "../../components/SavedReports/SavedReportsBar";
+import SaveAsModal from "../../components/SavedReports/SaveAsModal";
+import SettingsModal from "../../components/SavedReports/SettingsModal";
+import { useSavedReports } from "../../hooks/useSavedReports";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
+import {
+  ASSIGNMENT_ROW_DEFAULTS,
+  makeAssignmentNewRowValue,
+  buildAssignmentRowFilterGroup,
+  summarizeAssignmentRow,
+  makeRequestNewRowValue,
+  makeDefaultRequestsCriteria,
+  buildRequestRowFilterGroup,
+  summarizeRequestRow,
+} from "./stackingHelpers";
+import { createInitialState } from "../../components/StackingCriteria/createInitialState";
 import styles from "./Requests.module.css";
+
+const REQUESTS_STORAGE_KEY = "requests_stacking";
+const REQUESTS_LEGACY_STORAGE_KEY = "requests_filters";
 
 function formatTimestamp(iso) {
   return new Date(iso).toLocaleString("en-US", {
@@ -34,11 +57,24 @@ function formatTime(timeStr) {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
+// Most assignees share dps.alaska.gov, so showing the local-part is enough to
+// identify the row; full email lives in the title attribute for hover.
+function shortEmail(email) {
+  if (!email) return "";
+  const at = email.indexOf("@");
+  return at > 0 ? email.slice(0, at) : email;
+}
+
+function assignmentTypeLabel(t) {
+  return t === "awareness" ? "Awareness" : "Monitoring";
+}
+
 // ─── Hearing Assignments ───────────────────────────────────────────────────
 
 const ACTIVE_ASSIGNMENT_ACTIONS = new Set([
   "auto_suggested_hearing_assignment",
   "hearing_assigned",
+  "hearing_reassigned",
   "reassignment_request",
 ]);
 
@@ -52,6 +88,7 @@ function assignmentStatusLabel(latestActionType) {
   switch (latestActionType) {
     case "auto_suggested_hearing_assignment": return "Suggested";
     case "hearing_assigned":                 return "Assigned";
+    case "hearing_reassigned":               return "Assigned";
     case "reassignment_request":             return "Reassign";
     case "hearing_assignment_complete":      return "Completed";
     case "hearing_assignment_canceled":      return "Canceled";
@@ -68,7 +105,7 @@ function assignmentStatusClass(latestActionType, styles) {
 }
 
 const ASSIGNMENT_COLUMNS = [
-  "id", "workflow_id", "latest_action_type", "assignee_email",
+  "id", "workflow_id", "latest_action_type", "assignment_type", "assignee_email",
   "hearing_id", "hearing_date", "hearing_time", "hearing_chamber", "committee_name",
   "bill_number", "bill_short_title", "created_at", "actions",
 ];
@@ -78,6 +115,7 @@ function rowToAssignment(row) {
     id:                 row.id,
     workflow_id:        row.workflow_id,
     latest_action_type: row.latest_action_type ?? null,
+    assignment_type:    row.assignment_type ?? "monitoring",
     assignee_email:     row.assignee_email ?? null,
     hearing_id:         row.hearing_id ?? null,
     hearing_date:       row.hearing_date ?? null,
@@ -99,56 +137,6 @@ const ASSIGNMENT_ACTION_TYPE_OPTS = [
   { value: "hearing_assignment_discarded",      label: "Discarded" },
   { value: "auto_suggested_hearing_assignment", label: "Suggested" },
 ];
-
-const ASSIGNMENT_FILTER_DEFAULTS = {
-  latest_action_type: [],
-  assignee_email: "",
-  bill_number: "",
-  hearing_date_from: "",
-  hearing_date_to: "",
-};
-
-function makePresetFilters(preset, username, canViewSuggestions) {
-  const openActiveTypes = ["hearing_assigned", "reassignment_request"];
-  if (canViewSuggestions) openActiveTypes.push("auto_suggested_hearing_assignment");
-
-  if (preset === "my_open") {
-    return { ...ASSIGNMENT_FILTER_DEFAULTS, latest_action_type: ["hearing_assigned", "reassignment_request"], assignee_email: username };
-  }
-  if (preset === "all_open") {
-    return { ...ASSIGNMENT_FILTER_DEFAULTS, latest_action_type: openActiveTypes };
-  }
-  if (preset === "unassigned") {
-    return { ...ASSIGNMENT_FILTER_DEFAULTS, latest_action_type: ["auto_suggested_hearing_assignment", "reassignment_request"] };
-  }
-  return ASSIGNMENT_FILTER_DEFAULTS;
-}
-
-function buildAssignmentFilterGroup(filters, { canViewAll, username }) {
-  const conditions = [];
-
-  if (!canViewAll && !filters.assignee_email?.trim()) {
-    conditions.push({ field: "assignee_email", op: "equals", value: username });
-  } else if (filters.assignee_email?.trim()) {
-    conditions.push({ field: "assignee_email", op: "contains", value: filters.assignee_email.trim() });
-  }
-
-  if (filters.latest_action_type?.length > 0) {
-    conditions.push({ field: "latest_action_type", op: "in", value: filters.latest_action_type });
-  }
-  if (filters.bill_number?.trim()) {
-    conditions.push({ field: "bill_number", op: "contains", value: filters.bill_number.trim() });
-  }
-  if (filters.hearing_date_from && filters.hearing_date_to) {
-    conditions.push({ field: "hearing_date", op: "between", value: [filters.hearing_date_from, filters.hearing_date_to] });
-  } else if (filters.hearing_date_from) {
-    conditions.push({ field: "hearing_date", op: "after", value: filters.hearing_date_from });
-  } else if (filters.hearing_date_to) {
-    conditions.push({ field: "hearing_date", op: "before", value: filters.hearing_date_to });
-  }
-
-  return { logic: "AND", conditions };
-}
 
 function AssignmentsFilterBar({ filters, onChange, canViewAll, canViewSuggestions }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -251,12 +239,22 @@ function AssignmentsFilterBar({ filters, onChange, canViewAll, canViewSuggestion
   );
 }
 
-function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onActionTaken, username }) {
+function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onActionTaken, username, isMobile }) {
   const [expanded, setExpanded] = useState(false);
   const [acting, setActing] = useState(null);
   const [error, setError] = useState(null);
   const [showReassignForm, setShowReassignForm] = useState(false);
   const [reassignEmail, setReassignEmail] = useState("");
+  const [showCancelForm, setShowCancelForm] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState("");
+  const [updatingType, setUpdatingType] = useState(false);
+  const [localAssignmentType, setLocalAssignmentType] = useState(assignment.assignment_type ?? "monitoring");
+
+  // Re-sync the local type if the row's underlying value shifts (e.g. parent
+  // refetched after another tab confirmed the suggestion).
+  useEffect(() => {
+    setLocalAssignmentType(assignment.assignment_type ?? "monitoring");
+  }, [assignment.assignment_type]);
 
   const { latest_action_type, assignee_email, hearing_date, hearing_time, hearing_chamber, committee_name, bill_number } = assignment;
   const chamberPrefix = hearing_chamber ? `(${hearing_chamber}) ` : "";
@@ -267,7 +265,13 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
   const isClosed = CLOSED_ASSIGNMENT_ACTIONS.has(latest_action_type);
   const isSuggested = latest_action_type === "auto_suggested_hearing_assignment";
   const isReassignRequest = latest_action_type === "reassignment_request";
+  const isAssigned = latest_action_type === "hearing_assigned";
   const isAssignee = username === assignee_email;
+
+  const reassignAssigneeOptedOut = useAssigneeOptedOut(
+    showReassignForm ? reassignEmail : "",
+    token,
+  );
 
   async function handleAction(actionType, opts = {}) {
     setError(null);
@@ -276,6 +280,8 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
       await addWorkflowAction(assignment.workflow_id, actionType, token, opts);
       setShowReassignForm(false);
       setReassignEmail("");
+      setShowCancelForm(false);
+      setCancellationReason("");
       onActionTaken();
     } catch (err) {
       setError(err.message);
@@ -284,66 +290,142 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
     }
   }
 
+  async function handleTypeChange(newType) {
+    if (newType === localAssignmentType) return;
+    setError(null);
+    setUpdatingType(true);
+    // Optimistic local update — the report refetch will reconcile if the
+    // server rejects (e.g. another tab confirmed the suggestion).
+    const previous = localAssignmentType;
+    setLocalAssignmentType(newType);
+    try {
+      await updateHearingAssignmentType({
+        assignmentId: assignment.id,
+        assignmentType: newType,
+        token,
+      });
+      onActionTaken();
+    } catch (err) {
+      setLocalAssignmentType(previous);
+      setError(err.message);
+    } finally {
+      setUpdatingType(false);
+    }
+  }
+
+  const cols = isMobile ? 3 : 7;
+
+  const typeControl = canManage && isSuggested ? (
+    <select
+      className={styles.typeSelect}
+      value={localAssignmentType}
+      onChange={(e) => handleTypeChange(e.target.value)}
+      disabled={updatingType || acting !== null}
+      aria-label="Assignment type"
+    >
+      <option value="monitoring">Monitoring</option>
+      <option value="awareness">Awareness</option>
+    </select>
+  ) : (
+    <span className={styles.typeLabel}>{assignmentTypeLabel(localAssignmentType)}</span>
+  );
+
+  const actionButtons = (
+    <div className={styles.actionsCell}>
+      {canManage && isSuggested && (
+        <>
+          <button className={styles.assignBtn} onClick={() => handleAction("hearing_assigned")} disabled={acting !== null || updatingType}>
+            {acting === "hearing_assigned" ? "…" : "Assign"}
+          </button>
+          <button className={styles.discardBtn} onClick={() => handleAction("hearing_assignment_discarded")} disabled={acting !== null || updatingType}>
+            {acting === "hearing_assignment_discarded" ? "…" : "Discard"}
+          </button>
+        </>
+      )}
+      {canManage && isReassignRequest && !showReassignForm && !showCancelForm && (
+        <>
+          <button className={styles.assignBtn} onClick={() => { setReassignEmail(assignee_email ?? ""); setShowReassignForm(true); }} disabled={acting !== null}>
+            Reassign
+          </button>
+          <button className={styles.discardBtn} onClick={() => setShowCancelForm(true)} disabled={acting !== null}>
+            Cancel
+          </button>
+        </>
+      )}
+      {canManage && isAssigned && !showCancelForm && (
+        <button className={styles.discardBtn} onClick={() => setShowCancelForm(true)} disabled={acting !== null}>
+          Cancel
+        </button>
+      )}
+      {isAssignee && !isClosed && isAssigned && !showCancelForm && (
+        <>
+          <button className={styles.completeBtn} onClick={() => handleAction("hearing_assignment_complete")} disabled={acting !== null}>
+            {acting === "hearing_assignment_complete" ? "…" : "Mark Complete"}
+          </button>
+          <button className={styles.reassignRequestBtn} onClick={() => handleAction("reassignment_request")} disabled={acting !== null}>
+            {acting === "reassignment_request" ? "…" : "Request Reassignment"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <>
-      <tr className={`${styles.assignmentRow} ${isClosed ? styles.assignmentRowClosed : ""}`}>
-        <td className={styles.cellEmail}>{assignee_email}</td>
+      <tr
+        className={`${styles.assignmentRow} ${isClosed ? styles.assignmentRowClosed : ""} ${isMobile ? styles.assignmentRowMobile : ""}`}
+        onClick={isMobile ? () => setExpanded((v) => !v) : undefined}
+        aria-expanded={isMobile ? expanded : undefined}
+      >
+        <td className={styles.cellEmail} title={assignee_email ?? ""}>{shortEmail(assignee_email)}</td>
         <td className={styles.cellBill}>{bill_number || ""}</td>
         <td>
           <span className={`${styles.statusBadge} ${assignmentStatusClass(latest_action_type, styles)}`}>
             {assignmentStatusLabel(latest_action_type)}
           </span>
+          {isMobile && <span className={styles.mobileChevron}>{expanded ? "▴" : "▾"}</span>}
         </td>
-        <td className={styles.cellHearing}>{hearingInfo}</td>
-        <td className={styles.cellActions}>
-          <div className={styles.actionsCell}>
-            {canManage && isSuggested && (
-              <>
-                <button className={styles.assignBtn} onClick={() => handleAction("hearing_assigned")} disabled={acting !== null}>
-                  {acting === "hearing_assigned" ? "…" : "Assign"}
-                </button>
-                <button className={styles.discardBtn} onClick={() => handleAction("hearing_assignment_discarded")} disabled={acting !== null}>
-                  {acting === "hearing_assignment_discarded" ? "…" : "Discard"}
-                </button>
-              </>
-            )}
-            {canManage && isReassignRequest && !showReassignForm && (
-              <>
-                <button className={styles.assignBtn} onClick={() => { setReassignEmail(assignee_email ?? ""); setShowReassignForm(true); }} disabled={acting !== null}>
-                  Reassign
-                </button>
-                <button className={styles.discardBtn} onClick={() => handleAction("hearing_assignment_canceled")} disabled={acting !== null}>
-                  {acting === "hearing_assignment_canceled" ? "…" : "Cancel"}
-                </button>
-              </>
-            )}
-            {isAssignee && !isClosed && latest_action_type === "hearing_assigned" && (
-              <>
-                <button className={styles.completeBtn} onClick={() => handleAction("hearing_assignment_complete")} disabled={acting !== null}>
-                  {acting === "hearing_assignment_complete" ? "…" : "Mark Complete"}
-                </button>
-                <button className={styles.reassignRequestBtn} onClick={() => handleAction("reassignment_request")} disabled={acting !== null}>
-                  {acting === "reassignment_request" ? "…" : "Request Reassignment"}
-                </button>
-              </>
-            )}
-          </div>
-        </td>
-        <td className={styles.cellHistoryToggle}>
-          <button
-            className={styles.historyToggle}
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={expanded}
-            title={expanded ? "Hide history" : "Show history"}
-          >
-            {expanded ? "▲" : "▼"}
-          </button>
-        </td>
+        {!isMobile && (
+          <>
+            <td className={styles.cellType}>{typeControl}</td>
+            <td className={styles.cellHearing}>{hearingInfo}</td>
+            <td className={styles.cellActions}>{actionButtons}</td>
+            <td className={styles.cellHistoryToggle}>
+              <button
+                className={styles.historyToggle}
+                onClick={() => setExpanded((v) => !v)}
+                aria-expanded={expanded}
+                title={expanded ? "Hide history" : "Show history"}
+              >
+                {expanded ? "▲" : "▼"}
+              </button>
+            </td>
+          </>
+        )}
       </tr>
+
+      {isMobile && expanded && (
+        <tr className={styles.assignmentSubRow}>
+          <td colSpan={cols}>
+            <dl className={styles.mobileDetails}>
+              {hearingInfo && (
+                <>
+                  <dt>Hearing</dt>
+                  <dd>{hearingInfo}</dd>
+                </>
+              )}
+              <dt>Type</dt>
+              <dd>{typeControl}</dd>
+              <dt>Actions</dt>
+              <dd>{actionButtons}</dd>
+            </dl>
+          </td>
+        </tr>
+      )}
 
       {showReassignForm && (
         <tr className={styles.assignmentSubRow}>
-          <td colSpan={6}>
+          <td colSpan={cols}>
             <div className={styles.reassignForm}>
               <span className={styles.reassignFormLabel}>New assignee</span>
               <UserCombobox
@@ -372,17 +454,61 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
         </tr>
       )}
 
+      {showReassignForm && reassignAssigneeOptedOut && (
+        <tr className={styles.assignmentSubRow}>
+          <td colSpan={cols}>
+            <p className={styles.optOutWarning}>{OPT_OUT_WARNING}</p>
+          </td>
+        </tr>
+      )}
+
+      {showCancelForm && (
+        <tr className={styles.assignmentSubRow}>
+          <td colSpan={cols}>
+            <div className={styles.reassignForm}>
+              <span className={styles.reassignFormLabel}>Cancellation reason</span>
+              <input
+                type="text"
+                className={styles.reassignEmailInput}
+                value={cancellationReason}
+                onChange={(e) => setCancellationReason(e.target.value)}
+                placeholder="Why is this assignment being canceled?"
+                autoFocus
+              />
+              <button
+                className={styles.discardBtn}
+                onClick={() =>
+                  handleAction("hearing_assignment_canceled", {
+                    cancellationReason: cancellationReason.trim() || null,
+                  })
+                }
+                disabled={acting !== null}
+              >
+                {acting === "hearing_assignment_canceled" ? "…" : "Confirm Cancel"}
+              </button>
+              <button
+                className={styles.expandBtn}
+                onClick={() => { setShowCancelForm(false); setCancellationReason(""); }}
+                disabled={acting !== null}
+              >
+                Back
+              </button>
+            </div>
+          </td>
+        </tr>
+      )}
+
       {error && (
         <tr className={styles.assignmentSubRow}>
-          <td colSpan={6}>
+          <td colSpan={cols}>
             <p className={styles.error}>{error}</p>
           </td>
         </tr>
       )}
 
-      {expanded && (
+      {!isMobile && expanded && (
         <tr className={styles.assignmentSubRow}>
-          <td colSpan={6}>
+          <td colSpan={cols}>
             <table className={styles.actionsTable}>
               <thead>
                 <tr><th>Action</th><th>User</th><th>Timestamp</th></tr>
@@ -421,73 +547,6 @@ function actionClass(type, styles) {
     case "deny_bill_tracking":    return styles.actionDenied;
     default:                      return styles.actionRequested;
   }
-}
-
-const REQUEST_DEFAULT_FILTERS = {
-  workflow_status: ["open"],
-  outcome: [],
-  bill_number: "",
-  requestor_email: "",
-  bill_is_tracked: null,
-  advanced: {
-    created_at_from: "",
-    created_at_to: "",
-    updated_at_from: "",
-    updated_at_to: "",
-    bill_short_title: "",
-    bill_session: [],
-    bill_status: "",
-  },
-};
-
-function buildRequestFilterGroup(filters, { canViewAll, username }) {
-  const conditions = [];
-
-  if (!canViewAll) {
-    conditions.push({ field: "requestor_email", op: "equals", value: username });
-  }
-  if (filters.workflow_status?.length > 0) {
-    conditions.push({ field: "workflow_status", op: "in", value: filters.workflow_status });
-  }
-  if (filters.outcome?.length > 0) {
-    conditions.push({ field: "latest_action_type", op: "in", value: filters.outcome });
-  }
-  if (filters.bill_number?.trim()) {
-    conditions.push({ field: "bill_number", op: "contains", value: filters.bill_number.trim() });
-  }
-  if (canViewAll && filters.requestor_email?.trim()) {
-    conditions.push({ field: "requestor_email", op: "contains", value: filters.requestor_email.trim() });
-  }
-  if (filters.bill_is_tracked !== null && filters.bill_is_tracked !== undefined) {
-    conditions.push({ field: "bill_is_tracked", op: "equals", value: filters.bill_is_tracked });
-  }
-
-  const adv = filters.advanced ?? {};
-  if (adv.created_at_from && adv.created_at_to) {
-    conditions.push({ field: "created_at", op: "between", value: [adv.created_at_from, adv.created_at_to] });
-  } else if (adv.created_at_from) {
-    conditions.push({ field: "created_at", op: "after", value: adv.created_at_from });
-  } else if (adv.created_at_to) {
-    conditions.push({ field: "created_at", op: "before", value: adv.created_at_to });
-  }
-  if (adv.updated_at_from && adv.updated_at_to) {
-    conditions.push({ field: "updated_at", op: "between", value: [adv.updated_at_from, adv.updated_at_to] });
-  } else if (adv.updated_at_from) {
-    conditions.push({ field: "updated_at", op: "after", value: adv.updated_at_from });
-  } else if (adv.updated_at_to) {
-    conditions.push({ field: "updated_at", op: "before", value: adv.updated_at_to });
-  }
-  if (adv.bill_short_title?.trim()) {
-    conditions.push({ field: "bill_short_title", op: "contains", value: adv.bill_short_title.trim() });
-  }
-  if (adv.bill_session?.length > 0) {
-    conditions.push({ field: "bill_session", op: "in", value: adv.bill_session.map(Number) });
-  }
-  if (adv.bill_status?.trim()) {
-    conditions.push({ field: "bill_status", op: "contains", value: adv.bill_status.trim() });
-  }
-
-  return { logic: "AND", conditions };
 }
 
 function rowToRequest(row) {
@@ -535,7 +594,7 @@ function groupByBill(requests) {
   );
 }
 
-function BillRequestGroup({ group, canApprove, token, onActionTaken }) {
+function BillRequestGroup({ group, canApprove, token, onActionTaken, isMobile }) {
   const [expanded, setExpanded] = useState(false);
   const [acting, setActing] = useState(null);
   const [error, setError] = useState(null);
@@ -558,6 +617,18 @@ function BillRequestGroup({ group, canApprove, token, onActionTaken }) {
 
   const isOpen = requests.some((r) => r.workflow_status === "open");
   const openWorkflowId = requests.find((r) => r.workflow_status === "open")?.id;
+
+  const lastDecision = !isOpen
+    ? [...allActions].reverse().find(
+        (a) => a.type === "approve_bill_tracking" || a.type === "deny_bill_tracking"
+      )
+    : null;
+  const closedLabel = lastDecision?.type === "approve_bill_tracking" ? "Approved"
+                    : lastDecision?.type === "deny_bill_tracking" ? "Denied"
+                    : "Closed";
+  const closedClass = lastDecision?.type === "approve_bill_tracking" ? styles.statusApproved
+                    : lastDecision?.type === "deny_bill_tracking" ? styles.statusDenied
+                    : styles.statusClosed;
 
   async function handleAction(actionType) {
     if (!openWorkflowId) return;
@@ -589,8 +660,8 @@ function BillRequestGroup({ group, canApprove, token, onActionTaken }) {
           {bill_short_title && (
             <span className={styles.billTitle}>{bill_short_title}</span>
           )}
-          <span className={`${styles.statusBadge} ${isOpen ? styles.statusOpen : styles.statusClosed}`}>
-            {isOpen ? "Open" : "Closed"}
+          <span className={`${styles.statusBadge} ${isOpen ? styles.statusOpen : closedClass}`}>
+            {isOpen ? "Open" : closedLabel}
           </span>
         </div>
         <div className={styles.requestActions}>
@@ -617,12 +688,14 @@ function BillRequestGroup({ group, canApprove, token, onActionTaken }) {
               </button>
             </>
           )}
-          <button
-            className={styles.expandBtn}
-            onClick={() => setExpanded((v) => !v)}
-          >
-            {expanded ? "Hide actions ▲" : "Show actions ▼"}
-          </button>
+          {!isMobile && (
+            <button
+              className={styles.expandBtn}
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? "Hide actions ▲" : "Show actions ▼"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -658,37 +731,74 @@ function BillRequestGroup({ group, canApprove, token, onActionTaken }) {
 
 // ─── Page ──────────────────────────────────────────────────────────────────
 
+function AssignmentsRowEditor({ value, onChange, canViewAll, canViewSuggestions }) {
+  return (
+    <AssignmentsFilterBar
+      filters={value ?? makeAssignmentNewRowValue()}
+      onChange={onChange}
+      canViewAll={canViewAll}
+      canViewSuggestions={canViewSuggestions}
+    />
+  );
+}
+
+function RequestsRowEditor({ value, onChange, fields, canViewAll }) {
+  return (
+    <RequestsFilterBar
+      filters={value ?? makeRequestNewRowValue()}
+      onChange={onChange}
+      fields={fields}
+      canViewAll={canViewAll}
+    />
+  );
+}
+
+function loadStoredRequestsCriteria() {
+  const stored = sessionStorage.getItem(REQUESTS_STORAGE_KEY);
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (
+        parsed &&
+        Array.isArray(parsed.criteria) &&
+        typeof parsed.expression === "string" &&
+        Number.isInteger(parsed.nextLetterIndex)
+      ) {
+        return parsed;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  sessionStorage.removeItem(REQUESTS_LEGACY_STORAGE_KEY);
+  return makeDefaultRequestsCriteria();
+}
+
 export default function Tasks() {
   const { token, username, can } = useAuth();
   const canApprove = can("workflow:approve-tracking");
   const canViewAll = can("workflow:view-all");
   const canManageAssignments = can("workflow:view-all");
   const canViewSuggestions = can("hearing-assignment:view-auto-suggestions");
+  const isMobile = useMediaQuery("(max-width: 640px)");
 
   // ── Hearing Assignment state ──
-  const [assignmentFilters, setAssignmentFilters] = useState(ASSIGNMENT_FILTER_DEFAULTS);
+  const [assignmentCriteria, setAssignmentCriteria] = useState(() =>
+    createInitialState({ seedRows: [{ ...ASSIGNMENT_ROW_DEFAULTS }] }),
+  );
+  const [appliedAssignmentCriteria, setAppliedAssignmentCriteria] = useState(assignmentCriteria);
   const [assignmentCriteriaOpen, setAssignmentCriteriaOpen] = useState(false);
   const [allAssignments, setAllAssignments] = useState(null);
   const [assignmentsLoading, setAssignmentsLoading] = useState(false);
   const [assignmentsError, setAssignmentsError] = useState(null);
   const assignFetchTimerRef = useRef(null);
 
-  // Apply "My Open" preset once username is known
-  useEffect(() => {
-    if (username) {
-      setAssignmentFilters(makePresetFilters("my_open", username, canViewSuggestions));
-    }
-  }, [username]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ── Bill Tracking Request state ──
-  const [requestFilters, setRequestFilters] = useState(() => {
-    const stored = sessionStorage.getItem("requests_filters");
-    if (stored) { try { return JSON.parse(stored); } catch { /* ignore */ } }
-    return REQUEST_DEFAULT_FILTERS;
-  });
-  const [reportCriteriaOpen, setReportCriteriaOpen] = useState(() =>
-    sessionStorage.getItem("requests_reportCriteriaOpen") === "true"
-  );
+  const [requestsCriteria, setRequestsCriteria] = useState(loadStoredRequestsCriteria);
+  const [appliedRequestsCriteria, setAppliedRequestsCriteria] = useState(requestsCriteria);
+  // Always collapsed on navigation to keep the page visually quiet; criteria
+  // contents are still preserved between visits via REQUESTS_STORAGE_KEY.
+  const [reportCriteriaOpen, setReportCriteriaOpen] = useState(false);
   const [allRequests, setAllRequests] = useState(null);
   const [reportFields, setReportFields] = useState(null);
   const [requestsLoading, setRequestsLoading] = useState(false);
@@ -707,15 +817,14 @@ export default function Tasks() {
       .catch(() => {});
   }, [token]);
 
-  // ── Persist request filter state ──
+  // ── Persist request criteria state ──
   useEffect(() => {
-    sessionStorage.setItem("requests_filters", JSON.stringify(requestFilters));
-  }, [requestFilters]);
+    sessionStorage.setItem(REQUESTS_STORAGE_KEY, JSON.stringify(requestsCriteria));
+  }, [requestsCriteria]);
 
   useEffect(() => {
-    if (reportCriteriaOpen) sessionStorage.setItem("requests_reportCriteriaOpen", "true");
-    else sessionStorage.removeItem("requests_reportCriteriaOpen");
-  }, [reportCriteriaOpen]);
+    sessionStorage.removeItem("requests_reportCriteriaOpen");
+  }, []);
 
   // ── Load hearing assignments ──
   function loadAssignments() {
@@ -724,10 +833,10 @@ export default function Tasks() {
       setAssignmentsLoading(true);
       setAssignmentsError(null);
       try {
-        const filterGroup = buildAssignmentFilterGroup(assignmentFilters, {
-          canViewAll: canManageAssignments,
-          username,
-        });
+        const { ast } = validate(appliedAssignmentCriteria.expression, appliedAssignmentCriteria.criteria);
+        const filterGroup = compile(ast, appliedAssignmentCriteria.criteria, (row) =>
+          buildAssignmentRowFilterGroup(row.value, { canViewAll: canManageAssignments, username }),
+        );
         const data = await fetchReport({
           reportId: "hearing_assignments",
           columns: ASSIGNMENT_COLUMNS,
@@ -749,7 +858,7 @@ export default function Tasks() {
   useEffect(() => {
     loadAssignments();
     return () => clearTimeout(assignFetchTimerRef.current);
-  }, [JSON.stringify(assignmentFilters), token, canManageAssignments, username]);
+  }, [appliedAssignmentCriteria, token, canManageAssignments, username]);
 
   // ── Load bill tracking requests ──
   function loadRequests() {
@@ -758,7 +867,10 @@ export default function Tasks() {
       setRequestsLoading(true);
       setRequestsError(null);
       try {
-        const filters = buildRequestFilterGroup(requestFilters, { canViewAll, username });
+        const { ast } = validate(appliedRequestsCriteria.expression, appliedRequestsCriteria.criteria);
+        const filters = compile(ast, appliedRequestsCriteria.criteria, (row) =>
+          buildRequestRowFilterGroup(row.value, { canViewAll, username }),
+        );
         const data = await fetchReport({
           reportId: "requests",
           columns: REQUEST_COLUMNS,
@@ -780,13 +892,40 @@ export default function Tasks() {
   useEffect(() => {
     loadRequests();
     return () => clearTimeout(requestFetchTimerRef.current);
-  }, [JSON.stringify(requestFilters), token, canViewAll, username]);
+  }, [appliedRequestsCriteria, token, canViewAll, username]);
 
   function handleActionTaken() {
     setToast({ message: "Action recorded successfully.", type: "success" });
     loadAssignments();
     loadRequests();
   }
+
+  const canSystemEdit = can("system-report:edit");
+  const assignmentSavedReports = useSavedReports({
+    registryName: "hearing_assignments",
+    currentCriteria: assignmentCriteria,
+    onLoad: (criteria) => {
+      setAssignmentCriteria(criteria);
+      setAppliedAssignmentCriteria(criteria);
+    },
+    token,
+    username,
+    canSystemEdit,
+  });
+
+  const hadStoredRequestsCriteriaOnMount = useRef(!!sessionStorage.getItem(REQUESTS_STORAGE_KEY));
+  const requestSavedReports = useSavedReports({
+    registryName: "requests",
+    currentCriteria: requestsCriteria,
+    onLoad: (criteria) => {
+      setRequestsCriteria(criteria);
+      setAppliedRequestsCriteria(criteria);
+    },
+    token,
+    username,
+    skipDefaultLoad: hadStoredRequestsCriteriaOnMount.current,
+    canSystemEdit,
+  });
 
   const assignments = allAssignments ?? [];
   const requests = allRequests ?? [];
@@ -817,23 +956,19 @@ export default function Tasks() {
       <div className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Hearing Assignments</h2>
-          <div className={styles.quickButtons}>
-            <button className={styles.quickBtn}
-              onClick={() => setAssignmentFilters(makePresetFilters("my_open", username, canViewSuggestions))}>
-              My Open Assignments
-            </button>
-            <button className={styles.quickBtn}
-              onClick={() => setAssignmentFilters(makePresetFilters("all_open", username, canViewSuggestions))}>
-              All Open
-            </button>
-            {canViewSuggestions && (
-              <button className={styles.quickBtn}
-                onClick={() => setAssignmentFilters(makePresetFilters("unassigned", username, canViewSuggestions))}>
-                Unassigned
-              </button>
-            )}
-          </div>
         </div>
+
+        {!isMobile && token && (
+          <SavedReportsBar
+            reports={assignmentSavedReports.reports}
+            defaultReportId={assignmentSavedReports.defaultReportId}
+            loadedReportId={assignmentSavedReports.loadedReportId}
+            includeInactive={assignmentSavedReports.includeInactive}
+            onIncludeInactiveChange={assignmentSavedReports.setIncludeInactive}
+            onSelectReport={assignmentSavedReports.selectReport}
+            error={assignmentSavedReports.error}
+          />
+        )}
 
         <div className={styles.additionalFilters}>
           <button className={styles.additionalFiltersHeader} onClick={() => setAssignmentCriteriaOpen((v) => !v)}>
@@ -841,11 +976,39 @@ export default function Tasks() {
             <span className={`${styles.collapseArrow} ${assignmentCriteriaOpen ? styles.collapseArrowOpen : ""}`}>▾</span>
           </button>
           {assignmentCriteriaOpen && (
-            <AssignmentsFilterBar
-              filters={assignmentFilters}
-              onChange={setAssignmentFilters}
-              canViewAll={canManageAssignments}
-              canViewSuggestions={canViewSuggestions}
+            <StackingCriteria
+              value={assignmentCriteria}
+              onChange={setAssignmentCriteria}
+              appliedValue={appliedAssignmentCriteria}
+              onApply={(_filterGroup, value) => setAppliedAssignmentCriteria(value)}
+              RowEditor={AssignmentsRowEditor}
+              rowEditorProps={{
+                canViewAll: canManageAssignments,
+                canViewSuggestions,
+              }}
+              compileRow={(row) =>
+                buildAssignmentRowFilterGroup(row.value, { canViewAll: canManageAssignments, username })
+              }
+              emptyRowValue={makeAssignmentNewRowValue()}
+              summarizeRow={summarizeAssignmentRow}
+              mobile={isMobile}
+              onSave={isMobile ? undefined : assignmentSavedReports.save}
+              onSaveAs={isMobile ? undefined : assignmentSavedReports.openSaveAs}
+              saveAvailable={assignmentSavedReports.canSave}
+              saveAsAvailable={assignmentSavedReports.canSaveAs}
+              canRunQuery={assignmentSavedReports.canRunQuery}
+              loadedReportName={isMobile ? null : assignmentSavedReports.loadedReportName}
+              isLoadedActive={assignmentSavedReports.isLoadedActive}
+              isLoadedDefault={assignmentSavedReports.isLoadedDefault}
+              onToggleActive={isMobile ? undefined : assignmentSavedReports.toggleActive}
+              onToggleDefault={isMobile ? undefined : assignmentSavedReports.toggleDefault}
+              editMode={assignmentSavedReports.editMode}
+              editLocked={assignmentSavedReports.editLocked}
+              loadedDirty={assignmentSavedReports.loadedDirty}
+              onStartEdit={isMobile ? undefined : assignmentSavedReports.startEdit}
+              onCancelEdit={isMobile ? undefined : assignmentSavedReports.cancelEdit}
+              onNewReport={isMobile ? undefined : assignmentSavedReports.newReport}
+              onOpenSettings={isMobile ? undefined : assignmentSavedReports.openSettings}
             />
           )}
         </div>
@@ -866,9 +1029,14 @@ export default function Tasks() {
                 <th>Assigned To</th>
                 <th>Bill Number</th>
                 <th>Status</th>
-                <th>Hearing Info</th>
-                <th>Actions to Take</th>
-                <th className={styles.cellHistoryToggle}>Show History</th>
+                {!isMobile && (
+                  <>
+                    <th>Type</th>
+                    <th>Hearing Info</th>
+                    <th>Actions to Take</th>
+                    <th className={styles.cellHistoryToggle}>Show History</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -881,6 +1049,7 @@ export default function Tasks() {
                   token={token}
                   onActionTaken={handleActionTaken}
                   username={username}
+                  isMobile={isMobile}
                 />
               ))}
             </tbody>
@@ -894,6 +1063,18 @@ export default function Tasks() {
           <h2 className={styles.sectionTitle}>Bill Tracking Requests</h2>
         </div>
 
+        {!isMobile && token && (
+          <SavedReportsBar
+            reports={requestSavedReports.reports}
+            defaultReportId={requestSavedReports.defaultReportId}
+            loadedReportId={requestSavedReports.loadedReportId}
+            includeInactive={requestSavedReports.includeInactive}
+            onIncludeInactiveChange={requestSavedReports.setIncludeInactive}
+            onSelectReport={requestSavedReports.selectReport}
+            error={requestSavedReports.error}
+          />
+        )}
+
         <div className={styles.additionalFilters}>
           <button
             className={styles.additionalFiltersHeader}
@@ -903,11 +1084,36 @@ export default function Tasks() {
             <span className={`${styles.collapseArrow} ${reportCriteriaOpen ? styles.collapseArrowOpen : ""}`}>▾</span>
           </button>
           {reportCriteriaOpen && (
-            <RequestsFilterBar
-              filters={requestFilters}
-              onChange={setRequestFilters}
-              fields={reportFields}
-              canViewAll={canViewAll}
+            <StackingCriteria
+              value={requestsCriteria}
+              onChange={setRequestsCriteria}
+              appliedValue={appliedRequestsCriteria}
+              onApply={(_filterGroup, value) => setAppliedRequestsCriteria(value)}
+              RowEditor={RequestsRowEditor}
+              rowEditorProps={{ fields: reportFields, canViewAll }}
+              compileRow={(row) =>
+                buildRequestRowFilterGroup(row.value, { canViewAll, username })
+              }
+              emptyRowValue={makeRequestNewRowValue()}
+              summarizeRow={(rowValue) => summarizeRequestRow(rowValue, canViewAll)}
+              mobile={isMobile}
+              onSave={isMobile ? undefined : requestSavedReports.save}
+              onSaveAs={isMobile ? undefined : requestSavedReports.openSaveAs}
+              saveAvailable={requestSavedReports.canSave}
+              saveAsAvailable={requestSavedReports.canSaveAs}
+              canRunQuery={requestSavedReports.canRunQuery}
+              loadedReportName={isMobile ? null : requestSavedReports.loadedReportName}
+              isLoadedActive={requestSavedReports.isLoadedActive}
+              isLoadedDefault={requestSavedReports.isLoadedDefault}
+              onToggleActive={isMobile ? undefined : requestSavedReports.toggleActive}
+              onToggleDefault={isMobile ? undefined : requestSavedReports.toggleDefault}
+              editMode={requestSavedReports.editMode}
+              editLocked={requestSavedReports.editLocked}
+              loadedDirty={requestSavedReports.loadedDirty}
+              onStartEdit={isMobile ? undefined : requestSavedReports.startEdit}
+              onCancelEdit={isMobile ? undefined : requestSavedReports.cancelEdit}
+              onNewReport={isMobile ? undefined : requestSavedReports.newReport}
+              onOpenSettings={isMobile ? undefined : requestSavedReports.openSettings}
             />
           )}
         </div>
@@ -930,11 +1136,47 @@ export default function Tasks() {
                 canApprove={canApprove}
                 token={token}
                 onActionTaken={handleActionTaken}
+                isMobile={isMobile}
               />
             ))}
           </div>
         )}
       </div>
+
+      <SaveAsModal
+        open={assignmentSavedReports.saveAsOpen}
+        onClose={assignmentSavedReports.closeSaveAs}
+        onSave={assignmentSavedReports.saveAs}
+        canCreateSystemReports={assignmentSavedReports.canSystemEdit}
+        availableRoles={assignmentSavedReports.availableRoles}
+      />
+      <SettingsModal
+        open={assignmentSavedReports.settingsOpen}
+        onClose={assignmentSavedReports.closeSettings}
+        onSave={assignmentSavedReports.editSettings}
+        initialName={assignmentSavedReports.loadedReport?.display_name ?? ""}
+        isSystemLevel={assignmentSavedReports.loadedReport?.publication_level === "system"}
+        initialAllowedRoles={assignmentSavedReports.loadedReport?.allowed_roles ?? []}
+        canEditRoles={assignmentSavedReports.canSystemEdit}
+        availableRoles={assignmentSavedReports.availableRoles}
+      />
+      <SaveAsModal
+        open={requestSavedReports.saveAsOpen}
+        onClose={requestSavedReports.closeSaveAs}
+        onSave={requestSavedReports.saveAs}
+        canCreateSystemReports={requestSavedReports.canSystemEdit}
+        availableRoles={requestSavedReports.availableRoles}
+      />
+      <SettingsModal
+        open={requestSavedReports.settingsOpen}
+        onClose={requestSavedReports.closeSettings}
+        onSave={requestSavedReports.editSettings}
+        initialName={requestSavedReports.loadedReport?.display_name ?? ""}
+        isSystemLevel={requestSavedReports.loadedReport?.publication_level === "system"}
+        initialAllowedRoles={requestSavedReports.loadedReport?.allowed_roles ?? []}
+        canEditRoles={requestSavedReports.canSystemEdit}
+        availableRoles={requestSavedReports.availableRoles}
+      />
     </div>
   );
 }

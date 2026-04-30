@@ -83,7 +83,7 @@ function computeDayLayout(dayHearings) {
 
 // ─── Hearing detail overlay ───────────────────────────────────────────────────
 
-function HearingDetailOverlay({ hearing, showHidden, onClose, onNotesReload, onHiddenChanged, onAssignmentCreated }) {
+function HearingDetailOverlay({ hearing, onClose, onNotesReload, onHiddenChanged, onAssignmentCreated, showCanceledAssignments = false }) {
   const { can, token } = useAuth();
   const [notes, setNotes] = useState(hearing.dps_notes ?? "");
   const [saving, setSaving] = useState(false);
@@ -274,7 +274,7 @@ function HearingDetailOverlay({ hearing, showHidden, onClose, onNotesReload, onH
 
         {can("hearing-assignment:view") && (
           <div className={styles.overlayAssignments}>
-            <HearingAssignmentsPanel hearing={hearing} onAssignmentCreated={onAssignmentCreated} />
+            <HearingAssignmentsPanel hearing={hearing} onAssignmentCreated={onAssignmentCreated} showCanceled={showCanceledAssignments} />
           </div>
         )}
 
@@ -311,7 +311,7 @@ function HearingDetailOverlay({ hearing, showHidden, onClose, onNotesReload, onH
         {can("hearing:hide") && (
           <div className={styles.overlayHideRow}>
             <div className={styles.overlaySectionTitle}>Visibility</div>
-            {hearing.hidden && showHidden && (
+            {hearing.hidden && (
               <p className={styles.overlayHiddenNote}>Hidden from view and PDF</p>
             )}
             <button
@@ -350,8 +350,8 @@ export default function CalendarView({
   loading,
   noHearingsInRange,
   onHearingReload,
-  showHidden,
   onHiddenChanged,
+  showCanceledAssignments = false,
 }) {
   const [selectedHearing, setSelectedHearing] = useState(null);
   const scrollRef = useRef(null);
@@ -619,7 +619,6 @@ export default function CalendarView({
       {selectedHearing && (
         <HearingDetailOverlay
           hearing={selectedHearing}
-          showHidden={showHidden}
           onClose={() => setSelectedHearing(null)}
           onNotesReload={onHearingReload}
           onHiddenChanged={(updated) => {
@@ -627,6 +626,7 @@ export default function CalendarView({
             setSelectedHearing(null);
           }}
           onAssignmentCreated={onHearingReload}
+          showCanceledAssignments={showCanceledAssignments}
         />
       )}
     </div>

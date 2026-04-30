@@ -72,6 +72,7 @@ const DATE_MODES = [
 
 const ASSIGNMENT_STATUS_LABELS = {
   hearing_assigned: "Assigned",
+  hearing_reassigned: "Assigned",
   reassignment_request: "Reassign",
   auto_suggested_hearing_assignment: "Suggested",
   hearing_assignment_complete: "Completed",
@@ -84,7 +85,75 @@ function formatDate(str) {
   return new Date(str + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function buildSummary(filters, fields) {
+// Reads the bill-number filter as an array. Falls back to the legacy single-string
+// shape so reports/sessions saved before the chip UI keep working.
+export function readBillNumbers(advanced) {
+  const list = advanced?.agenda_bill_numbers;
+  if (Array.isArray(list)) return list;
+  const legacy = advanced?.agenda_bill_number;
+  if (typeof legacy === "string" && legacy.trim()) return [legacy.trim()];
+  return [];
+}
+
+function BillNumberChips({ value, onChange }) {
+  const list = Array.isArray(value) ? value : [];
+  const [draft, setDraft] = useState("");
+
+  function add() {
+    const v = draft.trim().toUpperCase();
+    if (!v) return;
+    if (list.includes(v)) {
+      setDraft("");
+      return;
+    }
+    onChange([...list, v]);
+    setDraft("");
+  }
+
+  function remove(v) {
+    onChange(list.filter((x) => x !== v));
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      add();
+    } else if (e.key === "Backspace" && !draft && list.length > 0) {
+      e.preventDefault();
+      onChange(list.slice(0, -1));
+    }
+  }
+
+  return (
+    <div className={styles.chipsContainer}>
+      {list.map((v) => (
+        <span key={v} className={styles.chip}>
+          {v}
+          <button
+            type="button"
+            className={styles.chipRemove}
+            onClick={() => remove(v)}
+            aria-label={`Remove ${v}`}
+            title={`Remove ${v}`}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        type="text"
+        className={styles.chipsInput}
+        placeholder={list.length === 0 ? "e.g. HB 62" : "Add another…"}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={add}
+      />
+    </div>
+  );
+}
+
+export function buildSummary(filters, fields) {
   const parts = [];
 
   if (filters.hearingDateMode === "on" && filters.hearingDateOn) {
@@ -105,10 +174,12 @@ function buildSummary(filters, fields) {
     parts.push(`Session: ${filters.legislature_session.join(", ")}`);
   }
 
-  if (filters.advanced?.agenda_bill_number) parts.push(`Bill: "${filters.advanced.agenda_bill_number}"`);
+  const bills = readBillNumbers(filters.advanced);
+  if (bills.length > 0) parts.push(`Bill on Agenda: ${bills.join(", ")}`);
   if (filters.showInactive) parts.push("Including inactive");
   if (filters.showHidden) parts.push("Including hidden");
   if (filters.advanced?.has_tracked_bill_without_assignment) parts.push("Has unassigned tracked bills");
+  if (filters.advanced?.has_prior_agendas) parts.push("Has prior agendas");
 
   const adv = filters.advanced ?? {};
   for (const [key, field] of Object.entries(fields ?? {})) {
@@ -246,12 +317,14 @@ export default function HearingsFilterBar({ filters, onChange, fields, canHide, 
         {/* bill on agenda */}
         <div className={styles.filterGroup}>
           <span className={styles.label}>Bill on Agenda</span>
-          <input
-            type="text"
-            className={styles.textInput}
-            placeholder="e.g. HB 62"
-            value={filters.advanced?.agenda_bill_number ?? ""}
-            onChange={(e) => setAdvanced("agenda_bill_number", e.target.value)}
+          <BillNumberChips
+            value={readBillNumbers(filters.advanced)}
+            onChange={(next) => {
+              const adv = { ...(filters.advanced ?? {}) };
+              adv.agenda_bill_numbers = next;
+              delete adv.agenda_bill_number;
+              onChange({ ...filters, advanced: adv });
+            }}
           />
         </div>
       </div>
@@ -315,6 +388,29 @@ export default function HearingsFilterBar({ filters, onChange, fields, canHide, 
               <button type="button" className={`${styles.seg} ${filters.showHidden ? styles.segActive : ""}`} onClick={() => set("showHidden", true)}>Show hidden</button>
             </div>
           </div>
+
+          {/* has_prior_agendas - permission-gated by backend field availability */}
+          {fields?.has_prior_agendas && (
+            <div className={styles.filterGroup}>
+              <span className={styles.label}>Prior Agendas</span>
+              <div className={styles.segmented}>
+                <button
+                  type="button"
+                  className={`${styles.seg} ${!filters.advanced?.has_prior_agendas ? styles.segActive : ""}`}
+                  onClick={() => setAdvanced("has_prior_agendas", false)}
+                >
+                  Any
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.seg} ${filters.advanced?.has_prior_agendas ? styles.segActive : ""}`}
+                  onClick={() => setAdvanced("has_prior_agendas", true)}
+                >
+                  Has Prior Agendas
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* hearing_type */}
           {hearingTypeOptions.length > 0 && (

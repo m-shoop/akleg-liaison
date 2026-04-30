@@ -1,13 +1,16 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import CurrentUser, get_current_user, get_optional_current_user, require_permission
+from app.models.email import EmailEventType
 from app.models.workflow import WorkflowActionType, WorkflowType
 from app.repositories.audit_log_repository import log_action
 from app.repositories.bill_repository import get_bill_by_id, set_bill_tracked
+from app.repositories.comm_prefs_repository import get_email_enabled
+from app.repositories.email_repository import upsert_workflow_action_message
 from app.repositories.hearing_repository import get_hearing_by_id
 from app.repositories.user_repository import get_user_by_email, search_users_by_email
 from app.repositories.bill_repository import get_bill_by_number
@@ -18,14 +21,17 @@ from app.repositories.workflow_repository import (
     create_bill_tracking_workflow,
     create_hearing_assignment_workflow,
     get_bill_tracking_state,
+    get_hearing_assignment_with_workflow,
     get_open_workflow_for_bill_by_user,
     get_workflow_by_id,
     has_open_hearing_assignments,
     has_open_workflows,
     list_workflows,
     update_hearing_assignment_assignee,
+    update_hearing_assignment_type,
     user_has_any_workflow_for_bill,
 )
+from app.services.email_notification_dispatcher import queue_assignment_notification
 from app.schemas.workflow import (
     AddActionRequest,
     BillTrackingStateItem,
@@ -34,6 +40,7 @@ from app.schemas.workflow import (
     CreateWorkflowRequest,
     HasOpenResponse,
     HearingAssignmentRead,
+    UpdateHearingAssignmentTypeRequest,
     WorkflowRead,
 )
 
@@ -55,6 +62,30 @@ async def search_assignees(
     """Return emails of active users matching the search query (for assignment comboboxes)."""
     users = await search_users_by_email(db, q)
     return [u.email for u in users]
+
+
+# ---------------------------------------------------------------------------
+# GET /workflows/assignee-comm-prefs
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/assignee-comm-prefs",
+    dependencies=[Depends(require_permission("workflow:view-all"))],
+)
+async def get_assignee_comm_prefs(
+    email: str = Query(..., min_length=1),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return whether the prospective assignee will receive email notifications.
+
+    Returns 404 if the email doesn't match a user. Liaisons hit this from the
+    assignment dialogs to show a heads-up when the target has opted out.
+    """
+    user = await get_user_by_email(db, email)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"email": user.email, "email_enabled": await get_email_enabled(db, user.id)}
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +178,7 @@ async def get_bill_tracking_state_route(
 @router.post("/hearing-assignment", response_model=HearingAssignmentRead, status_code=201)
 async def create_hearing_assignment(
     body: CreateHearingAssignmentRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(require_permission("workflow:view-all")),
 ):
@@ -176,6 +208,18 @@ async def create_hearing_assignment(
         assignee_id=assignee.id,
         bill_id=bill.id if bill else None,
         created_by_user_id=current_user.user.id,
+        assignment_type=body.assignment_type,
+    )
+    await db.refresh(workflow, ["hearing_assignment", "actions"])
+    initial_action = workflow.actions[0]
+    await queue_assignment_notification(
+        db,
+        hearing_assignment_id=workflow.hearing_assignment.id,
+        workflow_action_id=initial_action.id,
+        event_type=EmailEventType.ASSIGNMENT_CREATED,
+        recipient_user_id=assignee.id,
+        hearing_id=body.hearing_id,
+        bill_id=bill.id if bill else None,
     )
     await log_action(
         db,
@@ -183,16 +227,78 @@ async def create_hearing_assignment(
         "hearing_assignment_created",
         entity_type="workflow",
         entity_id=workflow.id,
+        target_user_id=assignee.id,
         details={
             "hearing_id": body.hearing_id,
             "assignee_id": assignee.id,
             "bill_id": bill.id if bill else None,
+            "assignment_type": body.assignment_type.value,
         },
+        request=request,
     )
     await db.commit()
 
     await db.refresh(workflow, ["hearing_assignment"])
     return workflow.hearing_assignment
+
+
+# ---------------------------------------------------------------------------
+# PATCH /workflows/hearing-assignments/{assignment_id}
+# ---------------------------------------------------------------------------
+
+
+@router.patch(
+    "/hearing-assignments/{assignment_id}",
+    response_model=HearingAssignmentRead,
+)
+async def update_hearing_assignment_type_route(
+    assignment_id: int,
+    body: UpdateHearingAssignmentTypeRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_permission("workflow:view-all")),
+):
+    """
+    Change the assignment_type on an auto-suggested hearing assignment before
+    it's been confirmed. Once the suggestion has been promoted to
+    hearing_assigned (or any later state), the type is locked — admins can
+    cancel the assignment and create a new one if they need a different type.
+    """
+    ha = await get_hearing_assignment_with_workflow(db, assignment_id)
+    if ha is None:
+        raise HTTPException(status_code=404, detail="Hearing assignment not found")
+
+    actions = ha.workflow.actions  # ordered ASC by action_timestamp
+    latest = actions[-1] if actions else None
+    if latest is None or latest.type != WorkflowActionType.AUTO_SUGGESTED_HEARING_ASSIGNMENT:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Assignment type can only be changed before the suggestion is "
+                "confirmed. Cancel and recreate the assignment to change it now."
+            ),
+        )
+
+    if ha.assignment_type == body.assignment_type:
+        return ha  # No-op; return current state.
+
+    await update_hearing_assignment_type(db, assignment_id, body.assignment_type)
+    await log_action(
+        db,
+        current_user.user,
+        "hearing_assignment_type_updated",
+        entity_type="hearing_assignment",
+        entity_id=assignment_id,
+        target_user_id=ha.assignee_id,
+        details={
+            "from": ha.assignment_type.value,
+            "to": body.assignment_type.value,
+        },
+        request=request,
+    )
+    await db.commit()
+    await db.refresh(ha)
+    return ha
 
 
 # ---------------------------------------------------------------------------
@@ -203,6 +309,7 @@ async def create_hearing_assignment(
 @router.post("", response_model=WorkflowRead, status_code=201)
 async def create_workflow(
     body: CreateWorkflowRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(require_permission("bill:request-tracking")),
 ):
@@ -245,10 +352,11 @@ async def create_workflow(
     await log_action(
         db,
         current_user.user,
-        "workflow_created",
+        "bill_tracking_requested",
         entity_type="workflow",
         entity_id=workflow.id,
-        details={"workflow_type": WorkflowType.REQUEST_BILL_TRACKING, "bill_id": body.bill_id, "bill_number": bill.bill_number},
+        details={"bill_id": body.bill_id, "bill_number": bill.bill_number},
+        request=request,
     )
     await db.commit()
 
@@ -270,6 +378,9 @@ _HEARING_ASSIGNMENT_ACTIONS = {
     WorkflowActionType.HEARING_ASSIGNMENT_DISCARDED,
 }
 
+# Actions only an admin (workflow:view-all) can take. hearing_reassigned is
+# emitted internally by the server when an admin submits hearing_assigned with
+# a new_assignee_email, so it isn't part of the inbound allow-set.
 _HEARING_ASSIGNMENT_ADMIN_ACTIONS = {
     WorkflowActionType.HEARING_ASSIGNED,
     WorkflowActionType.HEARING_ASSIGNMENT_CANCELED,
@@ -282,11 +393,24 @@ _HEARING_ASSIGNMENT_TERMINAL_ACTIONS = {
     WorkflowActionType.HEARING_ASSIGNMENT_DISCARDED,
 }
 
+# Audit action name per recorded WorkflowActionType for the HA branch. The
+# generic 'workflow_action_added' was hard to query; named actions let us grep
+# audit_logs.action directly without parsing the JSON details column.
+_HA_AUDIT_ACTION_NAMES = {
+    WorkflowActionType.HEARING_ASSIGNED: "hearing_assignment_confirmed",
+    WorkflowActionType.HEARING_REASSIGNED: "hearing_reassigned",
+    WorkflowActionType.HEARING_ASSIGNMENT_COMPLETE: "hearing_assignment_completed",
+    WorkflowActionType.HEARING_ASSIGNMENT_CANCELED: "hearing_assignment_canceled",
+    WorkflowActionType.HEARING_ASSIGNMENT_DISCARDED: "hearing_assignment_discarded",
+    WorkflowActionType.REASSIGNMENT_REQUEST: "hearing_reassignment_requested",
+}
+
 
 @router.post("/{workflow_id}/actions", response_model=WorkflowRead, status_code=201)
 async def add_action(
     workflow_id: int,
     body: AddActionRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
@@ -330,31 +454,123 @@ async def add_action(
         if body.type not in _HEARING_ASSIGNMENT_ADMIN_ACTIONS and not is_assignee and not is_admin:
             raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-        # For hearing_assigned, optionally re-assign to a different user
-        new_assignee_id = None
-        if body.type == WorkflowActionType.HEARING_ASSIGNED and body.new_assignee_email:
+        # ── Action type promotion: hearing_assigned + new_assignee_email is
+        # a reassignment, recorded as the dedicated hearing_reassigned type.
+        is_reassignment = (
+            body.type == WorkflowActionType.HEARING_ASSIGNED and bool(body.new_assignee_email)
+        )
+        recorded_type = (
+            WorkflowActionType.HEARING_REASSIGNED if is_reassignment else body.type
+        )
+
+        new_assignee_id: int | None = None
+        old_assignee_id = ha.assignee_id
+        if is_reassignment:
             new_assignee = await get_user_by_email(db, body.new_assignee_email)
             if new_assignee is None:
                 raise HTTPException(status_code=404, detail=f"User '{body.new_assignee_email}' not found")
             new_assignee_id = new_assignee.id
             await update_hearing_assignment_assignee(db, ha.id, new_assignee_id)
 
-        await add_workflow_action(db, workflow, body.type, current_user.user.id)
+        action = await add_workflow_action(db, workflow, recorded_type, current_user.user.id)
+
+        # ── Workflow-action messages (e.g. cancellation reason) ─────────────
+        if body.type == WorkflowActionType.HEARING_ASSIGNMENT_CANCELED and body.cancellation_reason:
+            await upsert_workflow_action_message(
+                db,
+                workflow_action_id=action.id,
+                message_type="cancellation_reason",
+                action_message=body.cancellation_reason.strip(),
+            )
+
+        # ── Email notifications (queued in this same transaction) ───────────
+        if body.type == WorkflowActionType.HEARING_ASSIGNED and not is_reassignment:
+            # "Confirm Assign" from a suggestion or first-time assigned action:
+            # tell the assignee.
+            await queue_assignment_notification(
+                db,
+                hearing_assignment_id=ha.id,
+                workflow_action_id=action.id,
+                event_type=EmailEventType.ASSIGNMENT_CREATED,
+                recipient_user_id=ha.assignee_id,
+                hearing_id=ha.hearing_id,
+                bill_id=ha.bill_id,
+            )
+        elif is_reassignment:
+            # Cancel the old assignee's notification (suppress if same user).
+            same_user = old_assignee_id == new_assignee_id
+            await queue_assignment_notification(
+                db,
+                hearing_assignment_id=ha.id,
+                workflow_action_id=action.id,
+                event_type=EmailEventType.ASSIGNMENT_CANCELED,
+                recipient_user_id=old_assignee_id,
+                hearing_id=ha.hearing_id,
+                bill_id=ha.bill_id,
+                cancellation_reason="Hearing has been reassigned",
+                suppressed_reason_override="identical_reassignment" if same_user else None,
+            )
+            # Tell the new assignee they now own this hearing.
+            await queue_assignment_notification(
+                db,
+                hearing_assignment_id=ha.id,
+                workflow_action_id=action.id,
+                event_type=EmailEventType.ASSIGNMENT_CREATED,
+                recipient_user_id=new_assignee_id,
+                hearing_id=ha.hearing_id,
+                bill_id=ha.bill_id,
+            )
+        elif body.type == WorkflowActionType.HEARING_ASSIGNMENT_CANCELED:
+            await queue_assignment_notification(
+                db,
+                hearing_assignment_id=ha.id,
+                workflow_action_id=action.id,
+                event_type=EmailEventType.ASSIGNMENT_CANCELED,
+                recipient_user_id=ha.assignee_id,
+                hearing_id=ha.hearing_id,
+                bill_id=ha.bill_id,
+                cancellation_reason=(body.cancellation_reason or "").strip() or None,
+            )
 
         if body.type in _HEARING_ASSIGNMENT_TERMINAL_ACTIONS:
             await close_workflows(db, [workflow.id])
 
+        # target_user_id: the user materially affected by the action.
+        # - reassignment: the new owner
+        # - discarded: no one (the assignment never landed on the assignee in a
+        #   meaningful way; admins discard auto-suggested rows)
+        # - reassignment_request: no clear single target (admins are notified)
+        # - everything else: the (current) assignee
+        if recorded_type == WorkflowActionType.HEARING_REASSIGNED:
+            target_user_id = new_assignee_id
+        elif recorded_type in (
+            WorkflowActionType.HEARING_ASSIGNMENT_DISCARDED,
+            WorkflowActionType.REASSIGNMENT_REQUEST,
+        ):
+            target_user_id = None
+        else:
+            target_user_id = old_assignee_id
+
+        audit_details: dict = {
+            "hearing_assignment_id": ha.id,
+            "hearing_id": ha.hearing_id,
+            "bill_id": ha.bill_id,
+        }
+        if recorded_type == WorkflowActionType.HEARING_REASSIGNED:
+            audit_details["from_assignee_id"] = old_assignee_id
+            audit_details["to_assignee_id"] = new_assignee_id
+        if body.type == WorkflowActionType.HEARING_ASSIGNMENT_CANCELED and body.cancellation_reason:
+            audit_details["cancellation_reason"] = body.cancellation_reason.strip()
+
         await log_action(
             db,
             current_user.user,
-            "workflow_action_added",
+            _HA_AUDIT_ACTION_NAMES[recorded_type],
             entity_type="workflow",
             entity_id=workflow_id,
-            details={
-                "action_type": body.type.value,
-                "hearing_assignment_id": ha.id,
-                **({"new_assignee_id": new_assignee_id} if new_assignee_id else {}),
-            },
+            target_user_id=target_user_id,
+            details=audit_details,
+            request=request,
         )
         await db.commit()
 
@@ -381,6 +597,8 @@ async def add_action(
 
     bill_id = btr.bill_id
 
+    requester_user_id = workflow.created_by
+
     if body.type == WorkflowActionType.APPROVE_BILL_TRACKING:
         await set_bill_tracked(db, bill_id, True)
         await log_action(
@@ -389,7 +607,9 @@ async def add_action(
             "bill_tracked",
             entity_type="bill",
             entity_id=bill_id,
+            target_user_id=requester_user_id,
             details={"source": "workflow_approval", "workflow_id": workflow_id},
+            request=request,
         )
 
     affected_workflows = await close_open_workflows_for_bill(
@@ -399,17 +619,23 @@ async def add_action(
         acting_user_id=current_user.user.id,
     )
 
+    decision_action = (
+        "bill_tracking_approved"
+        if body.type == WorkflowActionType.APPROVE_BILL_TRACKING
+        else "bill_tracking_denied"
+    )
     await log_action(
         db,
         current_user.user,
-        "workflow_action_added",
+        decision_action,
         entity_type="workflow",
         entity_id=workflow_id,
+        target_user_id=requester_user_id,
         details={
-            "action_type": body.type.value,
             "bill_id": bill_id,
             "affected_workflow_ids": [wf.id for wf in affected_workflows],
         },
+        request=request,
     )
     await db.commit()
 

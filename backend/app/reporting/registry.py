@@ -7,6 +7,10 @@ class FieldDefinition(BaseModel):
     filter_tier: Literal["basic", "advanced"] | None = None
     type: Literal["date", "datetime", "time", "text", "enum", "boolean", "integer", "json_array"]
     enum_source: dict | str | list | None = None
+    # Maps a canonical filter value to extra equivalents that should also match.
+    # E.g. {"hearing_assigned": ["hearing_reassigned"]} groups reassigned rows
+    # under the Assigned filter without exposing reassigned as its own option.
+    enum_aliases: dict[str, list[str]] | None = None
     aggregate: str | None = None
     operators: list[str]
     filterable: bool = True
@@ -147,7 +151,7 @@ REPORTS: dict[str, ReportDefinition] = {
                 column="bills.bill_number",
                 filter_tier="advanced",
                 type="text",
-                operators=["contains", "starts_with", "equals"],
+                operators=["contains", "starts_with", "equals", "in"],
                 filterable=True,
                 selectable=True,
                 label="Bill Number",
@@ -346,7 +350,8 @@ REPORTS: dict[str, ReportDefinition] = {
                     'fn_allocation',     fiscal_notes.fn_allocation,
                     'fn_identifier',     fiscal_notes.fn_identifier,
                     'publish_date',      fiscal_notes.publish_date,
-                    'control_code',      fiscal_notes.control_code
+                    'control_code',      fiscal_notes.control_code,
+                    'url',               fiscal_notes.url
                 )) FILTER (WHERE fiscal_notes.id IS NOT NULL)""",
                 join="fiscal_notes",
                 operators=[],
@@ -388,8 +393,9 @@ REPORTS: dict[str, ReportDefinition] = {
                 column="tags.id",
                 type="json_array",
                 aggregate="""json_agg(DISTINCT jsonb_build_object(
-                    'id',    tags.id,
-                    'label', tags.label
+                    'id',        tags.id,
+                    'label',     tags.label,
+                    'is_active', tags.is_active
                 )) FILTER (WHERE tags.id IS NOT NULL)""",
                 join="tags",
                 operators=[],
@@ -616,7 +622,7 @@ REPORTS: dict[str, ReportDefinition] = {
                 column="agenda_items.bill_number",
                 filter_tier="basic",
                 type="text",
-                operators=["contains", "equals"],
+                operators=["contains", "equals", "in"],
                 filterable=True,
                 selectable=False,
                 join="agenda_items",
@@ -665,6 +671,7 @@ REPORTS: dict[str, ReportDefinition] = {
                     "hearing_assignment_canceled",
                     "hearing_assignment_discarded",
                 ],
+                enum_aliases={"hearing_assigned": ["hearing_reassigned"]},
                 operators=["equals", "in"],
                 filterable=True,
                 selectable=False,
@@ -682,6 +689,7 @@ REPORTS: dict[str, ReportDefinition] = {
                     'workflow_id',         hearing_assignments.workflow_id,
                     'assignee_email',      (SELECT email FROM users WHERE id = hearing_assignments.assignee_id),
                     'bill_number',         (SELECT bill_number FROM bills b2 WHERE b2.id = hearing_assignments.bill_id),
+                    'assignment_type',     hearing_assignments.assignment_type,
                     'latest_action_type',  (SELECT type FROM workflow_actions wa
                                             WHERE wa.workflow_id = hearing_assignments.workflow_id
                                             ORDER BY wa.action_timestamp DESC LIMIT 1)
@@ -693,6 +701,23 @@ REPORTS: dict[str, ReportDefinition] = {
                 label="Hearing Assignments",
                 render_as="text",
                 requires_permission="hearing-assignment:view",
+            ),
+            "has_prior_agendas": FieldDefinition(
+                column=(
+                    "EXISTS ("
+                    "  SELECT 1 FROM hearing_agenda_versions hav_prior"
+                    "  WHERE hav_prior.hearing_id = hearings.id"
+                    "    AND hav_prior.is_current = FALSE"
+                    ")"
+                ),
+                filter_tier="advanced",
+                type="boolean",
+                operators=["equals"],
+                filterable=True,
+                selectable=True,
+                label="Has Prior Agendas",
+                render_as="text",
+                requires_permission="prior-hearing-agendas:view",
             ),
             "has_tracked_bill_without_assignment": FieldDefinition(
                 column=(
@@ -707,7 +732,8 @@ REPORTS: dict[str, ReportDefinition] = {
                     "    AND (SELECT type FROM workflow_actions wa2"
                     "         WHERE wa2.workflow_id = ha2.workflow_id"
                     "         ORDER BY wa2.action_timestamp DESC LIMIT 1)"
-                    "    IN ('hearing_assigned', 'hearing_assignment_complete',"
+                    "    IN ('hearing_assigned', 'hearing_reassigned',"
+                    "        'hearing_assignment_complete',"
                     "        'reassignment_request', 'auto_suggested_hearing_assignment')"
                     "  )"
                     ")"
@@ -946,6 +972,21 @@ REPORTS: dict[str, ReportDefinition] = {
     "hearing_assignments": ReportDefinition(
         label="Hearing Assignments",
         base_entity="HearingAssignment",
+        security_filters=[
+            SecurityFilter(
+                requires_permission="hearing-assignment:view-auto-suggestions",
+                fallback_sql=(
+                    "(SELECT type FROM workflow_actions wa"
+                    " WHERE wa.workflow_id = hearing_assignments.workflow_id"
+                    " ORDER BY wa.action_timestamp DESC LIMIT 1)"
+                    " <> 'auto_suggested_hearing_assignment'"
+                ),
+            ),
+            SecurityFilter(
+                requires_permission="workflow:view-all",
+                fallback_sql="hearing_assignments.assignee_id = :current_user_id",
+            ),
+        ],
         joins={
             "workflow": JoinDefinition(
                 entity="Workflow",
@@ -1029,6 +1070,7 @@ REPORTS: dict[str, ReportDefinition] = {
                     "hearing_assignment_canceled",
                     "hearing_assignment_discarded",
                 ],
+                enum_aliases={"hearing_assigned": ["hearing_reassigned"]},
                 operators=["equals", "in"],
                 filterable=True,
                 selectable=True,
@@ -1044,6 +1086,17 @@ REPORTS: dict[str, ReportDefinition] = {
                 selectable=True,
                 join="assignee_user",
                 label="Assignee",
+                render_as="text",
+            ),
+            "assignment_type": FieldDefinition(
+                column="hearing_assignments.assignment_type",
+                filter_tier="advanced",
+                type="enum",
+                enum_source=["awareness", "monitoring"],
+                operators=["equals", "in"],
+                filterable=True,
+                selectable=True,
+                label="Type",
                 render_as="text",
             ),
             "hearing_id": FieldDefinition(
@@ -1160,7 +1213,8 @@ REPORTS: dict[str, ReportDefinition] = {
                     " WHEN (SELECT type FROM workflow_actions wa"
                     "       WHERE wa.workflow_id = hearing_assignments.workflow_id"
                     "       ORDER BY wa.action_timestamp DESC LIMIT 1)"
-                    "      IN ('hearing_assigned', 'reassignment_request') THEN 2"
+                    "      IN ('hearing_assigned', 'hearing_reassigned',"
+                    "          'reassignment_request') THEN 2"
                     " ELSE 3 END"
                 ),
                 type="integer",

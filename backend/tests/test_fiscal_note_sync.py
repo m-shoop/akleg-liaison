@@ -186,6 +186,38 @@ class TestParseFiscalNoteLinks:
         assert _parse_fiscal_note_links("<div>No fiscal notes.</div>") == []
 
 
+# Regression: HB 239 had a Department of Public Safety appropriation
+# ("Alaska State Troopers") with two allocations underneath it ("Alaska State
+# Trooper Detachments" and "Alaska Bureau of Investigation"), each with its
+# own fiscal note link. The previous backwards-walking parser misread the
+# first allocation as the second link's appropriation.
+_MULTI_ALLOCATION_HTML = (
+    "&nbsp;&nbsp;<b>Department of Public Safety</b><br>"
+    "&nbsp;&nbsp;&nbsp;&nbsp;Alaska State Troopers<br>"
+    "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Alaska State Trooper Detachments<br>"
+    "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
+    '<a href="fiscalNote.php?q=&amp;billID=HB__239&amp;billVersion=I&amp;compNum=2295&amp;session=34&amp;sid=1014098271" target="_blank">View Note</a>'
+    "<br>"
+    "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Alaska Bureau of Investigation<br>"
+    "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
+    '<a href="fiscalNote.php?q=&amp;billID=HB__239&amp;billVersion=I&amp;compNum=2667&amp;session=34&amp;sid=2000405682" target="_blank">View Note</a>'
+    "<br>"
+)
+
+
+class TestParseFiscalNoteLinksMultiAllocation:
+    def test_first_note_has_correct_appropriation_and_allocation(self):
+        links = _parse_fiscal_note_links(_MULTI_ALLOCATION_HTML)
+        assert links[0]["fn_appropriation"] == "Alaska State Troopers"
+        assert links[0]["fn_allocation"] == "Alaska State Trooper Detachments"
+
+    def test_second_note_inherits_appropriation_and_has_new_allocation(self):
+        """The second note shares the appropriation but has a different allocation."""
+        links = _parse_fiscal_note_links(_MULTI_ALLOCATION_HTML)
+        assert links[1]["fn_appropriation"] == "Alaska State Troopers"
+        assert links[1]["fn_allocation"] == "Alaska Bureau of Investigation"
+
+
 # ---------------------------------------------------------------------------
 # _parse_pdf_fields
 # ---------------------------------------------------------------------------

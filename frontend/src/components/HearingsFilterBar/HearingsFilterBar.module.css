@@ -147,6 +147,56 @@
   width: 160px;
 }
 
+.chipsContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  border: 1px solid var(--color-border, #cbd5e1);
+  border-radius: 6px;
+  background: var(--color-surface-raised);
+  padding: 3px 6px;
+  min-width: 180px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  padding: 2px 4px 2px 8px;
+  background: var(--color-rainy-sky);
+  color: #fff;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.chipRemove {
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.chipRemove:hover {
+  opacity: 1;
+}
+
+.chipsInput {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.85rem;
+  padding: 2px 4px;
+  flex: 1;
+  min-width: 100px;
+  color: var(--color-text, #334155);
+}
+
 .weekShortcuts {
   display: flex;
   gap: 4px;

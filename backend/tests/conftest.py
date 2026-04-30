@@ -29,6 +29,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from app.config import settings
 from app.database import get_db
 from app.main import app
+
+# The test client speaks plain http://, so a Secure cookie set by /auth/validate-token
+# won't be sent back on the follow-up /auth/set-password request and the handler
+# would 401. Production keeps cookie_secure=True; tests need it off.
+settings.cookie_secure = False
 from app.models.user import TokenType, UserStatus
 from app.repositories.user_repository import (
     create_user,
@@ -199,3 +204,23 @@ async def login_user(client: AsyncClient, email: str, password: str) -> str:
     )
     assert resp.status_code == 200, resp.text
     return resp.json()["access_token"]
+
+
+async def audit_actions_for(
+    db: AsyncSession,
+    *,
+    entity_type: str,
+    entity_id: int,
+) -> list[str]:
+    """Return audit action names for an entity, in insertion order. Used by
+    audit-log regression tests so a future rename of an action string fails
+    the test instead of silently dropping rows from analytics."""
+    from sqlalchemy import select
+    from app.models.audit_log import AuditLog
+
+    result = await db.execute(
+        select(AuditLog.action)
+        .where(AuditLog.entity_type == entity_type, AuditLog.entity_id == entity_id)
+        .order_by(AuditLog.id)
+    )
+    return list(result.scalars().all())

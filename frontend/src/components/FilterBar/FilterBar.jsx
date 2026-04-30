@@ -70,6 +70,74 @@ const HEARING_DATE_MODES = [
   { value: "range", label: "In Range" },
 ];
 
+// Reads the bill_number filter as an array. Falls back to the legacy single-string
+// shape so reports/sessions saved before the chip UI keep working.
+export function readBillNumbers(advanced) {
+  const list = advanced?.bill_numbers;
+  if (Array.isArray(list)) return list;
+  const legacy = advanced?.bill_number;
+  if (typeof legacy === "string" && legacy.trim()) return [legacy.trim()];
+  return [];
+}
+
+function BillNumberChips({ value, onChange }) {
+  const list = Array.isArray(value) ? value : [];
+  const [draft, setDraft] = useState("");
+
+  function add() {
+    const v = draft.trim().toUpperCase();
+    if (!v) return;
+    if (list.includes(v)) {
+      setDraft("");
+      return;
+    }
+    onChange([...list, v]);
+    setDraft("");
+  }
+
+  function remove(v) {
+    onChange(list.filter((x) => x !== v));
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      add();
+    } else if (e.key === "Backspace" && !draft && list.length > 0) {
+      e.preventDefault();
+      onChange(list.slice(0, -1));
+    }
+  }
+
+  return (
+    <div className={styles.chipsContainer}>
+      {list.map((v) => (
+        <span key={v} className={styles.chip}>
+          {v}
+          <button
+            type="button"
+            className={styles.chipRemove}
+            onClick={() => remove(v)}
+            aria-label={`Remove ${v}`}
+            title={`Remove ${v}`}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        type="text"
+        className={styles.chipsInput}
+        placeholder={list.length === 0 ? "e.g. HB 62" : "Add another…"}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={add}
+      />
+    </div>
+  );
+}
+
 function ordinalSuffix(n) {
   const v = n % 100;
   if (v >= 11 && v <= 13) return "th";
@@ -96,7 +164,7 @@ function formatDateLong(str) {
   return `${month} ${day}${suffix}, ${d.getFullYear()}`;
 }
 
-function buildSummary(filters, fields) {
+export function buildSummary(filters, fields) {
   const parts = [];
 
   const trackedLabel = TRACKED_OPTIONS.find((o) => o.value === (filters.tracked ?? "all"))?.label ?? "All Bills";
@@ -121,8 +189,13 @@ function buildSummary(filters, fields) {
     if (field.filter_tier !== "advanced" || !field.filterable) continue;
 
     if (field.type === "text") {
-      const val = advanced[key];
-      if (val) parts.push(`${field.label}: "${val}"`);
+      if (key === "bill_number") {
+        const chips = readBillNumbers(advanced);
+        if (chips.length > 0) parts.push(`${field.label}: ${chips.join(", ")}`);
+      } else {
+        const val = advanced[key];
+        if (val) parts.push(`${field.label}: "${val}"`);
+      }
     } else if (field.type === "enum" && field.operators?.includes("in")) {
       const vals = advanced[key];
       if (Array.isArray(vals) && vals.length > 0) {
@@ -173,7 +246,18 @@ export default function FilterBar({ fields, filters, onChange }) {
     return (
       <div key={key} className={styles.filterGroup}>
         <span className={styles.label}>{field.label}</span>
-        {field.type === "text" && (
+        {key === "bill_number" && (
+          <BillNumberChips
+            value={readBillNumbers(filters.advanced)}
+            onChange={(next) => {
+              const adv = { ...(filters.advanced ?? {}) };
+              adv.bill_numbers = next;
+              delete adv.bill_number;
+              onChange({ ...filters, advanced: adv });
+            }}
+          />
+        )}
+        {field.type === "text" && key !== "bill_number" && (
           <input
             type="text"
             className={styles.textInput}

@@ -53,9 +53,22 @@ def _build_condition(
 
     ft = field_def.type
 
+    aliases = field_def.enum_aliases or {}
+
+    def _expand(v):
+        return [v, *aliases.get(v, [])]
+
     if op == "equals":
-        params[base] = _coerce_param(condition.value, ft)
-        return f"{col} = :{base}"
+        expanded = _expand(condition.value)
+        if len(expanded) == 1:
+            params[base] = _coerce_param(expanded[0], ft)
+            return f"{col} = :{base}"
+        placeholders = []
+        for i, v in enumerate(expanded):
+            k = f"{base}_{i}"
+            params[k] = _coerce_param(v, ft)
+            placeholders.append(f":{k}")
+        return f"{col} IN ({', '.join(placeholders)})"
     elif op == "contains":
         params[base] = f"%{condition.value}%"
         return f"{col} ILIKE :{base}"
@@ -63,7 +76,14 @@ def _build_condition(
         params[base] = f"{condition.value}%"
         return f"{col} ILIKE :{base}"
     elif op == "in":
-        values = condition.value if isinstance(condition.value, list) else [condition.value]
+        raw = condition.value if isinstance(condition.value, list) else [condition.value]
+        seen = set()
+        values = []
+        for v in raw:
+            for ev in _expand(v):
+                if ev not in seen:
+                    seen.add(ev)
+                    values.append(ev)
         placeholders = []
         for i, v in enumerate(values):
             k = f"{base}_{i}"
@@ -256,6 +276,7 @@ async def run_report(
     db: AsyncSession,
     request: ReportRequest,
     user_permissions: frozenset[str],
+    current_user_id: int | None = None,
 ) -> ReportResponse:
     report = REPORTS.get(request.report)
     if report is None:
@@ -271,7 +292,7 @@ async def run_report(
         if field.requires_permission and field.requires_permission not in user_permissions:
             raise ReportPermissionError(f"Insufficient permissions for column '{col}'")
 
-    params: dict = {}
+    params: dict = {"current_user_id": current_user_id}
     where_sql, filter_joins = _build_filter_group(
         report, request.filters, params, user_permissions
     )

@@ -15,6 +15,7 @@ class WorkflowActionType(str, enum.Enum):
     HEARING_ASSIGNMENT_COMPLETE = "hearing_assignment_complete"
     REASSIGNMENT_REQUEST = "reassignment_request"
     HEARING_ASSIGNMENT_CANCELED = "hearing_assignment_canceled"
+    HEARING_REASSIGNED = "hearing_reassigned"
     AUTO_SUGGESTED_HEARING_ASSIGNMENT = "auto_suggested_hearing_assignment"
     HEARING_ASSIGNMENT_DISCARDED = "hearing_assignment_discarded"
 
@@ -27,6 +28,11 @@ class WorkflowType(str, enum.Enum):
 class WorkflowStatus(str, enum.Enum):
     OPEN = "open"
     CLOSED = "closed"
+
+
+class AssignmentType(str, enum.Enum):
+    AWARENESS = "awareness"
+    MONITORING = "monitoring"
 
 
 class Workflow(Base):
@@ -127,6 +133,17 @@ class HearingAssignment(Base):
     )
     workflow_id: Mapped[int] = mapped_column(
         ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False
+    )
+    assignment_type: Mapped[AssignmentType] = mapped_column(
+        Enum(
+            AssignmentType,
+            name="assignment_type_enum",
+            create_type=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=False,
+        default=AssignmentType.MONITORING,
+        server_default=AssignmentType.MONITORING.value,
     )
 
     workflow: Mapped["Workflow"] = relationship(back_populates="hearing_assignment")

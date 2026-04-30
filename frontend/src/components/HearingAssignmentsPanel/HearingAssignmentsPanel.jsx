@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { addWorkflowAction, createHearingAssignment } from "../../api/workflows";
+import { addWorkflowAction, createHearingAssignment, updateHearingAssignmentType } from "../../api/workflows";
+import { useAssigneeOptedOut, OPT_OUT_WARNING } from "../../hooks/useAssigneeOptedOut";
 import UserCombobox from "../UserCombobox/UserCombobox";
 import styles from "./HearingAssignmentsPanel.module.css";
 
@@ -20,8 +21,13 @@ function fmtTime(timeStr) {
   return `${hour}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
+function assignmentTypeLabel(t) {
+  return t === "awareness" ? "Awareness" : "Monitoring";
+}
+
 const ACTIVE_ASSIGNMENT_TYPES = new Set([
   "hearing_assigned",
+  "hearing_reassigned",
   "hearing_assignment_complete",
   "reassignment_request",
   "auto_suggested_hearing_assignment",
@@ -30,30 +36,56 @@ const ACTIVE_ASSIGNMENT_TYPES = new Set([
 // Confirmed open or completed — suggestions don't count
 const OPEN_OR_COMPLETE_TYPES = new Set([
   "hearing_assigned",
+  "hearing_reassigned",
   "hearing_assignment_complete",
   "reassignment_request",
 ]);
 
-export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated }) {
+export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, showCanceled = false }) {
   const { can, token, username } = useAuth();
 
   const [showCreateAssignment, setShowCreateAssignment] = useState(false);
-  const [assignmentForm, setAssignmentForm] = useState({ assigneeEmail: "", billNumber: "" });
+  const [assignmentForm, setAssignmentForm] = useState({
+    assigneeEmail: "",
+    billNumber: "",
+    assignmentType: "monitoring",
+  });
   const [creatingAssignment, setCreatingAssignment] = useState(false);
   const [createAssignmentError, setCreateAssignmentError] = useState(null);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [assignmentActing, setAssignmentActing] = useState(null);
   const [assignmentActionError, setAssignmentActionError] = useState(null);
   const [reassignEmail, setReassignEmail] = useState("");
+  const [showCancelReason, setShowCancelReason] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState("");
+  const [updatingType, setUpdatingType] = useState(false);
 
   const canViewSuggestions = can("hearing-assignment:view-auto-suggestions");
   const canCreate = can("workflow:view-all");
 
-  const visible = (hearing.hearing_assignments_summary ?? []).filter(
-    (a) =>
-      ACTIVE_ASSIGNMENT_TYPES.has(a.latest_action_type) &&
-      (a.latest_action_type !== "auto_suggested_hearing_assignment" || canViewSuggestions)
+  const createAssigneeOptedOut = useAssigneeOptedOut(
+    showCreateAssignment ? assignmentForm.assigneeEmail : "",
+    token,
   );
+  const isSuggestedSelected =
+    selectedAssignment?.latest_action_type === "auto_suggested_hearing_assignment";
+  const isReassignSelected =
+    selectedAssignment?.latest_action_type === "reassignment_request";
+  const suggestedAssigneeOptedOut = useAssigneeOptedOut(
+    isSuggestedSelected && !showCancelReason ? selectedAssignment?.assignee_email ?? "" : "",
+    token,
+  );
+  const reassignAssigneeOptedOut = useAssigneeOptedOut(
+    isReassignSelected && !showCancelReason ? reassignEmail : "",
+    token,
+  );
+
+  const visible = (hearing.hearing_assignments_summary ?? []).filter((a) => {
+    if (a.latest_action_type === "hearing_assignment_canceled") return showCanceled;
+    if (!ACTIVE_ASSIGNMENT_TYPES.has(a.latest_action_type)) return false;
+    if (a.latest_action_type === "auto_suggested_hearing_assignment") return canViewSuggestions;
+    return true;
+  });
 
   const assignedBillNumbers = new Set(
     (hearing.hearing_assignments_summary ?? [])
@@ -74,10 +106,11 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated }
         hearingId: hearing.id,
         assigneeEmail: assignmentForm.assigneeEmail.trim(),
         billNumber: assignmentForm.billNumber.trim() || null,
+        assignmentType: assignmentForm.assignmentType,
         token,
       });
       setShowCreateAssignment(false);
-      setAssignmentForm({ assigneeEmail: "", billNumber: "" });
+      setAssignmentForm({ assigneeEmail: "", billNumber: "", assignmentType: "monitoring" });
       onAssignmentCreated?.();
     } catch (err) {
       setCreateAssignmentError(err.message);
@@ -94,12 +127,46 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated }
       await addWorkflowAction(selectedAssignment.workflow_id, actionType, token, opts);
       setSelectedAssignment(null);
       setReassignEmail("");
+      setShowCancelReason(false);
+      setCancellationReason("");
       onAssignmentCreated?.();
     } catch (err) {
       setAssignmentActionError(err.message);
     } finally {
       setAssignmentActing(null);
     }
+  }
+
+  async function handleSuggestionTypeChange(newType) {
+    if (!selectedAssignment || newType === selectedAssignment.assignment_type) return;
+    setAssignmentActionError(null);
+    setUpdatingType(true);
+    try {
+      await updateHearingAssignmentType({
+        assignmentId: selectedAssignment.id,
+        assignmentType: newType,
+        token,
+      });
+      setSelectedAssignment({ ...selectedAssignment, assignment_type: newType });
+      onAssignmentCreated?.();
+    } catch (err) {
+      setAssignmentActionError(err.message);
+    } finally {
+      setUpdatingType(false);
+    }
+  }
+
+  function startCancelFlow() {
+    // Auto-fill the reason when the linked hearing is no longer on the calendar.
+    setCancellationReason(hearing.is_active === false ? "Hearing no longer on calendar" : "");
+    setShowCancelReason(true);
+  }
+
+  function closeAssignmentModal() {
+    setSelectedAssignment(null);
+    setReassignEmail("");
+    setShowCancelReason(false);
+    setCancellationReason("");
   }
 
   const chamberPrefix = hearing.chamber ? `(${hearing.chamber}) ` : "";
@@ -128,6 +195,7 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated }
             <tr>
               <th>Assigned To</th>
               <th>Bill Number</th>
+              <th>Type</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -135,21 +203,26 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated }
             {visible.map((a) => {
               const statusLabel = {
                 hearing_assigned: "Open",
+                hearing_reassigned: "Open",
                 hearing_assignment_complete: "Complete",
                 reassignment_request: "Reassign requested",
                 auto_suggested_hearing_assignment: "Suggested",
+                hearing_assignment_canceled: "Canceled",
               }[a.latest_action_type];
               const statusClass = {
                 hearing_assigned: styles.openTag,
+                hearing_reassigned: styles.openTag,
                 hearing_assignment_complete: styles.completeTag,
                 reassignment_request: styles.reassignTag,
                 auto_suggested_hearing_assignment: styles.suggestedTag,
+                hearing_assignment_canceled: styles.canceledTag,
               }[a.latest_action_type];
+              const isCanceled = a.latest_action_type === "hearing_assignment_canceled";
               const openAssignment = () => { setAssignmentActionError(null); setSelectedAssignment(a); };
               return (
                 <tr
                   key={a.id}
-                  className={styles.row}
+                  className={`${styles.row} ${isCanceled ? styles.rowCanceled : ""}`}
                   onClick={openAssignment}
                   tabIndex={0}
                   role="button"
@@ -162,6 +235,7 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated }
                 >
                   <td className={styles.cellEmail}>{a.assignee_email}</td>
                   <td className={styles.cellBill}>{a.bill_number || ""}</td>
+                  <td className={styles.cellType}>{assignmentTypeLabel(a.assignment_type)}</td>
                   <td><span className={statusClass}>{statusLabel}</span></td>
                 </tr>
               );
@@ -179,7 +253,10 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated }
       )}
 
       {showCreateAssignment && (
-        <div className={styles.modalOverlay} onClick={() => setShowCreateAssignment(false)}>
+        <div
+          className={styles.modalOverlay}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowCreateAssignment(false); }}
+        >
           <div className={styles.modalDialog} onClick={(e) => e.stopPropagation()}>
             <h3 className={styles.modalTitle}>Create Assignment</h3>
             <p className={styles.modalHearingInfo}>{hearingInfo}</p>
@@ -212,6 +289,20 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated }
                   ))}
               </select>
             </div>
+            <div className={styles.modalField}>
+              <label className={styles.modalLabel}>Type</label>
+              <select
+                className={styles.modalSelect}
+                value={assignmentForm.assignmentType}
+                onChange={(e) => setAssignmentForm((f) => ({ ...f, assignmentType: e.target.value }))}
+              >
+                <option value="monitoring">Monitoring Reports</option>
+                <option value="awareness">Awareness</option>
+              </select>
+            </div>
+            {createAssigneeOptedOut && (
+              <p className={styles.optOutWarning}>{OPT_OUT_WARNING}</p>
+            )}
             {createAssignmentError && (
               <p className={styles.modalError}>{createAssignmentError}</p>
             )}
@@ -241,16 +332,41 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated }
         const canManage = can("workflow:view-all");
         const isSuggested = a.latest_action_type === "auto_suggested_hearing_assignment";
         const isReassignRequest = a.latest_action_type === "reassignment_request";
-        const isAssigned = a.latest_action_type === "hearing_assigned";
+        const isAssigned =
+          a.latest_action_type === "hearing_assigned" ||
+          a.latest_action_type === "hearing_reassigned";
+        const cancelOpts = { cancellationReason: cancellationReason.trim() || null };
         return (
-          <div className={styles.modalOverlay} onClick={() => { setSelectedAssignment(null); setReassignEmail(""); }}>
+          <div
+            className={styles.modalOverlay}
+            onClick={(e) => { if (e.target === e.currentTarget) closeAssignmentModal(); }}
+          >
             <div className={styles.modalDialog} onClick={(e) => e.stopPropagation()}>
               <h3 className={styles.modalTitle}>Assignment</h3>
               <p className={styles.modalHearingInfo}>{hearingInfo}</p>
               <p className={styles.modalHearingInfo}>
                 {a.bill_number ? `${a.bill_number} · ` : ""}{a.assignee_email}
               </p>
-              {canManage && isReassignRequest && (
+              {canManage && isSuggested && !showCancelReason ? (
+                <div className={styles.modalField}>
+                  <label className={styles.modalLabel}>Type</label>
+                  <select
+                    className={styles.modalSelect}
+                    value={a.assignment_type ?? "monitoring"}
+                    onChange={(e) => handleSuggestionTypeChange(e.target.value)}
+                    disabled={updatingType || assignmentActing !== null}
+                  >
+                    <option value="monitoring">Monitoring Reports</option>
+                    <option value="awareness">Awareness</option>
+                  </select>
+                </div>
+              ) : (
+                <div className={styles.modalField}>
+                  <label className={styles.modalLabel}>Type</label>
+                  <p className={styles.modalReadOnly}>{assignmentTypeLabel(a.assignment_type)}</p>
+                </div>
+              )}
+              {canManage && isReassignRequest && !showCancelReason && (
                 <div className={styles.modalField}>
                   <label className={styles.modalLabel}>New assignee</label>
                   <UserCombobox
@@ -262,18 +378,34 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated }
                   />
                 </div>
               )}
+              {showCancelReason && (
+                <div className={styles.modalField}>
+                  <label className={styles.modalLabel}>Cancellation Reason</label>
+                  <textarea
+                    className={styles.modalSelect}
+                    rows={3}
+                    value={cancellationReason}
+                    onChange={(e) => setCancellationReason(e.target.value)}
+                    placeholder="Why is this assignment being canceled?"
+                    autoFocus
+                  />
+                </div>
+              )}
+              {(suggestedAssigneeOptedOut || reassignAssigneeOptedOut) && (
+                <p className={styles.optOutWarning}>{OPT_OUT_WARNING}</p>
+              )}
               {assignmentActionError && (
                 <p className={styles.modalError}>{assignmentActionError}</p>
               )}
               <div className={styles.modalActions}>
                 <button
                   className={styles.modalCancelBtn}
-                  onClick={() => { setSelectedAssignment(null); setReassignEmail(""); }}
+                  onClick={closeAssignmentModal}
                   disabled={assignmentActing !== null}
                 >
                   Close
                 </button>
-                {canManage && isSuggested && (
+                {canManage && isSuggested && !showCancelReason && (
                   <>
                     <button
                       className={styles.modalSubmitBtn}
@@ -291,7 +423,7 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated }
                     </button>
                   </>
                 )}
-                {canManage && isReassignRequest && (
+                {canManage && isReassignRequest && !showCancelReason && (
                   <>
                     <button
                       className={styles.modalSubmitBtn}
@@ -302,14 +434,32 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated }
                     </button>
                     <button
                       className={styles.modalDangerBtn}
-                      onClick={() => handleAssignmentAction("hearing_assignment_canceled")}
+                      onClick={startCancelFlow}
                       disabled={assignmentActing !== null}
                     >
-                      {assignmentActing === "hearing_assignment_canceled" ? "…" : "Cancel Assignment"}
+                      Cancel Assignment
                     </button>
                   </>
                 )}
-                {isAssignee && isAssigned && (
+                {canManage && isAssigned && !showCancelReason && (
+                  <button
+                    className={styles.modalDangerBtn}
+                    onClick={startCancelFlow}
+                    disabled={assignmentActing !== null}
+                  >
+                    Cancel Assignment
+                  </button>
+                )}
+                {showCancelReason && (
+                  <button
+                    className={styles.modalDangerBtn}
+                    onClick={() => handleAssignmentAction("hearing_assignment_canceled", cancelOpts)}
+                    disabled={assignmentActing !== null}
+                  >
+                    {assignmentActing === "hearing_assignment_canceled" ? "…" : "Confirm Cancel"}
+                  </button>
+                )}
+                {isAssignee && isAssigned && !showCancelReason && (
                   <>
                     <button
                       className={styles.modalSubmitBtn}

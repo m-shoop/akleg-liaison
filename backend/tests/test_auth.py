@@ -20,6 +20,7 @@ VIEWER_PERMISSIONS = {
     "prior-hearing-agendas:view",
     "bill:request-tracking",
     "hearing-assignment:view",
+    "user-report:edit",
 }
 ADMIN_ONLY_PERMISSIONS = {
     "bill:track", "hearing:query", "bill:query", "hearing:hide",

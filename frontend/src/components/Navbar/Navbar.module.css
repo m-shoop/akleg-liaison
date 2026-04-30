@@ -27,6 +27,17 @@
   color: var(--color-text-on-dark);
   letter-spacing: 0.02em;
   margin-right: auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.mobileOnly,
+.mobileOnlyItem {
+  display: none;
+}
+
+.desktopOnly {
+  display: list-item;
 }
 
 .brand:hover {
@@ -212,6 +223,32 @@
   .link {
     font-size: 0.8rem;
     padding: 0.3rem 0.5rem;
+  }
+
+  .dropdownBtn {
+    font-size: 0.8rem;
+    padding: 0.3rem 0.5rem;
+  }
+
+  .brandSuffix {
+    display: none;
+  }
+
+  .desktopOnly {
+    display: none;
+  }
+
+  .mobileOnly {
+    display: list-item;
+  }
+
+  .mobileOnlyItem {
+    display: list-item;
+  }
+
+  .dropdownMenuRight {
+    left: auto;
+    right: 0;
   }
 
   .username {

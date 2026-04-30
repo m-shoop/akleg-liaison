@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 
 logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -96,13 +96,22 @@ async def _run_refresh_job(job_id, bill_number: str, session: int) -> None:
 async def refresh_bill(
     bill_id: int,
     background_tasks: BackgroundTasks,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(require_permission("bill:query")),
 ):
     """Enqueue a bill re-scrape and return immediately. Poll GET /jobs/{id} for status."""
     bill = await _get_bill_or_404(bill_id, db)
     job_id = await create_job(db, job_type="refresh_bill")
-    await log_action(db, current_user.user, "bill_queried", entity_type="bill", entity_id=bill_id, details={"bill_number": bill.bill_number})
+    await log_action(
+        db,
+        current_user.user,
+        "bill_queried",
+        entity_type="bill",
+        entity_id=bill_id,
+        details={"bill_number": bill.bill_number},
+        request=request,
+    )
     await db.commit()
     background_tasks.add_task(_run_refresh_job, job_id, bill.bill_number, bill.session)
     job = await get_job(db, job_id)
@@ -169,6 +178,7 @@ async def list_bills_route(
 async def update_bill_tracked(
     bill_id: int,
     background_tasks: BackgroundTasks,
+    request: Request,
     is_tracked: bool = Query(...),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(require_permission("bill:track")),
@@ -178,7 +188,15 @@ async def update_bill_tracked(
     if bill is None:
         raise HTTPException(status_code=404, detail="Bill not found")
     action = "bill_tracked" if is_tracked else "bill_untracked"
-    await log_action(db, current_user.user, action, entity_type="bill", entity_id=bill_id, details={"bill_number": bill.bill_number})
+    await log_action(
+        db,
+        current_user.user,
+        action,
+        entity_type="bill",
+        entity_id=bill_id,
+        details={"bill_number": bill.bill_number, "source": "direct_toggle"},
+        request=request,
+    )
     if is_tracked:
         job_id = await create_job(db, job_type="refresh_bill")
         # Auto-close any pending tracking request workflows for this bill

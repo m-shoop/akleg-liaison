@@ -11,7 +11,7 @@ import datetime
 
 from httpx import AsyncClient
 
-from tests.conftest import login_user, seed_active_user
+from tests.conftest import audit_actions_for, login_user, seed_active_user
 
 
 # ---------------------------------------------------------------------------
@@ -389,6 +389,65 @@ async def test_assignees_endpoint_filters_by_query(client: AsyncClient, db, uid:
 
 
 # ---------------------------------------------------------------------------
+# GET /workflows/assignee-comm-prefs
+# ---------------------------------------------------------------------------
+
+
+async def test_assignee_comm_prefs_requires_admin(client: AsyncClient, db, uid: str):
+    target_email, _ = await _viewer_token(client, db, uid, suffix="_target")
+    _, viewer_tok = await _viewer_token(client, db, uid)
+    resp = await client.get(
+        "/workflows/assignee-comm-prefs",
+        params={"email": target_email},
+        headers={"Authorization": f"Bearer {viewer_tok}"},
+    )
+    assert resp.status_code == 403
+
+
+async def test_assignee_comm_prefs_default_enabled(client: AsyncClient, db, uid: str):
+    target_email, _ = await _viewer_token(client, db, uid, suffix="_target")
+    _, admin_tok = await _admin_token(client, db, uid)
+    resp = await client.get(
+        "/workflows/assignee-comm-prefs",
+        params={"email": target_email},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"email": target_email, "email_enabled": True}
+
+
+async def test_assignee_comm_prefs_reflects_opt_out(client: AsyncClient, db, uid: str):
+    target_email, _ = await _viewer_token(client, db, uid, suffix="_target")
+    _, admin_tok = await _admin_token(client, db, uid)
+
+    opt_out = await client.put(
+        "/admin/users/comm-prefs",
+        params={"email": target_email},
+        json={"email_enabled": False},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert opt_out.status_code == 200
+
+    resp = await client.get(
+        "/workflows/assignee-comm-prefs",
+        params={"email": target_email},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["email_enabled"] is False
+
+
+async def test_assignee_comm_prefs_unknown_email_returns_404(client: AsyncClient, db, uid: str):
+    _, admin_tok = await _admin_token(client, db, uid)
+    resp = await client.get(
+        "/workflows/assignee-comm-prefs",
+        params={"email": f"nobody-{uid}@example.com"},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
 # GET /workflows/has-open — assignee visibility
 # ---------------------------------------------------------------------------
 
@@ -427,3 +486,274 @@ async def test_has_open_false_for_unrelated_viewer(client: AsyncClient, db, uid:
         headers={"Authorization": f"Bearer {bystander_tok}"},
     )
     assert resp.json() == {"has_open": False}
+
+
+# ---------------------------------------------------------------------------
+# PATCH /workflows/hearing-assignments/{id} — change type on a suggestion
+# ---------------------------------------------------------------------------
+
+
+async def _seed_suggested_assignment(db, hearing_id: int, assignee_email: str) -> int:
+    """Seed an auto_suggested hearing assignment directly via the repository.
+    Returns the HearingAssignment.id. The PATCH endpoint only accepts updates
+    on assignments that are still in the auto_suggested state, so the API
+    create endpoint (which lands in hearing_assigned) doesn't help here."""
+    from app.models.workflow import AssignmentType, WorkflowActionType
+    from app.repositories.user_repository import get_user_by_email
+    from app.repositories.workflow_repository import create_hearing_assignment_workflow
+
+    user = await get_user_by_email(db, assignee_email)
+    assert user is not None
+    workflow = await create_hearing_assignment_workflow(
+        db,
+        hearing_id=hearing_id,
+        assignee_id=user.id,
+        bill_id=None,
+        created_by_user_id=user.id,
+        initial_action_type=WorkflowActionType.AUTO_SUGGESTED_HEARING_ASSIGNMENT,
+        action_actor_user_id=user.id,
+        assignment_type=AssignmentType.MONITORING,
+    )
+    await db.commit()
+    await db.refresh(workflow, ["hearing_assignment"])
+    return workflow.hearing_assignment.id
+
+
+async def test_admin_can_change_type_on_suggestion(client: AsyncClient, db, uid: str):
+    hearing_id = await _seed_hearing(db, uid)
+    assignee_email, _ = await _viewer_token(client, db, uid, suffix="_assignee")
+    _, admin_tok = await _admin_token(client, db, uid)
+    assignment_id = await _seed_suggested_assignment(db, hearing_id, assignee_email)
+
+    resp = await client.patch(
+        f"/workflows/hearing-assignments/{assignment_id}",
+        json={"assignment_type": "awareness"},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["assignment_type"] == "awareness"
+
+
+async def test_change_type_is_idempotent(client: AsyncClient, db, uid: str):
+    hearing_id = await _seed_hearing(db, uid)
+    assignee_email, _ = await _viewer_token(client, db, uid, suffix="_assignee")
+    _, admin_tok = await _admin_token(client, db, uid)
+    assignment_id = await _seed_suggested_assignment(db, hearing_id, assignee_email)
+
+    # Same type as the seeded value — should succeed without error.
+    resp = await client.patch(
+        f"/workflows/hearing-assignments/{assignment_id}",
+        json={"assignment_type": "monitoring"},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["assignment_type"] == "monitoring"
+
+
+async def test_change_type_locked_after_confirmation(client: AsyncClient, db, uid: str):
+    hearing_id = await _seed_hearing(db, uid)
+    assignee_email, _ = await _viewer_token(client, db, uid, suffix="_assignee")
+    _, admin_tok = await _admin_token(client, db, uid)
+    assignment_id = await _seed_suggested_assignment(db, hearing_id, assignee_email)
+
+    # Confirm the suggestion (auto_suggested -> hearing_assigned).
+    from app.repositories.workflow_repository import get_hearing_assignment_with_workflow
+    ha = await get_hearing_assignment_with_workflow(db, assignment_id)
+    workflow_id = ha.workflow_id
+    confirm_resp = await client.post(
+        f"/workflows/{workflow_id}/actions",
+        json={"type": "hearing_assigned"},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert confirm_resp.status_code == 201, confirm_resp.text
+
+    # Now the type is locked.
+    resp = await client.patch(
+        f"/workflows/hearing-assignments/{assignment_id}",
+        json={"assignment_type": "awareness"},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert resp.status_code == 409
+
+
+async def test_viewer_cannot_change_type(client: AsyncClient, db, uid: str):
+    hearing_id = await _seed_hearing(db, uid)
+    assignee_email, _ = await _viewer_token(client, db, uid, suffix="_assignee")
+    _, viewer_tok = await _viewer_token(client, db, uid, suffix="_other")
+    assignment_id = await _seed_suggested_assignment(db, hearing_id, assignee_email)
+
+    resp = await client.patch(
+        f"/workflows/hearing-assignments/{assignment_id}",
+        json={"assignment_type": "awareness"},
+        headers={"Authorization": f"Bearer {viewer_tok}"},
+    )
+    assert resp.status_code == 403
+
+
+async def test_change_type_404_for_nonexistent_assignment(client: AsyncClient, db, uid: str):
+    _, admin_tok = await _admin_token(client, db, uid)
+    resp = await client.patch(
+        "/workflows/hearing-assignments/999999",
+        json={"assignment_type": "awareness"},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Audit log assertions — guard the rename from workflow_action_added to the
+# per-action-type names. If anyone renames or drops a name, these tests fail
+# instead of analytics quietly losing rows.
+# ---------------------------------------------------------------------------
+
+
+async def test_audit_create_logs_hearing_assignment_created(client: AsyncClient, db, uid: str):
+    hearing_id = await _seed_hearing(db, uid)
+    assignee_email, _ = await _viewer_token(client, db, uid, suffix="_assignee")
+    _, admin_tok = await _admin_token(client, db, uid)
+
+    body = await _create_assignment(client, admin_tok, hearing_id, assignee_email)
+
+    actions = await audit_actions_for(db, entity_type="workflow", entity_id=body["workflow_id"])
+    assert actions == ["hearing_assignment_created"]
+
+
+async def test_audit_complete_logs_hearing_assignment_completed(client: AsyncClient, db, uid: str):
+    hearing_id = await _seed_hearing(db, uid)
+    assignee_email, assignee_tok = await _viewer_token(client, db, uid, suffix="_assignee")
+    _, admin_tok = await _admin_token(client, db, uid)
+
+    body = await _create_assignment(client, admin_tok, hearing_id, assignee_email)
+    workflow_id = body["workflow_id"]
+
+    resp = await client.post(
+        f"/workflows/{workflow_id}/actions",
+        json={"type": "hearing_assignment_complete"},
+        headers={"Authorization": f"Bearer {assignee_tok}"},
+    )
+    assert resp.status_code == 201
+
+    actions = await audit_actions_for(db, entity_type="workflow", entity_id=workflow_id)
+    assert actions == ["hearing_assignment_created", "hearing_assignment_completed"]
+    assert "workflow_action_added" not in actions
+
+
+async def test_audit_cancel_logs_hearing_assignment_canceled(client: AsyncClient, db, uid: str):
+    hearing_id = await _seed_hearing(db, uid)
+    assignee_email, _ = await _viewer_token(client, db, uid, suffix="_assignee")
+    _, admin_tok = await _admin_token(client, db, uid)
+
+    body = await _create_assignment(client, admin_tok, hearing_id, assignee_email)
+    workflow_id = body["workflow_id"]
+
+    resp = await client.post(
+        f"/workflows/{workflow_id}/actions",
+        json={"type": "hearing_assignment_canceled", "cancellation_reason": "no longer needed"},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert resp.status_code == 201
+
+    actions = await audit_actions_for(db, entity_type="workflow", entity_id=workflow_id)
+    assert actions == ["hearing_assignment_created", "hearing_assignment_canceled"]
+
+
+async def test_audit_discard_logs_hearing_assignment_discarded(client: AsyncClient, db, uid: str):
+    hearing_id = await _seed_hearing(db, uid)
+    assignee_email, _ = await _viewer_token(client, db, uid, suffix="_assignee")
+    _, admin_tok = await _admin_token(client, db, uid)
+
+    body = await _create_assignment(client, admin_tok, hearing_id, assignee_email)
+    workflow_id = body["workflow_id"]
+
+    resp = await client.post(
+        f"/workflows/{workflow_id}/actions",
+        json={"type": "hearing_assignment_discarded"},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert resp.status_code == 201
+
+    actions = await audit_actions_for(db, entity_type="workflow", entity_id=workflow_id)
+    assert actions == ["hearing_assignment_created", "hearing_assignment_discarded"]
+
+
+async def test_audit_reassignment_request_logs_hearing_reassignment_requested(client: AsyncClient, db, uid: str):
+    hearing_id = await _seed_hearing(db, uid)
+    assignee_email, assignee_tok = await _viewer_token(client, db, uid, suffix="_assignee")
+    _, admin_tok = await _admin_token(client, db, uid)
+
+    body = await _create_assignment(client, admin_tok, hearing_id, assignee_email)
+    workflow_id = body["workflow_id"]
+
+    resp = await client.post(
+        f"/workflows/{workflow_id}/actions",
+        json={"type": "reassignment_request"},
+        headers={"Authorization": f"Bearer {assignee_tok}"},
+    )
+    assert resp.status_code == 201
+
+    actions = await audit_actions_for(db, entity_type="workflow", entity_id=workflow_id)
+    assert actions == ["hearing_assignment_created", "hearing_reassignment_requested"]
+
+
+async def test_audit_reassign_via_new_assignee_email_logs_hearing_reassigned(client: AsyncClient, db, uid: str):
+    hearing_id = await _seed_hearing(db, uid)
+    original_email, _ = await _viewer_token(client, db, uid, suffix="_original")
+    new_email, _ = await _viewer_token(client, db, uid, suffix="_new")
+    _, admin_tok = await _admin_token(client, db, uid)
+
+    body = await _create_assignment(client, admin_tok, hearing_id, original_email)
+    workflow_id = body["workflow_id"]
+
+    resp = await client.post(
+        f"/workflows/{workflow_id}/actions",
+        json={"type": "hearing_assigned", "new_assignee_email": new_email},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert resp.status_code == 201
+
+    actions = await audit_actions_for(db, entity_type="workflow", entity_id=workflow_id)
+    assert actions == ["hearing_assignment_created", "hearing_reassigned"]
+    # Distinct from the no-reassign confirm action.
+    assert "hearing_assignment_confirmed" not in actions
+
+
+async def test_audit_confirm_suggestion_logs_hearing_assignment_confirmed(client: AsyncClient, db, uid: str):
+    hearing_id = await _seed_hearing(db, uid)
+    assignee_email, _ = await _viewer_token(client, db, uid, suffix="_assignee")
+    _, admin_tok = await _admin_token(client, db, uid)
+    assignment_id = await _seed_suggested_assignment(db, hearing_id, assignee_email)
+
+    from app.repositories.workflow_repository import get_hearing_assignment_with_workflow
+    ha = await get_hearing_assignment_with_workflow(db, assignment_id)
+    workflow_id = ha.workflow_id
+
+    resp = await client.post(
+        f"/workflows/{workflow_id}/actions",
+        json={"type": "hearing_assigned"},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert resp.status_code == 201
+
+    actions = await audit_actions_for(db, entity_type="workflow", entity_id=workflow_id)
+    # Suggested assignment was seeded directly via repository (no audit row),
+    # so the only audited event here is the confirm.
+    assert actions == ["hearing_assignment_confirmed"]
+
+
+async def test_audit_change_type_logs_hearing_assignment_type_updated(client: AsyncClient, db, uid: str):
+    hearing_id = await _seed_hearing(db, uid)
+    assignee_email, _ = await _viewer_token(client, db, uid, suffix="_assignee")
+    _, admin_tok = await _admin_token(client, db, uid)
+    assignment_id = await _seed_suggested_assignment(db, hearing_id, assignee_email)
+
+    resp = await client.patch(
+        f"/workflows/hearing-assignments/{assignment_id}",
+        json={"assignment_type": "awareness"},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert resp.status_code == 200
+
+    actions = await audit_actions_for(
+        db, entity_type="hearing_assignment", entity_id=assignment_id
+    )
+    assert actions == ["hearing_assignment_type_updated"]
