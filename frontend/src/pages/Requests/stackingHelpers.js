@@ -6,13 +6,23 @@ import { createInitialState } from "../../components/StackingCriteria/createInit
 export const ASSIGNMENT_ROW_DEFAULTS = {
   latest_action_type: [],
   assignee_email: "",
-  bill_number: "",
+  bill_numbers: [],
   hearing_date_from: "",
   hearing_date_to: "",
 };
 
 export function makeAssignmentNewRowValue() {
-  return { ...ASSIGNMENT_ROW_DEFAULTS };
+  return { ...ASSIGNMENT_ROW_DEFAULTS, bill_numbers: [] };
+}
+
+// Reads the bill-number filter as an array. Falls back to the legacy single-string
+// shape so reports/sessions saved before the chip UI keep working.
+export function readAssignmentBillNumbers(rowValue) {
+  const list = rowValue?.bill_numbers;
+  if (Array.isArray(list)) return list;
+  const legacy = rowValue?.bill_number;
+  if (typeof legacy === "string" && legacy.trim()) return [legacy.trim()];
+  return [];
 }
 
 export function buildAssignmentRowFilterGroup(rowValue, { canViewAll, username }) {
@@ -28,8 +38,9 @@ export function buildAssignmentRowFilterGroup(rowValue, { canViewAll, username }
   if (rowValue.latest_action_type?.length > 0) {
     conditions.push({ field: "latest_action_type", op: "in", value: rowValue.latest_action_type });
   }
-  if (rowValue.bill_number?.trim()) {
-    conditions.push({ field: "bill_number", op: "contains", value: rowValue.bill_number.trim() });
+  const billNumbers = readAssignmentBillNumbers(rowValue);
+  if (billNumbers.length > 0) {
+    conditions.push({ field: "bill_number", op: "in", value: billNumbers });
   }
   if (rowValue.hearing_date_from && rowValue.hearing_date_to) {
     conditions.push({ field: "hearing_date", op: "between", value: [rowValue.hearing_date_from, rowValue.hearing_date_to] });
@@ -60,7 +71,8 @@ export function summarizeAssignmentRow(rowValue) {
     parts.push(`Type: ${labels.join(", ")}`);
   }
   if (rowValue.assignee_email) parts.push(`Assignee: "${rowValue.assignee_email}"`);
-  if (rowValue.bill_number) parts.push(`Bill: "${rowValue.bill_number}"`);
+  const billNumbers = readAssignmentBillNumbers(rowValue);
+  if (billNumbers.length > 0) parts.push(`Bill: ${billNumbers.join(", ")}`);
   if (rowValue.hearing_date_from && rowValue.hearing_date_to) {
     parts.push(`Hearing: ${rowValue.hearing_date_from} – ${rowValue.hearing_date_to}`);
   } else if (rowValue.hearing_date_from) {

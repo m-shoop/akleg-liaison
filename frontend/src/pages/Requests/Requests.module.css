@@ -548,6 +548,56 @@
   border-color: var(--color-glacial-water);
 }
 
+.chipsContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  border: 1.5px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface-raised);
+  padding: 3px 6px;
+  min-width: 180px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  padding: 2px 4px 2px 8px;
+  background: var(--color-rainy-sky);
+  color: #fff;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.chipRemove {
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.chipRemove:hover {
+  opacity: 1;
+}
+
+.chipsInput {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.82rem;
+  padding: 2px 4px;
+  flex: 1;
+  min-width: 100px;
+  color: var(--color-text-primary);
+}
+
 .filterDateInput {
   padding: 0.3rem 0.5rem;
   border: 1.5px solid var(--color-border);

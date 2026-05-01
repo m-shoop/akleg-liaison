@@ -19,6 +19,7 @@ import {
   makeAssignmentNewRowValue,
   buildAssignmentRowFilterGroup,
   summarizeAssignmentRow,
+  readAssignmentBillNumbers,
   makeRequestNewRowValue,
   makeDefaultRequestsCriteria,
   buildRequestRowFilterGroup,
@@ -138,6 +139,64 @@ const ASSIGNMENT_ACTION_TYPE_OPTS = [
   { value: "auto_suggested_hearing_assignment", label: "Suggested" },
 ];
 
+function BillNumberChips({ value, onChange }) {
+  const list = Array.isArray(value) ? value : [];
+  const [draft, setDraft] = useState("");
+
+  function add() {
+    const v = draft.trim().toUpperCase();
+    if (!v) return;
+    if (list.includes(v)) {
+      setDraft("");
+      return;
+    }
+    onChange([...list, v]);
+    setDraft("");
+  }
+
+  function remove(v) {
+    onChange(list.filter((x) => x !== v));
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      add();
+    } else if (e.key === "Backspace" && !draft && list.length > 0) {
+      e.preventDefault();
+      onChange(list.slice(0, -1));
+    }
+  }
+
+  return (
+    <div className={styles.chipsContainer}>
+      {list.map((v) => (
+        <span key={v} className={styles.chip}>
+          {v}
+          <button
+            type="button"
+            className={styles.chipRemove}
+            onClick={() => remove(v)}
+            aria-label={`Remove ${v}`}
+            title={`Remove ${v}`}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        type="text"
+        className={styles.chipsInput}
+        placeholder={list.length === 0 ? "e.g. HB 62" : "Add another…"}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={add}
+      />
+    </div>
+  );
+}
+
 function AssignmentsFilterBar({ filters, onChange, canViewAll, canViewSuggestions }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
@@ -155,7 +214,8 @@ function AssignmentsFilterBar({ filters, onChange, canViewAll, canViewSuggestion
     summaryParts.push(`Type: ${labels.join(", ")}`);
   }
   if (filters.assignee_email) summaryParts.push(`Assignee: "${filters.assignee_email}"`);
-  if (filters.bill_number) summaryParts.push(`Bill: "${filters.bill_number}"`);
+  const billChips = readAssignmentBillNumbers(filters);
+  if (billChips.length > 0) summaryParts.push(`Bill: ${billChips.join(", ")}`);
   if (filters.hearing_date_from && filters.hearing_date_to) summaryParts.push(`Hearing: ${filters.hearing_date_from} – ${filters.hearing_date_to}`);
   else if (filters.hearing_date_from) summaryParts.push(`Hearing: after ${filters.hearing_date_from}`);
   else if (filters.hearing_date_to) summaryParts.push(`Hearing: before ${filters.hearing_date_to}`);
@@ -201,8 +261,14 @@ function AssignmentsFilterBar({ filters, onChange, canViewAll, canViewSuggestion
         {/* Bill number */}
         <div className={styles.filterGroup}>
           <span className={styles.filterLabel}>Bill</span>
-          <input type="text" className={styles.filterTextInput} placeholder="e.g. HB 62"
-            value={filters.bill_number ?? ""} onChange={(e) => set("bill_number", e.target.value)} />
+          <BillNumberChips
+            value={readAssignmentBillNumbers(filters)}
+            onChange={(next) => {
+              const updated = { ...filters, bill_numbers: next };
+              delete updated.bill_number;
+              onChange(updated);
+            }}
+          />
         </div>
 
         {/* Assignee — admin only */}
