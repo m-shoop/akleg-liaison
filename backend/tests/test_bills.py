@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from httpx import AsyncClient
 
-from tests.conftest import login_user, register_user
+from tests.conftest import audit_actions_for, login_user, seed_active_user
 
 
 async def _seed_bill(db, uid: str, *, tracked: bool = True) -> int:
@@ -17,14 +17,16 @@ async def _seed_bill(db, uid: str, *, tracked: bool = True) -> int:
     return bill.id
 
 
-async def _editor_token(client: AsyncClient, uid: str) -> str:
-    await register_user(client, f"editor_{uid}", "pass", role="admin")
-    return await login_user(client, f"editor_{uid}", "pass")
+async def _editor_token(client: AsyncClient, db, uid: str) -> str:
+    email = f"editor_{uid}@example.com"
+    await seed_active_user(db, email, "pass", role="admin")
+    return await login_user(client, email, "pass")
 
 
-async def _viewer_token(client: AsyncClient, uid: str) -> str:
-    await register_user(client, f"viewer_{uid}", "pass", role="viewer")
-    return await login_user(client, f"viewer_{uid}", "pass")
+async def _viewer_token(client: AsyncClient, db, uid: str) -> str:
+    email = f"viewer_{uid}@example.com"
+    await seed_active_user(db, email, "pass", role="viewer")
+    return await login_user(client, email, "pass")
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +63,7 @@ async def test_list_bills_include_untracked(client: AsyncClient, db, uid: str):
 
 async def test_editor_can_untrack_bill(client: AsyncClient, db, uid: str):
     bill_id = await _seed_bill(db, uid, tracked=True)
-    token = await _editor_token(client, uid)
+    token = await _editor_token(client, db, uid)
 
     resp = await client.patch(
         f"/bills/{bill_id}/tracked",
@@ -74,7 +76,7 @@ async def test_editor_can_untrack_bill(client: AsyncClient, db, uid: str):
 
 async def test_editor_can_track_bill(client: AsyncClient, db, uid: str):
     bill_id = await _seed_bill(db, uid, tracked=False)
-    token = await _editor_token(client, uid)
+    token = await _editor_token(client, db, uid)
 
     with patch("app.routers.bills._run_refresh_job", new_callable=AsyncMock):
         resp = await client.patch(
@@ -88,7 +90,7 @@ async def test_editor_can_track_bill(client: AsyncClient, db, uid: str):
 
 async def test_viewer_cannot_change_tracked(client: AsyncClient, db, uid: str):
     bill_id = await _seed_bill(db, uid)
-    token = await _viewer_token(client, uid)
+    token = await _viewer_token(client, db, uid)
 
     resp = await client.patch(
         f"/bills/{bill_id}/tracked",
@@ -111,7 +113,7 @@ async def test_unauthenticated_cannot_change_tracked(client: AsyncClient, db, ui
 
 async def test_editor_can_enqueue_refresh(client: AsyncClient, db, uid: str):
     bill_id = await _seed_bill(db, uid)
-    token = await _editor_token(client, uid)
+    token = await _editor_token(client, db, uid)
 
     with patch("app.routers.bills._run_refresh_job", new_callable=AsyncMock):
         resp = await client.post(
@@ -127,7 +129,7 @@ async def test_editor_can_enqueue_refresh(client: AsyncClient, db, uid: str):
 
 async def test_viewer_cannot_enqueue_refresh(client: AsyncClient, db, uid: str):
     bill_id = await _seed_bill(db, uid)
-    token = await _viewer_token(client, uid)
+    token = await _viewer_token(client, db, uid)
 
     resp = await client.post(
         f"/bills/{bill_id}/refresh",
@@ -143,8 +145,8 @@ async def test_unauthenticated_cannot_enqueue_refresh(client: AsyncClient, db, u
     assert resp.status_code == 401
 
 
-async def test_refresh_nonexistent_bill_returns_404(client: AsyncClient, uid: str):
-    token = await _editor_token(client, uid)
+async def test_refresh_nonexistent_bill_returns_404(client: AsyncClient, db, uid: str):
+    token = await _editor_token(client, db, uid)
 
     resp = await client.post(
         "/bills/999999/refresh",
@@ -174,3 +176,76 @@ async def test_bill_fiscal_notes_query_failed_true_when_record_exists(client: As
     resp = await client.get(f"/bills/{bill_id}")
     assert resp.status_code == 200
     assert resp.json()["fiscal_notes_query_failed"] is True
+
+
+# ---------------------------------------------------------------------------
+# Audit log assertions — guard the action names + source detail used by the
+# direct PATCH /tracked toggle, which must remain distinguishable from the
+# workflow-approval path that also emits 'bill_tracked'.
+# ---------------------------------------------------------------------------
+
+
+async def _bill_tracked_audit_rows(db, bill_id: int) -> list[dict]:
+    from sqlalchemy import select
+    from app.models.audit_log import AuditLog
+
+    result = await db.execute(
+        select(AuditLog.action, AuditLog.details)
+        .where(AuditLog.entity_type == "bill", AuditLog.entity_id == bill_id)
+        .order_by(AuditLog.id)
+    )
+    return [{"action": a, "details": d} for a, d in result.all()]
+
+
+async def test_audit_untrack_logs_bill_untracked_with_direct_toggle_source(
+    client: AsyncClient, db, uid: str
+):
+    bill_id = await _seed_bill(db, uid, tracked=True)
+    token = await _editor_token(client, db, uid)
+
+    resp = await client.patch(
+        f"/bills/{bill_id}/tracked",
+        params={"is_tracked": False},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+
+    rows = await _bill_tracked_audit_rows(db, bill_id)
+    assert [r["action"] for r in rows] == ["bill_untracked"]
+    assert rows[0]["details"]["source"] == "direct_toggle"
+
+
+async def test_audit_track_logs_bill_tracked_with_direct_toggle_source(
+    client: AsyncClient, db, uid: str
+):
+    bill_id = await _seed_bill(db, uid, tracked=False)
+    token = await _editor_token(client, db, uid)
+
+    with patch("app.routers.bills._run_refresh_job", new_callable=AsyncMock):
+        resp = await client.patch(
+            f"/bills/{bill_id}/tracked",
+            params={"is_tracked": True},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert resp.status_code == 200
+
+    rows = await _bill_tracked_audit_rows(db, bill_id)
+    actions = [r["action"] for r in rows]
+    assert "bill_tracked" in actions
+    tracked_row = next(r for r in rows if r["action"] == "bill_tracked")
+    assert tracked_row["details"]["source"] == "direct_toggle"
+
+
+async def test_audit_refresh_logs_bill_queried(client: AsyncClient, db, uid: str):
+    bill_id = await _seed_bill(db, uid)
+    token = await _editor_token(client, db, uid)
+
+    with patch("app.routers.bills._run_refresh_job", new_callable=AsyncMock):
+        resp = await client.post(
+            f"/bills/{bill_id}/refresh",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert resp.status_code == 202
+
+    actions = await audit_actions_for(db, entity_type="bill", entity_id=bill_id)
+    assert actions == ["bill_queried"]

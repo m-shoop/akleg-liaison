@@ -1,28 +1,131 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useReactToPrint } from "react-to-print";
-import { fetchBills } from "../../api/bills";
 import { fetchHearings, fetchUpcomingHearings } from "../../api/hearings";
+import { fetchReport, fetchReportMeta } from "../../api/reports";
 import { fetchTags } from "../../api/tags";
+import { fetchBillTrackingState } from "../../api/workflows";
 import { useAuth } from "../../context/AuthContext";
 import BillCard from "../../components/BillCard/BillCard";
+import FilterBar from "../../components/FilterBar/FilterBar";
+import StackingCriteria from "../../components/StackingCriteria/StackingCriteria";
+import { compile } from "../../components/StackingCriteria/expression/compiler";
+import { validate } from "../../components/StackingCriteria/expression/validate";
+import SavedReportsBar from "../../components/SavedReports/SavedReportsBar";
+import SaveAsModal from "../../components/SavedReports/SaveAsModal";
+import SettingsModal from "../../components/SavedReports/SettingsModal";
+import { useSavedReports } from "../../hooks/useSavedReports";
 import FiscalDeptFilter from "../../components/FiscalDeptFilter/FiscalDeptFilter";
 import OutcomeFilter from "../../components/OutcomeFilter/OutcomeFilter";
 import PrintHearingsSection from "../../components/PrintHearingsSection/PrintHearingsSection";
 import ReportHeaderEditor from "../../components/ReportHeaderEditor/ReportHeaderEditor";
 import SyncSchedule from "../../components/SyncSchedule/SyncSchedule";
 import Toast from "../../components/Toast/Toast";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { createBillsTour } from "../../tours/billsTour";
 import { DEFAULT_SELECTED } from "../../utils/outcomeTypes";
 import { todayJuneau, weekBounds, weekBoundsTitle } from "../../utils/weekBounds";
+import {
+  makeDefaultBillsCriteria,
+  makeNewBillRowValue,
+  buildBillsRowFilterGroup,
+  summarizeBillsRow,
+} from "./stackingHelpers";
 import styles from "./Home.module.css";
+
+const STORAGE_KEY = "leg_billsStacking";
+const LEGACY_STORAGE_KEY = "leg_billFilters";
+
+function BillsRowEditor({ value, onChange, fields }) {
+  return (
+    <FilterBar
+      filters={value ?? makeNewBillRowValue()}
+      onChange={onChange}
+      fields={fields}
+    />
+  );
+}
+
+function loadStoredCriteria({ showUntracked, billNumber }) {
+  // Direct navigation from a Leg Up icon ignores stored criteria so the user
+  // lands on a clean filter focused on the bill they clicked through.
+  if (billNumber) {
+    return makeDefaultBillsCriteria({ showUntracked: true, billNumber });
+  }
+  const stored = sessionStorage.getItem(STORAGE_KEY);
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (
+        parsed &&
+        Array.isArray(parsed.criteria) &&
+        typeof parsed.expression === "string" &&
+        Number.isInteger(parsed.nextLetterIndex)
+      ) {
+        return parsed;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  sessionStorage.removeItem(LEGACY_STORAGE_KEY);
+  return makeDefaultBillsCriteria({ showUntracked });
+}
+
+function outcomesToEvents(outcomes) {
+  const byKey = new Map();
+  for (const o of (outcomes ?? [])) {
+    const key = `${o.date}|${o.source_url ?? ""}`;
+    if (!byKey.has(key)) byKey.set(key, { date: o.date, source_url: o.source_url ?? null, outcomes: [] });
+    byKey.get(key).outcomes.push({
+      outcome_type: o.outcome_type?.toLowerCase(),
+      committee: o.committee,
+      chamber: o.chamber?.toLowerCase().replace(/^\w/, (c) => c.toUpperCase()),
+      description: o.description,
+      ai_generated: o.ai_generated ?? false,
+    });
+  }
+  return [...byKey.values()]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(({ date, source_url, outcomes: outcomesForDate }) => ({
+      event_date: date,
+      source_url,
+      outcomes: outcomesForDate,
+    }));
+}
+
+function rowToBill(row, workflowState) {
+  const state = workflowState[row.id] ?? { tracking_requested: false, user_tracking_request_denied: false };
+  return {
+    id: row.id,
+    bill_number: row.bill_number,
+    title: row.title,
+    short_title: row.short_title,
+    session: row.session,
+    status: row.status,
+    introduced_date: row.introduced_date,
+    source_url: row.source_url,
+    is_tracked: row.is_tracked,
+    last_sync: row.last_sync,
+    sponsors: row.sponsors ?? [],
+    keywords: row.keywords ?? [],
+    tags: row.tags ?? [],
+    fiscal_notes: (row.fiscal_notes ?? []).map((fn) => ({ ...fn, is_active: true })),
+    fiscal_notes_query_failed: false,
+    events: outcomesToEvents(row.outcomes),
+    tracking_requested: state.tracking_requested,
+    user_tracking_request_denied: state.user_tracking_request_denied,
+  };
+}
 
 export default function Home() {
   const location = useLocation();
-  const { can, token } = useAuth();
+  const { can, token, username } = useAuth();
+  const isMobile = useMediaQuery("(max-width: 640px)");
   const [toast, setToast] = useState(location.state?.toast ? { message: location.state.toast, type: "success" } : null);
   const [bills, setBills] = useState([]);
   const [allTags, setAllTags] = useState([]);
+  const [reportMeta, setReportMeta] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showDescription, setShowDescription] = useState(() => sessionStorage.getItem("leg_showDescription") === "true");
@@ -47,26 +150,34 @@ export default function Home() {
     );
     return depts;
   }, [bills]);
-  const [showUntracked, setShowUntracked] = useState(location.state?.showUntracked ?? sessionStorage.getItem("leg_showUntracked") === "true");
+  const [billsCriteria, setBillsCriteria] = useState(() =>
+    loadStoredCriteria({
+      showUntracked: !!location.state?.showUntracked,
+      billNumber: location.state?.billNumber,
+    })
+  );
+  const [appliedCriteria, setAppliedCriteria] = useState(billsCriteria);
+  const fetchTimerRef = useRef(null);
   const [sideBySide, setSideBySide] = useState(() => sessionStorage.getItem("leg_sideBySide") !== "false");
   const [showKeywords, setShowKeywords] = useState(() => sessionStorage.getItem("leg_showKeywords") === "true");
-  // location.state?.search (from bill-link navigation) takes priority over stored search
-  const [searchQuery, setSearchQuery] = useState(location.state?.search ?? sessionStorage.getItem("leg_searchQuery") ?? "");
+  // location.state?.billNumber drives the discrete bill_number chip filter; the
+  // page-level search box stays clean so substring matches don't widen the set.
+  // Legacy location.state?.search still seeds the search box for backwards compat.
+  const [searchQuery, setSearchQuery] = useState(
+    location.state?.billNumber
+      ? ""
+      : (location.state?.search ?? sessionStorage.getItem("leg_searchQuery") ?? "")
+  );
   const [printStartDate, setPrintStartDate] = useState(() => sessionStorage.getItem("leg_printStartDate") ?? "");
   const [printEndDate, setPrintEndDate] = useState(() => sessionStorage.getItem("leg_printEndDate") ?? "");
   const [printMeetings, setPrintMeetings] = useState(null);
   const [upcomingHearings, setUpcomingHearings] = useState({});
   const [pendingPrint, setPendingPrint] = useState(false);
-  const [filterToHearings, setFilterToHearings] = useState(() => sessionStorage.getItem("leg_filterToHearings") === "true");
-  const [hearingBillIds, setHearingBillIds] = useState(null);
+  // Always collapsed on navigation to keep the page visually quiet; the panel
+  // contents (criteria, export/display) are still preserved between visits.
+  const [reportCriteriaOpen, setReportCriteriaOpen] = useState(false);
+  const [exportDisplayOpen, setExportDisplayOpen] = useState(false);
   const contentRef = useRef(null);
-
-  // Auto-off when either date is cleared
-  useEffect(() => {
-    if (!printStartDate || !printEndDate) {
-      setFilterToHearings(false);
-    }
-  }, [printStartDate, printEndDate]);
 
   // ─── Persist Legislation tab settings to sessionStorage ───────────────────
   useEffect(() => {
@@ -76,52 +187,63 @@ export default function Home() {
     else sessionStorage.removeItem("leg_showDescription");
     if (showKeywords) sessionStorage.setItem("leg_showKeywords", "true");
     else sessionStorage.removeItem("leg_showKeywords");
-    if (showUntracked) sessionStorage.setItem("leg_showUntracked", "true");
-    else sessionStorage.removeItem("leg_showUntracked");
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(billsCriteria));
     if (!sideBySide) sessionStorage.setItem("leg_sideBySide", "false");
     else sessionStorage.removeItem("leg_sideBySide");
     if (printStartDate) sessionStorage.setItem("leg_printStartDate", printStartDate);
     else sessionStorage.removeItem("leg_printStartDate");
     if (printEndDate) sessionStorage.setItem("leg_printEndDate", printEndDate);
     else sessionStorage.removeItem("leg_printEndDate");
-    if (filterToHearings) sessionStorage.setItem("leg_filterToHearings", "true");
-    else sessionStorage.removeItem("leg_filterToHearings");
     sessionStorage.setItem("leg_selectedOutcomes", JSON.stringify([...selectedOutcomes]));
     sessionStorage.setItem("leg_selectedDepts", selectedDepts === null ? "null" : JSON.stringify([...selectedDepts]));
-  }, [searchQuery, showDescription, showKeywords, showUntracked, sideBySide, printStartDate, printEndDate, filterToHearings, selectedOutcomes, selectedDepts]);
+    sessionStorage.removeItem("leg_reportCriteriaOpen");
+    sessionStorage.removeItem("leg_exportDisplayOpen");
+  }, [searchQuery, showDescription, showKeywords, billsCriteria, sideBySide, printStartDate, printEndDate, selectedOutcomes, selectedDepts]);
 
   function resetToDefaults() {
     setSearchQuery("");
     setShowDescription(false);
     setShowKeywords(false);
-    setShowUntracked(false);
     setSideBySide(true);
     setPrintStartDate("");
     setPrintEndDate("");
-    setFilterToHearings(false);
     setSelectedOutcomes(DEFAULT_SELECTED);
     setSelectedDepts(new Set(["Department of Public Safety"]));
+
+    // Auto-select the seeded "Tracked Bills" system report if it's active and
+    // visible to this user; otherwise leave the loaded report cleared and reset
+    // criteria to the local default.
+    const loadedSeed = savedReports.selectSystemReportByName("Tracked Bills");
+    if (!loadedSeed) {
+      const def = makeDefaultBillsCriteria();
+      setBillsCriteria(def);
+      setAppliedCriteria(def);
+      savedReports.clearLoadedReport();
+    }
   }
 
-  // Fetch hearing bill IDs whenever the filter is on and both dates are set
-  useEffect(() => {
-    if (!filterToHearings || !printStartDate || !printEndDate) {
-      setHearingBillIds(null);
-      return;
-    }
-    fetchHearings({ startDate: printStartDate, endDate: printEndDate, token })
-      .then((hearings) => {
-        const ids = new Set(
-          hearings
-            .flatMap((m) => m.agenda_items)
-            .filter((item) => item.is_bill && item.bill_id != null)
-            .map((item) => item.bill_id)
-        );
-        setHearingBillIds(ids);
-      })
-      .catch(() => setHearingBillIds(new Set()));
-  }, [filterToHearings, printStartDate, printEndDate]);
+  function handleStackingApply(_filterGroup, value) {
+    setAppliedCriteria(value);
+  }
 
+  const hadStoredCriteriaOnMount = useRef(!!sessionStorage.getItem(STORAGE_KEY));
+  // Skip default-report auto-load when arriving from a Leg Up icon — otherwise
+  // the default report would clobber the bill-chip seed before the user sees it.
+  const hasBillNumberSeed = useRef(!!location.state?.billNumber);
+  const savedReports = useSavedReports({
+    registryName: "bills",
+    currentCriteria: billsCriteria,
+    onLoad: (criteria) => {
+      setBillsCriteria(criteria);
+      setAppliedCriteria(criteria);
+    },
+    token,
+    username,
+    skipDefaultLoad: hadStoredCriteriaOnMount.current || hasBillNumberSeed.current,
+    canSystemEdit: can("system-report:edit"),
+  });
+
+  // Fetch hearing bill IDs whenever the filter is on and both dates are set
   useEffect(() => {
     if (can("bill-tags:view")) {
       fetchTags(token).then(setAllTags).catch(() => {});
@@ -129,18 +251,52 @@ export default function Home() {
   }, [can]);
 
   useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      fetchBills({ includeUntracked: showUntracked, token }),
-      fetchUpcomingHearings(),
-    ])
-      .then(([billsData, upcomingData]) => {
-        setBills(billsData);
-        setUpcomingHearings(upcomingData);
+    fetchReportMeta(token)
+      .then((data) => {
+        const billsMeta = data.reports?.find((r) => r.id === "bills");
+        setReportMeta(billsMeta ?? null);
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [showUntracked]);
+      .catch(() => {});
+  }, [token]);
+
+  useEffect(() => {
+    clearTimeout(fetchTimerRef.current);
+    fetchTimerRef.current = setTimeout(() => {
+      setLoading(true);
+      const columns = [
+        "id", "bill_number", "title", "short_title", "session", "status",
+        "introduced_date", "source_url", "is_tracked", "last_sync",
+        "sponsors", "keywords", "outcomes", "fiscal_notes",
+        ...(can("bill-tags:view") ? ["tags"] : []),
+      ];
+      const { ast } = validate(appliedCriteria.expression, appliedCriteria.criteria);
+      const filters = compile(ast, appliedCriteria.criteria, (row) =>
+        buildBillsRowFilterGroup(row.value),
+      );
+
+      Promise.all([
+        fetchReport({ reportId: "bills", columns, filters, token }),
+        fetchUpcomingHearings(),
+      ])
+        .then(async ([reportData, upcomingData]) => {
+          const rows = reportData.rows;
+          const untrackedIds = rows.filter((r) => !r.is_tracked).map((r) => r.id);
+          let workflowState = {};
+          if (untrackedIds.length > 0 && token) {
+            try {
+              const stateList = await fetchBillTrackingState({ billIds: untrackedIds, token });
+              workflowState = Object.fromEntries(stateList.map((s) => [s.bill_id, s]));
+            } catch { /* non-critical */ }
+          }
+          setBills(rows.map((row) => rowToBill(row, workflowState)));
+          setUpcomingHearings(upcomingData);
+        })
+        .catch((err) => setError(err.message))
+        .finally(() => setLoading(false));
+    }, 400);
+    return () => clearTimeout(fetchTimerRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appliedCriteria, token]);
 
   const reportDate = new Date().toLocaleDateString("en-US", {
     month: "long",
@@ -203,9 +359,7 @@ export default function Home() {
       })
     : sortedBills;
 
-  const visibleBills = filterToHearings && hearingBillIds !== null
-    ? searchedBills.filter((b) => hearingBillIds.has(b.id))
-    : searchedBills;
+  const visibleBills = searchedBills;
 
   const handlePrint = useReactToPrint({
     contentRef,
@@ -241,209 +395,289 @@ export default function Home() {
     <div className={styles.page}>
       <div className={styles.pageHeader}>
         <div className={styles.titleRow}>
-          <div className={styles.titleBlock}>
-            <div>
-              <h1 className={styles.title}>Tracked Legislation</h1>
-              <p className={styles.subtitle}>
-                34th Alaska Legislature ·{" "}
-                {(query || filterToHearings)
-                  ? `${visibleBills.length} of ${sortedBills.length} measures`
-                  : `${bills.length} measure${bills.length !== 1 ? "s" : ""}`}
-              </p>
-            </div>
-            <div className={styles.searchRow}>
-              <input
-                id="tour-search"
-                className={styles.searchInput}
-                type="search"
-                placeholder="Search bills, outcomes, committees…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <button
-                className={styles.helpBtn}
-                onClick={() => createBillsTour().drive()}
-                title="Tour the Bills page"
-              >
-                ?
-              </button>
-            </div>
-            <button className={styles.defaultBtn} onClick={resetToDefaults}>
-              Default Settings
-            </button>
+          <div>
+            <h1 className={styles.title}>Tracked Legislation</h1>
+            <p className={styles.subtitle}>
+              34th Alaska Legislature ·{" "}
+              {query
+                ? `${visibleBills.length} of ${sortedBills.length} measures`
+                : `${bills.length} measure${bills.length !== 1 ? "s" : ""}`}
+            </p>
           </div>
-          <div className={styles.controls}>
-            <div id="tour-filter-outcomes-fiscal-notes" className={styles.togglePair}>
-              <OutcomeFilter
-                selected={selectedOutcomes}
-                onChange={setSelectedOutcomes}
+          <div className={styles.headerLegend}>
+            <p className={styles.aiLegend}>
+              This is a research tool and not an official legislative record.
+            </p>
+            <p className={styles.aiLegend}>
+              ✨ Content marked with this symbol is AI-generated and may contain false information. Please review for accuracy.
+            </p>
+          </div>
+          <button id="tour-default-settings" className={styles.defaultBtn} onClick={resetToDefaults}>
+            Default Page Settings
+          </button>
+        </div>
+
+        {/* ── Saved Reports ──────────────────────────────────────── */}
+        {!isMobile && token && (
+          <div id="tour-saved-reports">
+            <SavedReportsBar
+              reports={savedReports.reports}
+              defaultReportId={savedReports.defaultReportId}
+              loadedReportId={savedReports.loadedReportId}
+              includeInactive={savedReports.includeInactive}
+              onIncludeInactiveChange={savedReports.setIncludeInactive}
+              onSelectReport={savedReports.selectReport}
+              error={savedReports.error}
+            />
+          </div>
+        )}
+
+        {/* ── Report Criteria ────────────────────────────────────── */}
+        <div id="tour-report-criteria" className={styles.panelSection}>
+          <button
+            type="button"
+            className={styles.panelSectionHeader}
+            onClick={() => setReportCriteriaOpen((o) => !o)}
+          >
+            <span>Report Criteria</span>
+            <span>{reportCriteriaOpen ? "▲" : "▼"}</span>
+          </button>
+          {reportCriteriaOpen && (
+            <div className={styles.panelSectionBody}>
+              <p className={styles.panelNote}>
+                <em>This section defines which measures are returned from the database.</em>
+              </p>
+              <StackingCriteria
+                value={billsCriteria}
+                onChange={setBillsCriteria}
+                appliedValue={appliedCriteria}
+                onApply={handleStackingApply}
+                RowEditor={BillsRowEditor}
+                rowEditorProps={{ fields: reportMeta?.fields ?? {} }}
+                compileRow={(row) => buildBillsRowFilterGroup(row.value)}
+                emptyRowValue={makeNewBillRowValue()}
+                summarizeRow={(rowValue) => summarizeBillsRow(rowValue, reportMeta?.fields ?? {})}
+                mobile={isMobile}
+                onSave={isMobile ? undefined : savedReports.save}
+                onSaveAs={isMobile ? undefined : savedReports.openSaveAs}
+                saveAvailable={savedReports.canSave}
+                saveAsAvailable={savedReports.canSaveAs}
+                canRunQuery={savedReports.canRunQuery}
+                loadedReportName={isMobile ? null : savedReports.loadedReportName}
+                isLoadedActive={savedReports.isLoadedActive}
+                isLoadedDefault={savedReports.isLoadedDefault}
+                onToggleActive={isMobile ? undefined : savedReports.toggleActive}
+                onToggleDefault={isMobile ? undefined : savedReports.toggleDefault}
+                editMode={savedReports.editMode}
+                editLocked={savedReports.editLocked}
+                loadedDirty={savedReports.loadedDirty}
+                onStartEdit={isMobile ? undefined : savedReports.startEdit}
+                onCancelEdit={isMobile ? undefined : savedReports.cancelEdit}
+                onNewReport={isMobile ? undefined : savedReports.newReport}
+                onOpenSettings={isMobile ? undefined : savedReports.openSettings}
               />
-              <FiscalDeptFilter
-                allDepts={allDepts}
-                selected={selectedDepts}
-                onChange={setSelectedDepts}
-              />
             </div>
-            <div id="tour-toggle-descriptions-keywords" className={styles.togglePair}>
-              <div className={styles.toggleGroup}>
-                <button
-                  className={`${styles.toggleOption} ${!showDescription ? styles.toggleSelected : ""}`}
-                  onClick={() => setShowDescription(false)}
-                >
-                  Hide Descriptions
-                </button>
-                <button
-                  className={`${styles.toggleOption} ${showDescription ? styles.toggleSelected : ""}`}
-                  onClick={() => setShowDescription(true)}
-                >
-                  Show Descriptions
-                </button>
-              </div>
-              <div className={styles.toggleGroup}>
-                <button
-                  className={`${styles.toggleOption} ${!showKeywords ? styles.toggleSelected : ""}`}
-                  onClick={() => setShowKeywords(false)}
-                >
-                  Hide Keywords
-                </button>
-                <button
-                  className={`${styles.toggleOption} ${showKeywords ? styles.toggleSelected : ""}`}
-                  onClick={() => setShowKeywords(true)}
-                >
-                  Show Keywords
-                </button>
-              </div>
-            </div>
-            <div id="tour-toggle-untracked" className={styles.toggleGroup}>
-              <button
-                className={`${styles.toggleOption} ${!showUntracked ? styles.toggleSelected : ""}`}
-                onClick={() => setShowUntracked(false)}
-              >
-                Hide Untracked
-              </button>
-              <button
-                className={`${styles.toggleOption} ${showUntracked ? styles.toggleSelected : ""}`}
-                onClick={() => setShowUntracked(true)}
-              >
-                Show Untracked
-              </button>
-            </div>
-            <div id="tour-toggle-layout" className={`${styles.toggleGroup} ${styles.layoutToggle}`}>
-              <button
-                className={`${styles.toggleOption} ${sideBySide ? styles.toggleSelected : ""}`}
-                onClick={() => setSideBySide(true)}
-              >
-                Side by Side
-              </button>
-              <button
-                className={`${styles.toggleOption} ${!sideBySide ? styles.toggleSelected : ""}`}
-                onClick={() => setSideBySide(false)}
-              >
-                Single Column
-              </button>
-            </div>
-            <div id="tour-export-pdf" className={styles.printRow}>
-              <span className={styles.printRowLabel}>Hearings:</span>
-              <input
-                type="date"
-                className={styles.printDateInput}
-                value={printStartDate}
-                onChange={(e) => setPrintStartDate(e.target.value)}
-              />
-              <span className={styles.printRowSep}>–</span>
-              <input
-                type="date"
-                className={styles.printDateInput}
-                value={printEndDate}
-                onChange={(e) => setPrintEndDate(e.target.value)}
-              />
-              <button className={styles.printBtn} onClick={exportPDF} disabled={pendingPrint || (!!(printStartDate) !== !!(printEndDate))}>
-                {pendingPrint ? "Preparing…" : "Export PDF"}
-              </button>
-            </div>
-            <div className={styles.weekShortcuts}>
-              <button
-                className={`${styles.weekShortcutBtn} ${isToday ? styles.weekShortcutBtnActive : ""}`}
-                onClick={() => { setPrintStartDate(today); setPrintEndDate(today); }}
-              >
-                Today
-              </button>
-              <button
-                className={`${styles.weekShortcutBtn} ${activeWeek === -1 ? styles.weekShortcutBtnActive : ""}`}
-                onClick={() => { const b = weekBounds(-1); setPrintStartDate(b.start); setPrintEndDate(b.end); }}
-                title={weekBoundsTitle(-1)}
-              >
-                Last Week
-              </button>
-              <button
-                className={`${styles.weekShortcutBtn} ${activeWeek === 0 ? styles.weekShortcutBtnActive : ""}`}
-                onClick={() => { const b = weekBounds(0); setPrintStartDate(b.start); setPrintEndDate(b.end); }}
-                title={weekBoundsTitle(0)}
-              >
-                This Week
-              </button>
-              <button
-                className={`${styles.weekShortcutBtn} ${activeWeek === 1 ? styles.weekShortcutBtnActive : ""}`}
-                onClick={() => { const b = weekBounds(1); setPrintStartDate(b.start); setPrintEndDate(b.end); }}
-                title={weekBoundsTitle(1)}
-              >
-                Next Week
-              </button>
-              {(printStartDate || printEndDate) && (
-                <button
-                  className={styles.clearDatesBtn}
-                  onClick={() => { setPrintStartDate(""); setPrintEndDate(""); }}
-                >
-                  Clear Dates
-                </button>
-              )}
-            </div>
-            {!!(printStartDate) !== !!(printEndDate) && (
-              <p className={styles.printDateNotice}>Select both a from and to date to export hearings. Clear both to export only bills.</p>
-            )}
-            <div
-              className={styles.hearingFilterRow}
-              title={(!printStartDate || !printEndDate) ? "Add dates to use this filter" : undefined}
-            >
-              <div id="tour-toggle-filter-bills-with-hearings">
-                <span className={styles.hearingFilterLabel}>Filter to Measures with Hearings on These Dates</span>
-                <div className={`${styles.toggleGroup} ${(!printStartDate || !printEndDate) ? styles.toggleDisabled : ""}`}>
-                  <button
-                    className={`${styles.toggleOption} ${!filterToHearings ? styles.toggleSelected : ""}`}
-                    onClick={() => setFilterToHearings(false)}
-                    disabled={!printStartDate || !printEndDate}
-                  >
-                    Off
-                  </button>
-                  <button
-                    className={`${styles.toggleOption} ${filterToHearings ? styles.toggleSelected : ""}`}
-                    onClick={() => setFilterToHearings(true)}
-                    disabled={!printStartDate || !printEndDate}
-                  >
-                    On
-                  </button>
+          )}
+        </div>
+
+        <SaveAsModal
+          open={savedReports.saveAsOpen}
+          onClose={savedReports.closeSaveAs}
+          onSave={savedReports.saveAs}
+          canCreateSystemReports={savedReports.canSystemEdit}
+          availableRoles={savedReports.availableRoles}
+        />
+        <SettingsModal
+          open={savedReports.settingsOpen}
+          onClose={savedReports.closeSettings}
+          onSave={savedReports.editSettings}
+          initialName={savedReports.loadedReport?.display_name ?? ""}
+          isSystemLevel={savedReports.loadedReport?.publication_level === "system"}
+          initialAllowedRoles={savedReports.loadedReport?.allowed_roles ?? []}
+          canEditRoles={savedReports.canSystemEdit}
+          availableRoles={savedReports.availableRoles}
+        />
+
+        {/* ── Export and Display Options ─────────────────────────── */}
+        <div className={styles.panelSection}>
+          <button
+            type="button"
+            className={styles.panelSectionHeader}
+            onClick={() => setExportDisplayOpen((o) => !o)}
+          >
+            <span>Options</span>
+            <span>{exportDisplayOpen ? "▲" : "▼"}</span>
+          </button>
+          {exportDisplayOpen && (
+            <div className={styles.panelSectionBody}>
+              <div className={styles.exportDisplayGrid}>
+                {/* Left: display toggles */}
+                <div className={styles.exportDisplayLeft}>
+                  <div className={styles.exportDisplayColHeader}>Display</div>
+                  <div id="tour-toggle-descriptions-keywords" className={styles.togglePair}>
+                    <div className={styles.toggleGroup}>
+                      <button
+                        className={`${styles.toggleOption} ${!showDescription ? styles.toggleSelected : ""}`}
+                        onClick={() => setShowDescription(false)}
+                      >
+                        Hide Descriptions
+                      </button>
+                      <button
+                        className={`${styles.toggleOption} ${showDescription ? styles.toggleSelected : ""}`}
+                        onClick={() => setShowDescription(true)}
+                      >
+                        Show Descriptions
+                      </button>
+                    </div>
+                    <div className={styles.toggleGroup}>
+                      <button
+                        className={`${styles.toggleOption} ${!showKeywords ? styles.toggleSelected : ""}`}
+                        onClick={() => setShowKeywords(false)}
+                      >
+                        Hide Keywords
+                      </button>
+                      <button
+                        className={`${styles.toggleOption} ${showKeywords ? styles.toggleSelected : ""}`}
+                        onClick={() => setShowKeywords(true)}
+                      >
+                        Show Keywords
+                      </button>
+                    </div>
+                  </div>
+                  <div id="tour-toggle-layout" className={`${styles.toggleGroup} ${styles.layoutToggle}`}>
+                    <button
+                      className={`${styles.toggleOption} ${sideBySide ? styles.toggleSelected : ""}`}
+                      onClick={() => setSideBySide(true)}
+                    >
+                      Side by Side
+                    </button>
+                    <button
+                      className={`${styles.toggleOption} ${!sideBySide ? styles.toggleSelected : ""}`}
+                      onClick={() => setSideBySide(false)}
+                    >
+                      Single Column
+                    </button>
+                  </div>
+                  <div id="tour-filter-outcomes-fiscal-notes" className={styles.togglePair}>
+                    <OutcomeFilter selected={selectedOutcomes} onChange={setSelectedOutcomes} />
+                    <FiscalDeptFilter allDepts={allDepts} selected={selectedDepts} onChange={setSelectedDepts} />
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div className={styles.exportDisplayDivider} />
+
+                {/* Right: export controls */}
+                <div className={styles.exportDisplayRight}>
+                  <div className={styles.exportDisplayColHeader}>Export</div>
+                  <div id="tour-export-pdf" className={styles.exportRow}>
+                    <span className={styles.printRowLabel}>Hearings:</span>
+                    <input
+                      type="date"
+                      className={styles.printDateInput}
+                      value={printStartDate}
+                      onChange={(e) => setPrintStartDate(e.target.value)}
+                    />
+                    <span className={styles.printRowSep}>–</span>
+                    <input
+                      type="date"
+                      className={styles.printDateInput}
+                      value={printEndDate}
+                      onChange={(e) => setPrintEndDate(e.target.value)}
+                    />
+                    <button
+                      className={styles.printBtn}
+                      onClick={exportPDF}
+                      disabled={pendingPrint || (!!(printStartDate) !== !!(printEndDate))}
+                    >
+                      {pendingPrint ? "Preparing…" : "Export PDF"}
+                    </button>
+                  </div>
+                  <div className={styles.weekShortcuts}>
+                    <button
+                      className={`${styles.weekShortcutBtn} ${isToday ? styles.weekShortcutBtnActive : ""}`}
+                      onClick={() => { setPrintStartDate(today); setPrintEndDate(today); }}
+                    >
+                      Today
+                    </button>
+                    <button
+                      className={`${styles.weekShortcutBtn} ${activeWeek === -1 ? styles.weekShortcutBtnActive : ""}`}
+                      onClick={() => { const b = weekBounds(-1); setPrintStartDate(b.start); setPrintEndDate(b.end); }}
+                      title={weekBoundsTitle(-1)}
+                    >
+                      Last Week
+                    </button>
+                    <button
+                      className={`${styles.weekShortcutBtn} ${activeWeek === 0 ? styles.weekShortcutBtnActive : ""}`}
+                      onClick={() => { const b = weekBounds(0); setPrintStartDate(b.start); setPrintEndDate(b.end); }}
+                      title={weekBoundsTitle(0)}
+                    >
+                      This Week
+                    </button>
+                    <button
+                      className={`${styles.weekShortcutBtn} ${activeWeek === 1 ? styles.weekShortcutBtnActive : ""}`}
+                      onClick={() => { const b = weekBounds(1); setPrintStartDate(b.start); setPrintEndDate(b.end); }}
+                      title={weekBoundsTitle(1)}
+                    >
+                      Next Week
+                    </button>
+                    {(printStartDate || printEndDate) && (
+                      <button
+                        className={styles.clearDatesBtn}
+                        onClick={() => { setPrintStartDate(""); setPrintEndDate(""); }}
+                      >
+                        Clear Dates
+                      </button>
+                    )}
+                  </div>
+                  {!!(printStartDate) !== !!(printEndDate) && (
+                    <p className={styles.printDateNotice}>Select both a from and to date to export hearings. Clear both to export only bills.</p>
+                  )}
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
-      <p className={styles.aiLegend}>
-        This is a research tool and not an official legislative record.
-      </p>
-      <p className={styles.aiLegend}>
-        ✨ Content marked with this symbol is AI-generated and may contain false information. Please review for accuracy.
-      </p>
 
-      {loading && <p className={styles.notice}>Loading measures…</p>}
       {error   && <p className={styles.error}>Error: {error}</p>}
       <Toast message={toast?.message} type={toast?.type} onDismiss={() => setToast(null)} />
 
       {!loading && !error && bills.length === 0 && (
-        <p className={styles.notice}>No bills have been tracked yet.</p>
+        <p className={styles.notice}>No bills match the current filters.</p>
       )}
 
-      <div ref={contentRef}>
+      {/* ── Search Results ─────────────────────────────────────── */}
+      <div className={styles.panelSection}>
+        <div className={styles.panelSectionHeaderStatic}>Search Results</div>
+        <div className={styles.panelSectionBody}>
+          <div className={styles.searchRow}>
+            <input
+              id="tour-search"
+              className={styles.searchInput}
+              type="search"
+              placeholder="Search measures on this page…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <button
+              className={styles.helpBtn}
+              onClick={() => createBillsTour({ isLoggedIn: !!token }).drive()}
+              title="Tour the Bills page"
+            >
+              ?
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {loading && (
+        <div className={styles.loadingOverlay}>
+          <span className={styles.loadingText}>Loading…</span>
+        </div>
+      )}
+
+      <div ref={contentRef} style={loading ? { display: "none" } : undefined}>
         <ReportHeaderEditor printStartDate={printStartDate} printEndDate={printEndDate} />
         <PrintHearingsSection hearings={printMeetings} startDate={printStartDate} endDate={printEndDate} />
 
@@ -482,13 +716,9 @@ export default function Home() {
                         onRefreshed={(updated) =>
                           setBills((prev) => prev.map((b) => b.id === updated.id ? updated : b))
                         }
-                        onTrackingChanged={(updated) => {
-                          if (!showUntracked && !updated.is_tracked) {
-                            setBills((prev) => prev.filter((b) => b.id !== updated.id));
-                          } else {
-                            setBills((prev) => prev.map((b) => b.id === updated.id ? updated : b));
-                          }
-                        }}
+                        onTrackingChanged={(updated) =>
+                          setBills((prev) => prev.map((b) => (b.id === updated.id ? updated : b)))
+                        }
                       />
                     </li>
                   ))}
@@ -511,13 +741,9 @@ export default function Home() {
                   onRefreshed={(updated) =>
                     setBills((prev) => prev.map((b) => b.id === updated.id ? updated : b))
                   }
-                  onTrackingChanged={(updated) => {
-                    if (!showUntracked && !updated.is_tracked) {
-                      setBills((prev) => prev.filter((b) => b.id !== updated.id));
-                    } else {
-                      setBills((prev) => prev.map((b) => b.id === updated.id ? updated : b));
-                    }
-                  }}
+                  onTrackingChanged={(updated) =>
+                    setBills((prev) => prev.map((b) => (b.id === updated.id ? updated : b)))
+                  }
                 />
               </li>
             ))}

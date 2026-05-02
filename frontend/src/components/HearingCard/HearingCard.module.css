@@ -254,14 +254,51 @@ a.committeeName:hover {
   text-decoration-style: dotted;
 }
 
+/* Hearing assignments panel */
+
+.assignmentsRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 0;
+  border-left: 1px solid var(--color-border);
+  padding-left: 0.75rem;
+}
+
+.assignmentsLabel {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 640px) {
+  .assignmentsRow {
+    width: auto;
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+    padding-left: 0;
+    padding-top: 0.75rem;
+  }
+}
+
+@media print {
+  .assignmentsRow {
+    display: none;
+  }
+}
+
 /* DPS notes */
 
 .dpsRow {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  width: max(220px, 18vw);
-  flex-shrink: 0;
+  flex: 0 0 25%;
+  max-width: 25%;
+  min-width: 0;
   border-left: 1px solid var(--color-border);
   padding-left: 0.75rem;
 }
@@ -321,6 +358,12 @@ a.committeeName:hover {
 .saveBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.visibilityDivider {
+  height: 1px;
+  background-color: var(--color-border);
+  margin: 0.2rem 0 0.05rem;
 }
 
 .hideRow {
@@ -425,7 +468,18 @@ a.committeeName:hover {
     flex-direction: column;
   }
 
+  .location {
+    white-space: normal;
+    margin-left: 0;
+  }
+
+  .priorAgendasRow {
+    display: none;
+  }
+
   .dpsRow {
+    flex: initial;
+    max-width: none;
     width: auto;
     border-left: none;
     border-top: 1px solid var(--color-border);

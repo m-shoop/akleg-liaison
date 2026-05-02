@@ -8,6 +8,14 @@ import Home from "./pages/Home/Home";
 import Login from "./pages/Login/Login";
 import QueryBill from "./pages/QueryBill/QueryBill";
 import Hearings from "./pages/Hearings/Hearings";
+import Requests from "./pages/Requests/Requests";
+import Register from "./pages/Register/Register";
+import ForgotPassword from "./pages/ForgotPassword/ForgotPassword";
+import ActivateToken from "./pages/ActivateToken/ActivateToken";
+import SetPassword from "./pages/SetPassword/SetPassword";
+import EmailTemplates from "./pages/EmailTemplates/EmailTemplates";
+import Settings from "./pages/Settings/Settings";
+import OptOut from "./pages/OptOut/OptOut";
 import styles from "./App.module.css";
 
 export default function App() {
@@ -17,11 +25,20 @@ export default function App() {
       <main className={styles.main}>
         <SessionExpiredBanner />
         <Routes>
-          <Route path="/"           element={<Home />} />
-          <Route path="/login"      element={<Login />} />
-          <Route path="/query-bill" element={<QueryBill />} />
+          <Route path="/"                element={<Home />} />
+          <Route path="/login"           element={<Login />} />
+          <Route path="/register"        element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/activate"        element={<ActivateToken />} />
+          <Route path="/set-password"    element={<SetPassword />} />
+          <Route path="/query-bill"      element={<QueryBill />} />
           <Route path="/hearings"   element={<Hearings />} />
-          <Route path="/meetings"   element={<Navigate to="/hearings" replace />} />
+          <Route path="/meetings"        element={<Navigate to="/hearings" replace />} />
+          <Route path="/requests"        element={<Requests />} />
+          <Route path="/tasks"           element={<Navigate to="/requests" replace />} />
+          <Route path="/email-templates" element={<EmailTemplates />} />
+          <Route path="/settings"        element={<Settings />} />
+          <Route path="/opt-out/:token"  element={<OptOut />} />
         </Routes>
       </main>
       <Footer />

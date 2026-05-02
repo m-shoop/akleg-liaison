@@ -68,6 +68,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(PERMISSIONS_KEY);
+    sessionStorage.clear(); // clear sessionStorage for filters
     setToken(null);
     setUsername(null);
     setPermissions([]);

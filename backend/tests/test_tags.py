@@ -3,7 +3,7 @@
 import pytest
 from httpx import AsyncClient
 
-from tests.conftest import login_user, register_user
+from tests.conftest import login_user, seed_active_user
 
 
 async def _seed_bill(db, uid: str) -> int:
@@ -18,8 +18,9 @@ async def _seed_bill(db, uid: str) -> int:
 
 async def test_viewer_cannot_add_tag(client: AsyncClient, db, uid: str):
     bill_id = await _seed_bill(db, uid)
-    await register_user(client, f"viewer_{uid}", "pass", role="viewer")
-    token = await login_user(client, f"viewer_{uid}", "pass")
+    email = f"viewer_{uid}@example.com"
+    await seed_active_user(db, email, "pass", role="viewer")
+    token = await login_user(client, email, "pass")
 
     resp = await client.post(
         f"/bills/{bill_id}/tags",
@@ -31,8 +32,9 @@ async def test_viewer_cannot_add_tag(client: AsyncClient, db, uid: str):
 
 async def test_admin_can_add_and_remove_tag(client: AsyncClient, db, uid: str):
     bill_id = await _seed_bill(db, uid)
-    await register_user(client, f"admin_{uid}", "pass", role="admin")
-    token = await login_user(client, f"admin_{uid}", "pass")
+    email = f"admin_{uid}@example.com"
+    await seed_active_user(db, email, "pass", role="admin")
+    token = await login_user(client, email, "pass")
 
     # Add tag
     resp = await client.post(
@@ -55,8 +57,9 @@ async def test_viewer_cannot_remove_tag(client: AsyncClient, db, uid: str):
     bill_id = await _seed_bill(db, uid)
 
     # Admin adds a tag first
-    await register_user(client, f"admin2_{uid}", "pass", role="admin")
-    admin_token = await login_user(client, f"admin2_{uid}", "pass")
+    admin_email = f"admin2_{uid}@example.com"
+    await seed_active_user(db, admin_email, "pass", role="admin")
+    admin_token = await login_user(client, admin_email, "pass")
     resp = await client.post(
         f"/bills/{bill_id}/tags",
         json={"label": f"health_{uid}"},
@@ -65,8 +68,9 @@ async def test_viewer_cannot_remove_tag(client: AsyncClient, db, uid: str):
     tag_id = resp.json()["id"]
 
     # Viewer tries to remove it
-    await register_user(client, f"viewer2_{uid}", "pass", role="viewer")
-    viewer_token = await login_user(client, f"viewer2_{uid}", "pass")
+    viewer_email = f"viewer2_{uid}@example.com"
+    await seed_active_user(db, viewer_email, "pass", role="viewer")
+    viewer_token = await login_user(client, viewer_email, "pass")
     resp = await client.delete(
         f"/bills/{bill_id}/tags/{tag_id}",
         headers={"Authorization": f"Bearer {viewer_token}"},

@@ -3,7 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import { addTagToBill, removeTagFromBill } from "../../api/tags";
 import styles from "./BillTags.module.css";
 
-export default function BillTags({ bill, allTags = [] }) {
+export default function BillTags({ bill, allTags = [], onTagsChanged }) {
   const { can, token } = useAuth();
   const [tags, setTags] = useState(bill.tags ?? []);
   const [inputValue, setInputValue] = useState("");
@@ -27,7 +27,11 @@ export default function BillTags({ bill, allTags = [] }) {
     setBusy(true);
     try {
       const newTag = await addTagToBill(bill.id, trimmed, token);
-      setTags((prev) => prev.some((t) => t.id === newTag.id) ? prev : [...prev, newTag]);
+      setTags((prev) => {
+        const next = prev.some((t) => t.id === newTag.id) ? prev : [...prev, newTag];
+        onTagsChanged?.(next);
+        return next;
+      });
       setInputValue("");
       setHighlightedIndex(-1);
     } catch (err) {
@@ -42,7 +46,11 @@ export default function BillTags({ bill, allTags = [] }) {
     setBusy(true);
     try {
       await removeTagFromBill(bill.id, tagId, token);
-      setTags((prev) => prev.filter((t) => t.id !== tagId));
+      setTags((prev) => {
+        const next = prev.filter((t) => t.id !== tagId);
+        onTagsChanged?.(next);
+        return next;
+      });
     } catch (err) {
       setError(err.message);
     } finally {

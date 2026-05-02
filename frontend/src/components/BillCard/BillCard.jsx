@@ -1,28 +1,23 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { setTracked } from "../../api/bills";
+import { requestBillTracking } from "../../api/workflows";
 import { useAuth } from "../../context/AuthContext";
 import BillTags from "../BillTags/BillTags";
 import FiscalNotesTable from "../FiscalNotesTable/FiscalNotesTable";
 import OutcomesTable from "../OutcomesTable/OutcomesTable";
 import { flattenOutcomes } from "../../utils/outcomes";
+import { addDays, todayJuneau } from "../../utils/weekBounds";
 import styles from "./BillCard.module.css";
 
-function weekOf(isoDate) {
-  const d = new Date(isoDate + "T00:00:00");
-  const sunday = new Date(d);
-  sunday.setDate(d.getDate() - d.getDay());
-  const saturday = new Date(sunday);
-  saturday.setDate(sunday.getDate() + 6);
-  return {
-    start: sunday.toISOString().slice(0, 10),
-    end: saturday.toISOString().slice(0, 10),
-  };
-}
-
-function hearingLink(billNumber, isoDate) {
-  const { start, end } = weekOf(isoDate);
-  return `/hearings?search=${encodeURIComponent(billNumber)}&start=${start}&end=${end}&show_hidden=1`;
+function hearingLink(billNumber) {
+  // Filter the Hearings page to today-or-later for this exact bill number.
+  // The far-future end is a workaround: a from-only date range compiles to
+  // `hearing_date > start` (exclusive of today), so we pass an upper bound a
+  // year out to get inclusive `BETWEEN today AND today+1y` semantics.
+  const start = todayJuneau();
+  const end = addDays(start, 365);
+  return `/hearings?bill=${encodeURIComponent(billNumber)}&start=${start}&end=${end}&show_hidden=1`;
 }
 
 function committeeLink(status) {
@@ -36,16 +31,18 @@ function CalendarIcon({ isoDate, billNumber }) {
   const weekday = d.toLocaleDateString("en-US", { weekday: "short" });
   const monthDay = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return (
-    <Link to={hearingLink(billNumber, isoDate)} className={`${styles.calIcon} ${styles.calIconUpcoming}`}>
+    <Link to={hearingLink(billNumber)} className={`${styles.calIcon} ${styles.calIconUpcoming}`}>
       <span className={styles.calIconTop}>{weekday}</span>
       <span className={styles.calIconBottom}>{monthDay}</span>
     </Link>
   );
 }
 
-export default function BillCard({ bill, showDescription, selectedOutcomes, selectedDepts = null, showKeywords = false, abbreviated = false, allTags = [], upcomingHearingDates = [], onRefreshed: _onRefreshed, onTrackingChanged }) {
+export default function BillCard({ bill, showDescription, selectedOutcomes, selectedDepts = null, showKeywords = false, abbreviated = false, allTags = [], upcomingHearingDates = [], onRefreshed, onTrackingChanged, onTrackingRequested }) {
   const { can, token } = useAuth();
   const [tracking, setTracking] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [trackingRequested, setTrackingRequested] = useState(bill.tracking_requested);
   const [error, setError] = useState(null);
 
   const visibleOutcomes = flattenOutcomes(bill.events).filter((r) => selectedOutcomes.has(r.outcome_type));
@@ -88,6 +85,20 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, sele
       setError(err.message);
     } finally {
       setTracking(false);
+    }
+  }
+
+  async function handleRequestTracking() {
+    setError(null);
+    setRequesting(true);
+    try {
+      await requestBillTracking(bill.id, token);
+      setTrackingRequested(true);
+      onTrackingRequested?.(bill.id);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRequesting(false);
     }
   }
 
@@ -135,6 +146,26 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, sele
             {tracking ? "…" : bill.is_tracked ? "Untrack" : "Track"}
           </button>
         )}
+        {!bill.is_tracked && !can("bill:track") && can("bill:request-tracking") && (
+          bill.user_tracking_request_denied ? (
+            <button
+              className={`${styles.trackBtn} ${styles.trackBtnDenied}`}
+              disabled
+              title="Contact your department's liaison if you have further questions."
+            >
+              Tracking Request Denied
+            </button>
+          ) : (
+            <button
+              className={styles.trackBtn}
+              onClick={handleRequestTracking}
+              disabled={requesting || trackingRequested}
+              title={trackingRequested ? "Tracking already requested" : "Request this bill be tracked"}
+            >
+              {requesting ? "…" : trackingRequested ? "Tracking Requested" : "Request Tracking"}
+            </button>
+          )
+        )}
       </div>
 
       {error && <p className={styles.error}>{error}</p>}
@@ -178,7 +209,11 @@ export default function BillCard({ bill, showDescription, selectedOutcomes, sele
       )}
       <div className={styles.bottomRow}>
         <div className={styles.bottomLeft}>
-          <BillTags bill={bill} allTags={allTags} />
+          <BillTags
+            bill={bill}
+            allTags={allTags}
+            onTagsChanged={(newTags) => onRefreshed?.({ ...bill, tags: newTags })}
+          />
           {showKeywords && bill.keywords?.length > 0 && (
             <div className={styles.keywords}>
               {bill.keywords.map((s) =>

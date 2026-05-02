@@ -1,51 +1,81 @@
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
 
-export function createHearingsTour({ isEditor = false, activeView = "list" } = {}) {
+export function createHearingsTour({
+  isEditor = false,
+  isLoggedIn = false,
+  activeView = "list",
+} = {}) {
   const isCalendar = activeView === "calendar";
 
   return driver({
     showProgress: true,
     steps: [
-      // Always: view toggle
       {
         element: "#tour-view-toggle",
         popover: {
           title: "View Toggle",
           description:
-            "Switch between List view and Calendar view. The calendar view is available on desktop only and shows hearings laid out on a weekly grid.",
+            "Switch between List view and Calendar view. Calendar view lays hearings out on a grid — 1 or 3 days at once on desktop, one day at a time on mobile. List view groups hearings by day.",
         },
       },
 
-      // Always: search
       {
-        element: "#tour-meetings-search",
+        element: "#tour-default-settings",
         popover: {
-          title: "Search",
+          title: "Default Page Settings",
           description:
-            "Filter hearings by committee name, bill number, description, location, or your own notes. Results update as you type. In calendar view, a banner appears when filtering is active.",
+            "Reset filters, criteria, search, and view options on this page back to their starting values.",
         },
       },
 
-      // Date controls differ per view
-      ...(!isCalendar
+      ...(isLoggedIn && !isCalendar
         ? [
             {
-              element: "#tour-date-range",
+              element: "#tour-saved-reports",
               popover: {
-                title: "Date Range",
+                title: "Saved Reports",
                 description:
-                  "Choose the week or date range you want to view. Hearings load automatically when the dates change.",
+                  "Save the criteria you've built as a named report and re-load it with one click. Click any badge to load that report. ★ marks your default — it loads automatically when you return to this page. System reports are visible to all users; user reports are private to you. Toggle 'Include Inactive' to see archived reports.",
               },
             },
           ]
-        : [
+        : []),
+
+      ...(!isCalendar
+        ? [
+            {
+              element: "#tour-report-criteria",
+              popover: {
+                title: "Report Criteria",
+                description:
+                  "Build the list of hearings you want to see by stacking rows of criteria — committee, chamber, date range, agenda content, hearing notes, and more. Combine rows with AND / OR in the Custom Logic box for complex queries. Click Run Query to apply, then Save or Save As to keep the result as a report.",
+              },
+            },
+          ]
+        : []),
+
+      ...(isEditor
+        ? [
+            {
+              element: "#tour-refresh-hearings",
+              popover: {
+                title: "Refresh from akleg.gov",
+                description:
+                  "Pull the latest schedule directly from akleg.gov for a date range. Use the shortcuts (Today / Last Week / This Week / Next Week) to quickly fill the dates. Refreshes run in the background.",
+              },
+            },
+          ]
+        : []),
+
+      ...(isCalendar
+        ? [
             {
               element: "#tour-calendar-start-date",
               popover: {
-                title: "Starting Date",
+                title: "Calendar Starting Date",
                 description:
-                  "The first day shown in the calendar. When you switch back to List view, this date carries over as the From date.",
+                  "The first day shown in the calendar grid. When you switch back to List view, this date carries over as the From date in your Report Criteria.",
               },
             },
             {
@@ -53,64 +83,39 @@ export function createHearingsTour({ isEditor = false, activeView = "list" } = {
               popover: {
                 title: "Calendar Navigation",
                 description:
-                  "Move forward or backward by the number of days currently shown (3 or 5). Use the 3-day / 5-day toggle to change how many columns are displayed.",
-              },
-            },
-          ]),
-
-      // Controls (editor only) — same in both views
-      ...(isEditor
-        ? [
-            {
-              element: "#tour-controls",
-              popover: {
-                title: "Controls",
-                description:
-                  "Scrape the latest schedule directly from akleg.gov to pick up any changes. Use the hidden hearings toggle to show or hide hearings marked as hidden.",
+                  "Step forward or backward by the number of days currently shown. Use the 1-day / 3-day toggle to change the column count (mobile is fixed at 1 day).",
               },
             },
           ]
-        : []),
-
-      // Expand agendas — list view only
-      ...(!isCalendar
-        ? [
+        : [
             {
               element: "#tour-expand-agendas",
               popover: {
                 title: "Expand / Collapse Agendas",
                 description:
-                  "Toggle all hearing agendas open or closed at once. You can also expand or collapse individual hearings independently by clicking '▸ Show agenda' on each card.",
+                  "Toggle every hearing's agenda open or closed at once. You can also expand individual hearings by clicking '▸ Show agenda' on each card.",
               },
             },
-          ]
-        : []),
+          ]),
 
-      // Show inactive — list view, editor only
-      ...(isEditor && !isCalendar
-        ? [
-            {
-              element: "#tour-show-inactive",
-              popover: {
-                title: "Show Inactive Hearings",
-                description:
-                  "Reveals hearings that were removed from the akleg.gov schedule after a prior scrape. Inactive hearings are shown with a strikethrough and reduced opacity. Only appears when inactive hearings exist in the selected date range.",
-              },
-            },
-          ]
-        : []),
-
-      // Always: legend
       {
         element: "#tour-legend",
         popover: {
           title: "Agenda Symbols",
           description:
-            "Symbols appearing before bill numbers: * = first hearing in first committee of referral, + = teleconferenced, = = previously heard or scheduled.",
+            "Symbols that appear before bill numbers on a hearing agenda: * = first hearing in the bill's first committee of referral, + = teleconferenced, = = previously heard or scheduled.",
         },
       },
 
-      // First item — differs per view
+      {
+        element: "#tour-meetings-search",
+        popover: {
+          title: "Search",
+          description:
+            "Filter the hearings shown on this page by committee, bill number, agenda content, location, or your own notes. Search runs locally on the loaded hearings — narrow with Report Criteria first if you don't see what you expect.",
+        },
+      },
+
       ...(!isCalendar
         ? [
             {
@@ -118,7 +123,7 @@ export function createHearingsTour({ isEditor = false, activeView = "list" } = {
               popover: {
                 title: "Hearing Card",
                 description:
-                  "Each card shows the date, time, committee, and location. Click '▸ Show agenda' to expand the bill list. Click a committee name or bill number to open it on akleg.gov. Use the Notes column to attach internal DPS notes — they persist across scrapes.",
+                  "Each card shows the date, time, committee, and location. Click '▸ Show agenda' to expand the bill list. Click a committee name or bill number to open it on akleg.gov. Use the Notes column to attach internal DPS notes — they persist across refreshes.",
               },
             },
           ]

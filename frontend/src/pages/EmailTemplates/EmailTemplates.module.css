@@ -1,0 +1,234 @@
+.page {
+  padding: 1.5rem 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.title {
+  font-size: 1.5rem;
+  color: var(--color-rainforest);
+  margin-bottom: 1rem;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 240px minmax(380px, 1fr) minmax(380px, 1fr);
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: 200px 1fr;
+  }
+  .previewPanel {
+    grid-column: span 2;
+  }
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--color-surface-raised);
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.sideBtn {
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 0.5rem 0.6rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.sideBtn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.sideBtnActive {
+  background: var(--color-rainforest);
+  color: var(--color-text-on-dark);
+  border-color: var(--color-rainforest);
+}
+
+.sideBtnActive .sideKey {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.sideName {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.sideKey {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  font-family: monospace;
+  margin-top: 2px;
+}
+
+.editorPanel,
+.previewPanel {
+  background: var(--color-surface-raised);
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.helper {
+  margin: 0 0 0.85rem;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.varTag {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  margin-right: 4px;
+}
+
+.fieldLabel {
+  display: block;
+  margin-bottom: 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.input,
+.textarea {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 0.45rem 0.6rem;
+  border: 1.5px solid var(--color-border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.textarea {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-glacial-water);
+}
+
+.actionsRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.primaryBtn {
+  background-color: var(--color-rainforest);
+  color: var(--color-text-on-dark);
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.primaryBtn:hover:not(:disabled) {
+  background-color: #3a5e43;
+}
+
+.primaryBtn:disabled,
+.secondaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondaryBtn {
+  background: transparent;
+  color: var(--color-rainforest);
+  border: 1.5px solid var(--color-rainforest);
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.secondaryBtn:hover:not(:disabled) {
+  background: rgba(46, 74, 53, 0.06);
+}
+
+.dirtyMark {
+  font-size: 0.78rem;
+  color: #b07e1c;
+}
+
+.error {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #b33a3a;
+}
+
+.success {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-rainforest);
+}
+
+.previewTitle {
+  font-size: 1.05rem;
+  margin: 0 0 0.6rem;
+  color: var(--color-rainforest);
+}
+
+.muted {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.previewSubject {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--color-surface);
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  margin-bottom: 0.6rem;
+}
+
+.previewLabel {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.previewIframeWrapper {
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+  background: white;
+}
+
+.previewIframe {
+  width: 100%;
+  height: 540px;
+  border: none;
+  background: white;
+}

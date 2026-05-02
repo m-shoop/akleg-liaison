@@ -1,9 +1,15 @@
 import styles from "./FiscalNotesTable.module.css";
 
 export default function FiscalNotesTable({ fiscalNotes, selectedDepts = null }) {
-  const active = fiscalNotes.filter(
-    (n) => n.is_active && (selectedDepts === null || selectedDepts.has(n.fn_department))
-  );
+  const cmp = (a, b) => (a ?? "").localeCompare(b ?? "");
+  const active = fiscalNotes
+    .filter((n) => n.is_active && (selectedDepts === null || selectedDepts.has(n.fn_department)))
+    .sort(
+      (a, b) =>
+        cmp(a.fn_department, b.fn_department) ||
+        cmp(a.fn_appropriation, b.fn_appropriation) ||
+        cmp(a.fn_allocation, b.fn_allocation)
+    );
   if (active.length === 0) return null;
 
   const formatDate = (iso) =>

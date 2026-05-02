@@ -15,7 +15,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from dataclasses import dataclass
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -102,6 +104,14 @@ identify all concrete outcomes for the specific bill noted in the event context.
 Focus only on actions that were actually taken — not scheduled hearings, \
 administrative notes, or fiscal note references.
 
+IMPORTANT: Limit your reported outcomes to what is directly reflected in the \
+"Raw action text" provided with the event. The journal page may contain many \
+other entries for the same bill on the same day; do not report outcomes for \
+those other entries — they are tracked as separate events with their own \
+source links. For example, if the raw action text says "(H) RULES TO CALENDAR \
+| (H) MOVED TO BOTTOM OF CALENDAR", report only rules_to_calendar — do not \
+also report amended outcomes visible elsewhere on the journal page.
+
 Call record_outcome once for each distinct outcome. If the document contains no \
 clear outcome for this bill, call once with outcome_type "other" and a brief \
 explanation in the description field.
@@ -136,6 +146,45 @@ Never omit the chamber prefix and never use all caps.\
 
 
 # ---------------------------------------------------------------------------
+# Journal page filtering
+# ---------------------------------------------------------------------------
+
+# Matches headers like "2026-02-25     House Journal     Page 1722"
+_JOURNAL_PAGE_HEADER_RE = re.compile(
+    r"^\S+\s+(?:House|Senate) Journal\s+Page\s+(\d+)\s*$",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+
+def _target_journal_page(url: str) -> int | None:
+    """Return the integer page number from a Journal URL's Page= parameter."""
+    qs = parse_qs(urlparse(url).query)
+    vals = qs.get("Page", [])
+    if not vals:
+        return None
+    try:
+        return int(vals[0])
+    except ValueError:
+        return None
+
+
+def _slice_journal_page(text: str, target_page: int) -> str:
+    """
+    Return only the text belonging to *target_page* from a multi-page
+    journal document.  Falls back to the full text if the page isn't found.
+    """
+    boundaries = [
+        (m.start(), int(m.group(1)))
+        for m in _JOURNAL_PAGE_HEADER_RE.finditer(text)
+    ]
+    for i, (start, page_num) in enumerate(boundaries):
+        if page_num == target_page:
+            end = boundaries[i + 1][0] if i + 1 < len(boundaries) else len(text)
+            return text[start:end]
+    return text
+
+
+# ---------------------------------------------------------------------------
 # Page fetch + text extraction
 # ---------------------------------------------------------------------------
 
@@ -144,6 +193,10 @@ async def _fetch_page_text(url: str) -> str:
     Fetch *url* with httpx and return stripped plain text, capped at
     _MAX_TEXT_CHARS.  Navigational chrome (header/footer/nav/breadcrumbs)
     is removed first so the model sees mostly content.
+
+    For Alaska House/Senate Journal URLs (which return a multi-page document),
+    the text is filtered down to the single journal page indicated by the
+    URL's Page= query parameter before truncation.
     """
     async with httpx.AsyncClient(
         follow_redirects=True, timeout=30, headers=_HEADERS
@@ -158,6 +211,11 @@ async def _fetch_page_text(url: str) -> str:
     text = soup.get_text(separator="\n", strip=True)
     lines = [ln for ln in text.splitlines() if ln.strip()]
     text = "\n".join(lines)
+
+    target_page = _target_journal_page(url)
+    if target_page is not None and "Journal/Pages" in url:
+        text = _slice_journal_page(text, target_page)
+
     return text[:_MAX_TEXT_CHARS]
 
 

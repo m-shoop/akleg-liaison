@@ -30,33 +30,30 @@ from app.config import settings
 from app.database import get_db
 from app.main import app
 
+# The test client speaks plain http://, so a Secure cookie set by /auth/validate-token
+# won't be sent back on the follow-up /auth/set-password request and the handler
+# would 401. Production keeps cookie_secure=True; tests need it off.
+settings.cookie_secure = False
+from app.models.user import TokenType, UserStatus
+from app.repositories.user_repository import (
+    create_user,
+    get_user_by_email,
+    upsert_user_token,
+)
+from app.services.auth_service import hash_password, generate_token, hash_token
+
 # ---------------------------------------------------------------------------
-# Test database URLs — derived from the application DB URL, no env var fallback.
-# If the application URL is misconfigured this will fail loudly at collection time.
+# Test database URLs
 # ---------------------------------------------------------------------------
 
 TEST_DB_NAME = "akleg_liaison_test"
 
-REGISTRATION_KEY = settings.registration_key
-
 
 def _derive_urls(app_url: str) -> tuple[str, str]:
-    """
-    Derive the maintenance URL (raw asyncpg) and test DB URL (SQLAlchemy) from
-    the application database URL.
-
-    app_url example:  postgresql+asyncpg://fibonacci:pass@localhost:5432/akleg_liaison
-    Returns:
-      maintenance_url  postgresql://fibonacci:pass@localhost:5432/postgres
-      test_db_url      postgresql+asyncpg://fibonacci:pass@localhost:5432/akleg_liaison_test
-    """
-    # asyncpg.connect does not accept the SQLAlchemy driver specifier
     asyncpg_base = app_url.replace("postgresql+asyncpg://", "postgresql://").rsplit("/", 1)[0]
     maintenance_url = f"{asyncpg_base}/postgres"
-
     sqlalchemy_base = app_url.rsplit("/", 1)[0]
     test_db_url = f"{sqlalchemy_base}/{TEST_DB_NAME}"
-
     return maintenance_url, test_db_url
 
 
@@ -64,7 +61,7 @@ MAINTENANCE_URL, TEST_DB_URL = _derive_urls(settings.database_url)
 
 
 # ---------------------------------------------------------------------------
-# Session-scoped DB lifecycle  (synchronous — uses asyncio.run internally)
+# Session-scoped DB lifecycle
 # ---------------------------------------------------------------------------
 
 async def _create_db() -> None:
@@ -106,10 +103,6 @@ def test_database():
 
 @pytest.fixture
 async def _conn(test_database):
-    """
-    A single DB connection per test with an open transaction.
-    Rolled back at teardown — no test data ever reaches disk.
-    """
     engine = create_async_engine(TEST_DB_URL, echo=False)
     async with engine.connect() as conn:
         await conn.begin()
@@ -120,7 +113,6 @@ async def _conn(test_database):
 
 @pytest.fixture
 async def db(_conn):
-    """Session for seeding data in tests; shares the outer test transaction."""
     session = AsyncSession(_conn, expire_on_commit=False, join_transaction_mode="create_savepoint")
     try:
         yield session
@@ -130,11 +122,6 @@ async def db(_conn):
 
 @pytest.fixture
 async def client(_conn):
-    """
-    AsyncClient wired to the FastAPI app.
-    Each request gets its own session bound to the same connection as `db`,
-    so route handler commits only release savepoints within the outer transaction.
-    """
     async def override_get_db():
         session = AsyncSession(_conn, expire_on_commit=False, join_transaction_mode="create_savepoint")
         try:
@@ -150,7 +137,7 @@ async def client(_conn):
 
 @pytest.fixture
 def uid():
-    """Short unique ID so test-created usernames/labels never collide within a run."""
+    """Short unique ID so test-created emails never collide within a run."""
     return uuid.uuid4().hex[:8]
 
 
@@ -158,23 +145,82 @@ def uid():
 # Convenience helpers
 # ---------------------------------------------------------------------------
 
-async def register_user(client: AsyncClient, username: str, password: str, role: str = "viewer") -> dict:
-    resp = await client.post("/auth/register", json={
-        "username": username,
-        "password": password,
-        "registration_key": REGISTRATION_KEY,
-        "role": role,
-    })
-    assert resp.status_code == 201, resp.text
-    return resp.json()
+async def seed_inactive_user(
+    db: AsyncSession,
+    email: str,
+    role: str = "viewer",
+) -> None:
+    """Insert a user directly into the DB with Inactive status and no password."""
+    await create_user(db, email=email, role_name=role)
+    await db.commit()
 
 
-async def login_user(client: AsyncClient, username: str, password: str) -> str:
-    """Returns the access token."""
+async def seed_active_user(
+    db: AsyncSession,
+    email: str,
+    password: str,
+    role: str = "viewer",
+) -> None:
+    """Insert a fully active user with a hashed password."""
+    hashed = hash_password(password)
+    await create_user(
+        db,
+        email=email,
+        role_name=role,
+        hashed_password=hashed,
+        user_status=UserStatus.active,
+    )
+    await db.commit()
+
+
+async def seed_user_token(
+    db: AsyncSession,
+    email: str,
+    token_type: TokenType,
+) -> str:
+    """
+    Insert a registration or password-reset token for an existing user.
+    Returns the raw (unhashed) token so tests can submit it.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    user = await get_user_by_email(db, email)
+    assert user is not None, f"User {email} not found — seed the user first"
+
+    raw = generate_token()
+    hashed = hash_token(raw)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
+    await upsert_user_token(db, user.id, token_type, hashed, expires_at)
+    await db.commit()
+    return raw
+
+
+async def login_user(client: AsyncClient, email: str, password: str) -> str:
+    """Log in and return the access token."""
     resp = await client.post(
         "/auth/login",
-        data={"username": username, "password": password},
+        data={"username": email, "password": password},
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     assert resp.status_code == 200, resp.text
     return resp.json()["access_token"]
+
+
+async def audit_actions_for(
+    db: AsyncSession,
+    *,
+    entity_type: str,
+    entity_id: int,
+) -> list[str]:
+    """Return audit action names for an entity, in insertion order. Used by
+    audit-log regression tests so a future rename of an action string fails
+    the test instead of silently dropping rows from analytics."""
+    from sqlalchemy import select
+    from app.models.audit_log import AuditLog
+
+    result = await db.execute(
+        select(AuditLog.action)
+        .where(AuditLog.entity_type == entity_type, AuditLog.entity_id == entity_id)
+        .order_by(AuditLog.id)
+    )
+    return list(result.scalars().all())

@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { updateDpsNotes, updateHidden } from "../../api/hearings";
-import { addDays } from "../../utils/weekBounds";
+import { addDays, todayJuneau } from "../../utils/weekBounds";
 import { alaskaLocalToUtc, exportToCalendar } from "../../utils/hearingCalendar";
 import PriorAgendasModal from "../PriorAgendasModal/PriorAgendasModal";
+import HearingAssignmentsPanel from "../HearingAssignmentsPanel/HearingAssignmentsPanel";
 import styles from "./CalendarView.module.css";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -82,7 +83,7 @@ function computeDayLayout(dayHearings) {
 
 // ─── Hearing detail overlay ───────────────────────────────────────────────────
 
-function HearingDetailOverlay({ hearing, showHidden, onClose, onNotesReload, onHiddenChanged }) {
+function HearingDetailOverlay({ hearing, onClose, onNotesReload, onHiddenChanged, onAssignmentCreated, showCanceledAssignments = false }) {
   const { can, token } = useAuth();
   const [notes, setNotes] = useState(hearing.dps_notes ?? "");
   const [saving, setSaving] = useState(false);
@@ -271,6 +272,12 @@ function HearingDetailOverlay({ hearing, showHidden, onClose, onNotesReload, onH
           />
         )}
 
+        {can("hearing-assignment:view") && (
+          <div className={styles.overlayAssignments}>
+            <HearingAssignmentsPanel hearing={hearing} onAssignmentCreated={onAssignmentCreated} showCanceled={showCanceledAssignments} />
+          </div>
+        )}
+
         {can("hearing-notes:view") && (
           <div className={styles.overlayNotes}>
             <div className={styles.overlaySectionTitle}>Notes</div>
@@ -304,7 +311,7 @@ function HearingDetailOverlay({ hearing, showHidden, onClose, onNotesReload, onH
         {can("hearing:hide") && (
           <div className={styles.overlayHideRow}>
             <div className={styles.overlaySectionTitle}>Visibility</div>
-            {hearing.hidden && showHidden && (
+            {hearing.hidden && (
               <p className={styles.overlayHiddenNote}>Hidden from view and PDF</p>
             )}
             <button
@@ -326,6 +333,7 @@ function HearingDetailOverlay({ hearing, showHidden, onClose, onNotesReload, onH
           <p className={styles.overlayLastSynced}>Synced {lastSynced}</p>
         )}
       </div>
+
     </>
   );
 }
@@ -342,8 +350,8 @@ export default function CalendarView({
   loading,
   noHearingsInRange,
   onHearingReload,
-  showHidden,
   onHiddenChanged,
+  showCanceledAssignments = false,
 }) {
   const [selectedHearing, setSelectedHearing] = useState(null);
   const scrollRef = useRef(null);
@@ -387,43 +395,64 @@ export default function CalendarView({
     <div className={styles.calendarWrapper}>
       {/* Navigation */}
       <div id="tour-calendar-nav" className={styles.calendarNav}>
-        <button
-          className={styles.navBtn}
-          onClick={() => onNavigate(addDays(startDate, -daysShown))}
-          title={`Back ${daysShown} ${dayLabel}`}
-        >
-          &lt;&lt; {daysShown} {dayLabel}
-        </button>
-        <div className={styles.daysToggle}>
+        <div className={styles.calendarNavRow}>
+          <div id="tour-calendar-start-date" className={styles.navStartDate}>
+            <label className={styles.navStartDateLabel}>
+              Starting Date
+              <input
+                type="date"
+                className={styles.navDateInput}
+                value={startDate ?? ""}
+                onChange={(e) => onNavigate(e.target.value)}
+              />
+            </label>
+            <button
+              className={`${styles.navBtn} ${startDate === todayJuneau() ? styles.navBtnActive : ""}`}
+              onClick={() => onNavigate(todayJuneau())}
+            >
+              Today
+            </button>
+          </div>
+          {loading && <span className={styles.navLoading}>Loading…</span>}
+          {!loading && noHearingsInRange && (
+            <span className={styles.navLoading}>No hearings found for this date range.</span>
+          )}
+          {isFiltered && (
+            <span className={styles.filterBanner}>
+              Search filter active — some hearings may have been hidden.
+            </span>
+          )}
+        </div>
+        <div className={styles.calendarNavRow}>
           <button
-            className={`${styles.daysOption} ${daysShown === 1 ? styles.daysSelected : ""}`}
-            onClick={() => onDaysShownChange(1)}
+            className={styles.navBtn}
+            onClick={() => onNavigate(addDays(startDate, -daysShown))}
+            title={`Back ${daysShown} ${dayLabel}`}
           >
-            1 day
+            &lt;&lt; {daysShown} {dayLabel}
           </button>
+          <div className={styles.daysToggle}>
+            <button
+              className={`${styles.daysOption} ${daysShown === 1 ? styles.daysSelected : ""}`}
+              onClick={() => onDaysShownChange(1)}
+            >
+              1 day
+            </button>
+            <button
+              className={`${styles.daysOption} ${daysShown === 3 ? styles.daysSelected : ""}`}
+              onClick={() => onDaysShownChange(3)}
+            >
+              3 days
+            </button>
+          </div>
           <button
-            className={`${styles.daysOption} ${daysShown === 3 ? styles.daysSelected : ""}`}
-            onClick={() => onDaysShownChange(3)}
+            className={styles.navBtn}
+            onClick={() => onNavigate(addDays(startDate, daysShown))}
+            title={`Forward ${daysShown} ${dayLabel}`}
           >
-            3 days
+            {daysShown} {dayLabel} &gt;&gt;
           </button>
         </div>
-        <button
-          className={styles.navBtn}
-          onClick={() => onNavigate(addDays(startDate, daysShown))}
-          title={`Forward ${daysShown} ${dayLabel}`}
-        >
-          {daysShown} {dayLabel} &gt;&gt;
-        </button>
-        {loading && <span className={styles.navLoading}>Loading…</span>}
-        {!loading && noHearingsInRange && (
-          <span className={styles.navLoading}>No hearings found for this date range.</span>
-        )}
-        {isFiltered && (
-          <span className={styles.filterBanner}>
-            Search filter active — some hearings may have been hidden.
-          </span>
-        )}
       </div>
 
       {/* Calendar grid */}
@@ -590,13 +619,14 @@ export default function CalendarView({
       {selectedHearing && (
         <HearingDetailOverlay
           hearing={selectedHearing}
-          showHidden={showHidden}
           onClose={() => setSelectedHearing(null)}
           onNotesReload={onHearingReload}
           onHiddenChanged={(updated) => {
             onHiddenChanged(updated);
             setSelectedHearing(null);
           }}
+          onAssignmentCreated={onHearingReload}
+          showCanceledAssignments={showCanceledAssignments}
         />
       )}
     </div>

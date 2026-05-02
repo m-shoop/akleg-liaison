@@ -14,7 +14,7 @@ export function flattenOutcomes(events) {
   for (const event of events) {
     for (const outcome of event.outcomes) {
       const key = `${event.event_date}|${outcome.chamber}|${outcome.outcome_type}|${outcome.committee ?? ""}`;
-      if (seen.has(key)) continue;
+      if (outcome.outcome_type !== "amended" && seen.has(key)) continue;
       seen.add(key);
       rows.push({
         date: event.event_date,
@@ -23,6 +23,7 @@ export function flattenOutcomes(events) {
         committee: outcome.committee,
         description: outcome.description,
         chamber: outcome.chamber,
+        ai_generated: outcome.ai_generated ?? false,
       });
     }
   }

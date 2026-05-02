@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { updateDpsNotes, updateHidden } from "../../api/hearings";
 import { exportToCalendar } from "../../utils/hearingCalendar";
 import PriorAgendasModal from "../PriorAgendasModal/PriorAgendasModal";
+import HearingAssignmentsPanel from "../HearingAssignmentsPanel/HearingAssignmentsPanel";
 import styles from "./HearingCard.module.css";
 
 function fmt(isoDate) {
@@ -22,7 +23,7 @@ function fmtTime(timeStr) {
   return `${hour}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
-export default function HearingCard({ hearing, isFirst, globalExpanded, showHidden, onNotesSaved, onHiddenChanged }) {
+export default function HearingCard({ hearing, isFirst, globalExpanded, onNotesSaved, onHiddenChanged, onAssignmentCreated, showCanceledAssignments = false }) {
   const { can, token } = useAuth();
   const [notes, setNotes] = useState(hearing.dps_notes ?? "");
   const [saving, setSaving] = useState(false);
@@ -144,7 +145,7 @@ export default function HearingCard({ hearing, isFirst, globalExpanded, showHidd
                       )}
                       {" "}<Link
                         to="/"
-                        state={{ search: item.bill_number, showUntracked: true }}
+                        state={{ billNumber: item.bill_number, showUntracked: true }}
                         className={styles.legLink}
                         title={`Find ${item.bill_number} in Legislation tab`}
                       >
@@ -210,10 +211,33 @@ export default function HearingCard({ hearing, isFirst, globalExpanded, showHidd
         <PriorAgendasModal hearing={hearing} onClose={() => setShowPriorAgendas(false)} />
       )}
 
-      {can("hearing:hide") && (
+      {can("hearing-assignment:view") && (
+        <div className={styles.assignmentsRow}>
+          <HearingAssignmentsPanel hearing={hearing} onAssignmentCreated={onAssignmentCreated} showCanceled={showCanceledAssignments} />
+          {can("hearing:hide") && (
+            <>
+              <div className={styles.visibilityDivider} />
+              <span className={styles.assignmentsLabel}>Visibility</span>
+              {hearing.hidden && (
+                <p className={styles.hiddenNote}>Hidden from view and PDF</p>
+              )}
+              <button
+                className={`${styles.hideBtn} ${hearing.hidden ? styles.hideBtnActive : ""}`}
+                onClick={handleToggleHidden}
+                disabled={hidingBusy}
+                title={hearing.hidden ? "Unhide this hearing" : "Hide this hearing and remove it from the PDF export."}
+              >
+                {hidingBusy ? "…" : hearing.hidden ? "Unhide" : "Hide"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {can("hearing:hide") && !can("hearing-assignment:view") && (
         <div className={styles.hideRow}>
           <label className={styles.dpsLabel}>Visibility</label>
-          {hearing.hidden && showHidden && (
+          {hearing.hidden && (
             <p className={styles.hiddenNote}>Hidden from view and PDF</p>
           )}
           <button
