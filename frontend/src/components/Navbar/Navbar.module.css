@@ -130,18 +130,6 @@
   background-color: rgba(168, 200, 192, 0.2);
 }
 
-.openBadge {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background-color: var(--color-lichen);
-  margin-left: 5px;
-  vertical-align: middle;
-  position: relative;
-  top: -1px;
-}
-
 .authArea {
   display: flex;
   align-items: center;

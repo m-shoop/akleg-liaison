@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import CurrentUser, get_current_user, get_optional_current_user, require_permission
+from app.dependencies import CurrentUser, get_current_user, require_permission
 from app.models.email import EmailEventType
 from app.models.workflow import WorkflowActionType, WorkflowType
 from app.repositories.audit_log_repository import log_action
@@ -12,7 +12,7 @@ from app.repositories.bill_repository import get_bill_by_id, set_bill_tracked
 from app.repositories.comm_prefs_repository import get_email_enabled
 from app.repositories.email_repository import upsert_workflow_action_message
 from app.repositories.hearing_repository import get_hearing_by_id
-from app.repositories.user_repository import get_user_by_email, search_users_by_email
+from app.repositories.user_repository import get_user_by_email, search_users
 from app.repositories.bill_repository import get_bill_by_number
 from app.repositories.workflow_repository import (
     add_workflow_action,
@@ -24,8 +24,6 @@ from app.repositories.workflow_repository import (
     get_hearing_assignment_with_workflow,
     get_open_workflow_for_bill_by_user,
     get_workflow_by_id,
-    has_open_hearing_assignments,
-    has_open_workflows,
     list_workflows,
     update_hearing_assignment_assignee,
     update_hearing_assignment_type,
@@ -38,7 +36,6 @@ from app.schemas.workflow import (
     BillTrackingStateRequest,
     CreateHearingAssignmentRequest,
     CreateWorkflowRequest,
-    HasOpenResponse,
     HearingAssignmentRead,
     UpdateHearingAssignmentTypeRequest,
     WorkflowRead,
@@ -54,14 +51,18 @@ router = APIRouter(prefix="/workflows", tags=["workflows"])
 # ---------------------------------------------------------------------------
 
 
-@router.get("/assignees", response_model=list[str], dependencies=[Depends(require_permission("workflow:view-all"))])
+@router.get("/assignees", dependencies=[Depends(require_permission("workflow:view-all"))])
 async def search_assignees(
     q: str = Query(""),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return emails of active users matching the search query (for assignment comboboxes)."""
-    users = await search_users_by_email(db, q)
-    return [u.email for u in users]
+    """Return active users matching the query (by email or name).
+
+    Empty q returns the full active-user list so callers can populate a
+    dropdown without paging.
+    """
+    users = await search_users(db, q, limit=500)
+    return [{"email": u.email, "name": u.name} for u in users]
 
 
 # ---------------------------------------------------------------------------
@@ -86,37 +87,6 @@ async def get_assignee_comm_prefs(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return {"email": user.email, "email_enabled": await get_email_enabled(db, user.id)}
-
-
-# ---------------------------------------------------------------------------
-# GET /workflows/has-open
-# ---------------------------------------------------------------------------
-
-
-@router.get("/has-open", response_model=HasOpenResponse)
-async def get_has_open(
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser | None = Depends(get_optional_current_user),
-):
-    """
-    Returns whether there are open requests relevant to the current user.
-    - Unauthenticated: always false.
-    - workflow:view-all: true if any open request_bill_tracking workflow exists.
-    - Otherwise: true if the user has any open workflows they created.
-    """
-    if current_user is None:
-        return HasOpenResponse(has_open=False)
-
-    is_admin = current_user.can("workflow:view-all")
-
-    has_requests = await has_open_workflows(
-        db, created_by_user_id=None if is_admin else current_user.user.id
-    )
-    has_assignments = await has_open_hearing_assignments(
-        db, assignee_user_id=None if is_admin else current_user.user.id
-    )
-
-    return HasOpenResponse(has_open=has_requests or has_assignments)
 
 
 # ---------------------------------------------------------------------------

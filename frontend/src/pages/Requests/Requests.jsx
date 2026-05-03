@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { addWorkflowAction, updateHearingAssignmentType } from "../../api/workflows";
 import { useAssigneeOptedOut, OPT_OUT_WARNING } from "../../hooks/useAssigneeOptedOut";
-import UserCombobox from "../../components/UserCombobox/UserCombobox";
+import UserSelect from "../../components/UserSelect/UserSelect";
+import { useAssignees } from "../../hooks/useAssignees";
 import { fetchReport, fetchReportMeta } from "../../api/reports";
 import Toast from "../../components/Toast/Toast";
 import RequestsFilterBar from "../../components/RequestsFilterBar/RequestsFilterBar";
@@ -10,6 +11,7 @@ import StackingCriteria from "../../components/StackingCriteria/StackingCriteria
 import { compile } from "../../components/StackingCriteria/expression/compiler";
 import { validate } from "../../components/StackingCriteria/expression/validate";
 import SavedReportsBar from "../../components/SavedReports/SavedReportsBar";
+import ReportFiltersSummary from "../../components/SavedReports/ReportFiltersSummary";
 import SaveAsModal from "../../components/SavedReports/SaveAsModal";
 import SettingsModal from "../../components/SavedReports/SettingsModal";
 import { useSavedReports } from "../../hooks/useSavedReports";
@@ -26,6 +28,7 @@ import {
   summarizeRequestRow,
 } from "./stackingHelpers";
 import { createInitialState } from "../../components/StackingCriteria/createInitialState";
+import { RELATIVE_ASSIGNEES, relativeAssigneeLabel } from "../../utils/relativeAssignees";
 import styles from "./Requests.module.css";
 
 const REQUESTS_STORAGE_KEY = "requests_stacking";
@@ -106,7 +109,7 @@ function assignmentStatusClass(latestActionType, styles) {
 }
 
 const ASSIGNMENT_COLUMNS = [
-  "id", "workflow_id", "latest_action_type", "assignment_type", "assignee_email",
+  "id", "workflow_id", "latest_action_type", "assignment_type", "assignee_email", "assignee_name",
   "hearing_id", "hearing_date", "hearing_time", "hearing_chamber", "committee_name",
   "bill_number", "bill_short_title", "created_at", "actions",
 ];
@@ -118,6 +121,7 @@ function rowToAssignment(row) {
     latest_action_type: row.latest_action_type ?? null,
     assignment_type:    row.assignment_type ?? "monitoring",
     assignee_email:     row.assignee_email ?? null,
+    assignee_name:      row.assignee_name ?? null,
     hearing_id:         row.hearing_id ?? null,
     hearing_date:       row.hearing_date ?? null,
     hearing_time:       row.hearing_time ?? null,
@@ -213,7 +217,12 @@ function AssignmentsFilterBar({ filters, onChange, canViewAll, canViewSuggestion
     );
     summaryParts.push(`Type: ${labels.join(", ")}`);
   }
-  if (filters.assignee_email) summaryParts.push(`Assignee: "${filters.assignee_email}"`);
+  if (filters.assigneeMode === "relative") {
+    const label = relativeAssigneeLabel(filters.assigneeRelative);
+    if (label) summaryParts.push(`Assignee: ${label}`);
+  } else if (filters.assignee_email) {
+    summaryParts.push(`Assignee: "${filters.assignee_email}"`);
+  }
   const billChips = readAssignmentBillNumbers(filters);
   if (billChips.length > 0) summaryParts.push(`Bill: ${billChips.join(", ")}`);
   if (filters.hearing_date_from && filters.hearing_date_to) summaryParts.push(`Hearing: ${filters.hearing_date_from} – ${filters.hearing_date_to}`);
@@ -275,8 +284,39 @@ function AssignmentsFilterBar({ filters, onChange, canViewAll, canViewSuggestion
         {canViewAll && (
           <div className={styles.filterGroup}>
             <span className={styles.filterLabel}>Assignee</span>
-            <input type="text" className={styles.filterTextInput} placeholder="email…"
-              value={filters.assignee_email ?? ""} onChange={(e) => set("assignee_email", e.target.value)} />
+            <div className={styles.filterSegmented}>
+              {[
+                { value: "email", label: "Email" },
+                { value: "relative", label: "Relative" },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`${styles.filterSeg} ${(filters.assigneeMode ?? "email") === opt.value ? styles.filterSegActive : ""}`}
+                  onClick={() => set("assigneeMode", opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {(filters.assigneeMode ?? "email") === "email" && (
+              <input type="text" className={styles.filterTextInput} placeholder="email…"
+                value={filters.assignee_email ?? ""} onChange={(e) => set("assignee_email", e.target.value)} />
+            )}
+            {filters.assigneeMode === "relative" && (
+              <div className={styles.filterRelativeOptions}>
+                {RELATIVE_ASSIGNEES.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={`${styles.filterShortcut} ${filters.assigneeRelative === opt.value ? styles.filterShortcutActive : ""}`}
+                    onClick={() => set("assigneeRelative", opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -315,6 +355,7 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
   const [cancellationReason, setCancellationReason] = useState("");
   const [updatingType, setUpdatingType] = useState(false);
   const [localAssignmentType, setLocalAssignmentType] = useState(assignment.assignment_type ?? "monitoring");
+  const allAssignees = useAssignees(showReassignForm, token);
 
   // Re-sync the local type if the row's underlying value shifts (e.g. parent
   // refetched after another tab confirmed the suggestion).
@@ -322,7 +363,8 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
     setLocalAssignmentType(assignment.assignment_type ?? "monitoring");
   }, [assignment.assignment_type]);
 
-  const { latest_action_type, assignee_email, hearing_date, hearing_time, hearing_chamber, committee_name, bill_number } = assignment;
+  const { latest_action_type, assignee_email, assignee_name, hearing_date, hearing_time, hearing_chamber, committee_name, bill_number } = assignment;
+  const assigneeDisplay = assignee_name || shortEmail(assignee_email);
   const chamberPrefix = hearing_chamber ? `(${hearing_chamber}) ` : "";
   const hearingName = `${chamberPrefix}${committee_name || "Floor Session"}`;
   const hearingInfo = hearing_date
@@ -423,15 +465,15 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
           Cancel
         </button>
       )}
+      {(isAssignee || canManage) && !isClosed && isAssigned && !showCancelForm && (
+        <button className={styles.completeBtn} onClick={() => handleAction("hearing_assignment_complete")} disabled={acting !== null}>
+          {acting === "hearing_assignment_complete" ? "…" : "Mark Complete"}
+        </button>
+      )}
       {isAssignee && !isClosed && isAssigned && !showCancelForm && (
-        <>
-          <button className={styles.completeBtn} onClick={() => handleAction("hearing_assignment_complete")} disabled={acting !== null}>
-            {acting === "hearing_assignment_complete" ? "…" : "Mark Complete"}
-          </button>
-          <button className={styles.reassignRequestBtn} onClick={() => handleAction("reassignment_request")} disabled={acting !== null}>
-            {acting === "reassignment_request" ? "…" : "Request Reassignment"}
-          </button>
-        </>
+        <button className={styles.reassignRequestBtn} onClick={() => handleAction("reassignment_request")} disabled={acting !== null}>
+          {acting === "reassignment_request" ? "…" : "Request Reassignment"}
+        </button>
       )}
     </div>
   );
@@ -443,7 +485,7 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
         onClick={isMobile ? () => setExpanded((v) => !v) : undefined}
         aria-expanded={isMobile ? expanded : undefined}
       >
-        <td className={styles.cellEmail} title={assignee_email ?? ""}>{shortEmail(assignee_email)}</td>
+        <td className={styles.cellEmail} title={assignee_email ?? ""}>{assigneeDisplay}</td>
         <td className={styles.cellBill}>{bill_number || ""}</td>
         <td>
           <span className={`${styles.statusBadge} ${assignmentStatusClass(latest_action_type, styles)}`}>
@@ -494,11 +536,11 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
           <td colSpan={cols}>
             <div className={styles.reassignForm}>
               <span className={styles.reassignFormLabel}>New assignee</span>
-              <UserCombobox
+              <UserSelect
+                users={allAssignees}
                 value={reassignEmail}
                 onChange={setReassignEmail}
-                token={token}
-                placeholder="staff@dps.alaska.gov"
+                className={styles.reassignEmailInput}
                 autoFocus
               />
               <button
@@ -1033,9 +1075,19 @@ export default function Tasks() {
             onIncludeInactiveChange={assignmentSavedReports.setIncludeInactive}
             onSelectReport={assignmentSavedReports.selectReport}
             error={assignmentSavedReports.error}
+            isLoadedDefault={assignmentSavedReports.isLoadedDefault}
+            isLoadedActive={assignmentSavedReports.isLoadedActive}
+            onToggleDefault={canSystemEdit ? undefined : assignmentSavedReports.toggleDefault}
+            onReorder={assignmentSavedReports.reorderReport}
+            onSortAlphabetical={assignmentSavedReports.sortAlphabetical}
           />
         )}
 
+        {!canSystemEdit && (
+          <ReportFiltersSummary criteria={appliedAssignmentCriteria} summarizeRow={summarizeAssignmentRow} />
+        )}
+
+        {canSystemEdit && (
         <div className={styles.additionalFilters}>
           <button className={styles.additionalFiltersHeader} onClick={() => setAssignmentCriteriaOpen((v) => !v)}>
             <span>Report Criteria</span>
@@ -1046,7 +1098,10 @@ export default function Tasks() {
               value={assignmentCriteria}
               onChange={setAssignmentCriteria}
               appliedValue={appliedAssignmentCriteria}
-              onApply={(_filterGroup, value) => setAppliedAssignmentCriteria(value)}
+              onApply={(_filterGroup, value) => {
+                setAppliedAssignmentCriteria(value);
+                setAssignmentCriteriaOpen(false);
+              }}
               RowEditor={AssignmentsRowEditor}
               rowEditorProps={{
                 canViewAll: canManageAssignments,
@@ -1058,7 +1113,10 @@ export default function Tasks() {
               emptyRowValue={makeAssignmentNewRowValue()}
               summarizeRow={summarizeAssignmentRow}
               mobile={isMobile}
-              onSave={isMobile ? undefined : assignmentSavedReports.save}
+              onSave={isMobile ? undefined : async () => {
+                await assignmentSavedReports.save();
+                setAssignmentCriteriaOpen(false);
+              }}
               onSaveAs={isMobile ? undefined : assignmentSavedReports.openSaveAs}
               saveAvailable={assignmentSavedReports.canSave}
               saveAsAvailable={assignmentSavedReports.canSaveAs}
@@ -1078,6 +1136,7 @@ export default function Tasks() {
             />
           )}
         </div>
+        )}
 
         {assignmentsLoading && (
           <div className={styles.loadingOverlay}><span className={styles.loadingText}>Loading…</span></div>
@@ -1138,9 +1197,22 @@ export default function Tasks() {
             onIncludeInactiveChange={requestSavedReports.setIncludeInactive}
             onSelectReport={requestSavedReports.selectReport}
             error={requestSavedReports.error}
+            isLoadedDefault={requestSavedReports.isLoadedDefault}
+            isLoadedActive={requestSavedReports.isLoadedActive}
+            onToggleDefault={canSystemEdit ? undefined : requestSavedReports.toggleDefault}
+            onReorder={requestSavedReports.reorderReport}
+            onSortAlphabetical={requestSavedReports.sortAlphabetical}
           />
         )}
 
+        {!canSystemEdit && (
+          <ReportFiltersSummary
+            criteria={appliedRequestsCriteria}
+            summarizeRow={(rowValue) => summarizeRequestRow(rowValue, canViewAll)}
+          />
+        )}
+
+        {canSystemEdit && (
         <div className={styles.additionalFilters}>
           <button
             className={styles.additionalFiltersHeader}
@@ -1154,7 +1226,10 @@ export default function Tasks() {
               value={requestsCriteria}
               onChange={setRequestsCriteria}
               appliedValue={appliedRequestsCriteria}
-              onApply={(_filterGroup, value) => setAppliedRequestsCriteria(value)}
+              onApply={(_filterGroup, value) => {
+                setAppliedRequestsCriteria(value);
+                setReportCriteriaOpen(false);
+              }}
               RowEditor={RequestsRowEditor}
               rowEditorProps={{ fields: reportFields, canViewAll }}
               compileRow={(row) =>
@@ -1163,7 +1238,10 @@ export default function Tasks() {
               emptyRowValue={makeRequestNewRowValue()}
               summarizeRow={(rowValue) => summarizeRequestRow(rowValue, canViewAll)}
               mobile={isMobile}
-              onSave={isMobile ? undefined : requestSavedReports.save}
+              onSave={isMobile ? undefined : async () => {
+                await requestSavedReports.save();
+                setReportCriteriaOpen(false);
+              }}
               onSaveAs={isMobile ? undefined : requestSavedReports.openSaveAs}
               saveAvailable={requestSavedReports.canSave}
               saveAsAvailable={requestSavedReports.canSaveAs}
@@ -1183,6 +1261,7 @@ export default function Tasks() {
             />
           )}
         </div>
+        )}
 
         {requestsLoading && (
           <div className={styles.loadingOverlay}><span className={styles.loadingText}>Loading…</span></div>
@@ -1209,40 +1288,44 @@ export default function Tasks() {
         )}
       </div>
 
-      <SaveAsModal
-        open={assignmentSavedReports.saveAsOpen}
-        onClose={assignmentSavedReports.closeSaveAs}
-        onSave={assignmentSavedReports.saveAs}
-        canCreateSystemReports={assignmentSavedReports.canSystemEdit}
-        availableRoles={assignmentSavedReports.availableRoles}
-      />
-      <SettingsModal
-        open={assignmentSavedReports.settingsOpen}
-        onClose={assignmentSavedReports.closeSettings}
-        onSave={assignmentSavedReports.editSettings}
-        initialName={assignmentSavedReports.loadedReport?.display_name ?? ""}
-        isSystemLevel={assignmentSavedReports.loadedReport?.publication_level === "system"}
-        initialAllowedRoles={assignmentSavedReports.loadedReport?.allowed_roles ?? []}
-        canEditRoles={assignmentSavedReports.canSystemEdit}
-        availableRoles={assignmentSavedReports.availableRoles}
-      />
-      <SaveAsModal
-        open={requestSavedReports.saveAsOpen}
-        onClose={requestSavedReports.closeSaveAs}
-        onSave={requestSavedReports.saveAs}
-        canCreateSystemReports={requestSavedReports.canSystemEdit}
-        availableRoles={requestSavedReports.availableRoles}
-      />
-      <SettingsModal
-        open={requestSavedReports.settingsOpen}
-        onClose={requestSavedReports.closeSettings}
-        onSave={requestSavedReports.editSettings}
-        initialName={requestSavedReports.loadedReport?.display_name ?? ""}
-        isSystemLevel={requestSavedReports.loadedReport?.publication_level === "system"}
-        initialAllowedRoles={requestSavedReports.loadedReport?.allowed_roles ?? []}
-        canEditRoles={requestSavedReports.canSystemEdit}
-        availableRoles={requestSavedReports.availableRoles}
-      />
+      {canSystemEdit && (
+        <>
+          <SaveAsModal
+            open={assignmentSavedReports.saveAsOpen}
+            onClose={assignmentSavedReports.closeSaveAs}
+            onSave={assignmentSavedReports.saveAs}
+            canCreateSystemReports={assignmentSavedReports.canSystemEdit}
+            availableRoles={assignmentSavedReports.availableRoles}
+          />
+          <SettingsModal
+            open={assignmentSavedReports.settingsOpen}
+            onClose={assignmentSavedReports.closeSettings}
+            onSave={assignmentSavedReports.editSettings}
+            initialName={assignmentSavedReports.loadedReport?.display_name ?? ""}
+            isSystemLevel={assignmentSavedReports.loadedReport?.publication_level === "system"}
+            initialAllowedRoles={assignmentSavedReports.loadedReport?.allowed_roles ?? []}
+            canEditRoles={assignmentSavedReports.canSystemEdit}
+            availableRoles={assignmentSavedReports.availableRoles}
+          />
+          <SaveAsModal
+            open={requestSavedReports.saveAsOpen}
+            onClose={requestSavedReports.closeSaveAs}
+            onSave={requestSavedReports.saveAs}
+            canCreateSystemReports={requestSavedReports.canSystemEdit}
+            availableRoles={requestSavedReports.availableRoles}
+          />
+          <SettingsModal
+            open={requestSavedReports.settingsOpen}
+            onClose={requestSavedReports.closeSettings}
+            onSave={requestSavedReports.editSettings}
+            initialName={requestSavedReports.loadedReport?.display_name ?? ""}
+            isSystemLevel={requestSavedReports.loadedReport?.publication_level === "system"}
+            initialAllowedRoles={requestSavedReports.loadedReport?.allowed_roles ?? []}
+            canEditRoles={requestSavedReports.canSystemEdit}
+            availableRoles={requestSavedReports.availableRoles}
+          />
+        </>
+      )}
     </div>
   );
 }

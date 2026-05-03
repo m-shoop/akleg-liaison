@@ -1,7 +1,17 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Text, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -60,6 +70,29 @@ class DefaultUserReport(Base):
     report_id: Mapped[int] = mapped_column(
         ForeignKey("saved_reports.id", ondelete="CASCADE"), nullable=False
     )
+
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])  # type: ignore[name-defined]
+    report: Mapped[SavedReport] = relationship("SavedReport", foreign_keys=[report_id])
+
+
+class UserReportOrder(Base):
+    """Per-user fractional sort key for a saved report.  Missing rows mean
+    "unranked" — those reports fall to the end of their section in display_name
+    order until the user reorders them."""
+
+    __tablename__ = "user_report_orders"
+    __table_args__ = (
+        UniqueConstraint("user_id", "report_id", name="uq_user_report_orders_user_report"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    report_id: Mapped[int] = mapped_column(
+        ForeignKey("saved_reports.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sort_key: Mapped[float] = mapped_column(Float, nullable=False)
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])  # type: ignore[name-defined]
     report: Mapped[SavedReport] = relationship("SavedReport", foreign_keys=[report_id])

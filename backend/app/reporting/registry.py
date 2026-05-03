@@ -688,6 +688,7 @@ REPORTS: dict[str, ReportDefinition] = {
                     'id',                  hearing_assignments.id,
                     'workflow_id',         hearing_assignments.workflow_id,
                     'assignee_email',      (SELECT email FROM users WHERE id = hearing_assignments.assignee_id),
+                    'assignee_name',       (SELECT name  FROM users WHERE id = hearing_assignments.assignee_id),
                     'bill_number',         (SELECT bill_number FROM bills b2 WHERE b2.id = hearing_assignments.bill_id),
                     'assignment_type',     hearing_assignments.assignment_type,
                     'latest_action_type',  (SELECT type FROM workflow_actions wa
@@ -1086,6 +1087,16 @@ REPORTS: dict[str, ReportDefinition] = {
                 selectable=True,
                 join="assignee_user",
                 label="Assignee",
+                render_as="text",
+            ),
+            "assignee_name": FieldDefinition(
+                column="assignee_user.name",
+                type="text",
+                operators=[],
+                filterable=False,
+                selectable=True,
+                join="assignee_user",
+                label="Assignee Name",
                 render_as="text",
             ),
             "assignment_type": FieldDefinition(

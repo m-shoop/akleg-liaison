@@ -1,11 +1,14 @@
 import { buildSummary as buildRequestSummary } from "../../components/RequestsFilterBar/RequestsFilterBar";
 import { createInitialState } from "../../components/StackingCriteria/createInitialState";
+import { resolveRelativeAssignee } from "../../utils/relativeAssignees";
 
 // ─── Hearing Assignments ──────────────────────────────────────────────────
 
 export const ASSIGNMENT_ROW_DEFAULTS = {
   latest_action_type: [],
   assignee_email: "",
+  assigneeMode: "email",
+  assigneeRelative: "",
   bill_numbers: [],
   hearing_date_from: "",
   hearing_date_to: "",
@@ -29,7 +32,15 @@ export function buildAssignmentRowFilterGroup(rowValue, { canViewAll, username }
   if (!rowValue) return null;
   const conditions = [];
 
-  if (!canViewAll && !rowValue.assignee_email?.trim()) {
+  const assigneeMode = rowValue.assigneeMode ?? "email";
+  if (assigneeMode === "relative") {
+    const resolved = resolveRelativeAssignee(rowValue.assigneeRelative, { username });
+    if (resolved) {
+      conditions.push({ field: "assignee_email", op: "equals", value: resolved });
+    } else if (!canViewAll) {
+      conditions.push({ field: "assignee_email", op: "equals", value: username });
+    }
+  } else if (!canViewAll && !rowValue.assignee_email?.trim()) {
     conditions.push({ field: "assignee_email", op: "equals", value: username });
   } else if (rowValue.assignee_email?.trim()) {
     conditions.push({ field: "assignee_email", op: "contains", value: rowValue.assignee_email.trim() });
@@ -70,7 +81,11 @@ export function summarizeAssignmentRow(rowValue) {
     const labels = rowValue.latest_action_type.map((v) => ASSIGNMENT_ACTION_LABELS[v] ?? v);
     parts.push(`Type: ${labels.join(", ")}`);
   }
-  if (rowValue.assignee_email) parts.push(`Assignee: "${rowValue.assignee_email}"`);
+  if (rowValue.assigneeMode === "relative") {
+    if (rowValue.assigneeRelative === "me") parts.push("Assignee: Me");
+  } else if (rowValue.assignee_email) {
+    parts.push(`Assignee: "${rowValue.assignee_email}"`);
+  }
   const billNumbers = readAssignmentBillNumbers(rowValue);
   if (billNumbers.length > 0) parts.push(`Bill: ${billNumbers.join(", ")}`);
   if (rowValue.hearing_date_from && rowValue.hearing_date_to) {

@@ -3,10 +3,13 @@ import {
   createSavedReport,
   fetchRoles,
   fetchSavedReports,
+  reorderSavedReport,
   setDefaultUserReport,
+  sortSavedReportsAlphabetically,
   updateSavedReport,
 } from "../api/savedReports";
 import { resolveCriteriaSentinels } from "../utils/criteriaSentinels";
+import { migrateLegacyCriteria } from "../utils/criteriaMigration";
 
 /**
  * State + handlers for the saved-reports feature on a page that uses StackingCriteria.
@@ -47,16 +50,10 @@ export function useSavedReports({
     if (!token) return;
     try {
       const data = await fetchSavedReports({ registryName, includeInactive, token });
-      // Sort: system-level reports first, then user-level (preserves server's
-      // alphabetic order within each level).
-      const sorted = [...data.reports].sort((a, b) => {
-        if (a.publication_level === b.publication_level) return 0;
-        return a.publication_level === "system" ? -1 : 1;
-      });
-      setReports(sorted);
+      setReports(data.reports);
       setDefaultReportId(data.default_report_id);
       setError(null);
-      return { ...data, reports: sorted };
+      return data;
     } catch (e) {
       setError(e.message);
       return null;
@@ -71,7 +68,7 @@ export function useSavedReports({
       if (!initialLoadDone.current && !skipDefaultLoad && data.default_report_id != null) {
         const def = data.reports.find((r) => r.id === data.default_report_id);
         if (def && def.is_active) {
-          const resolved = resolveCriteriaSentinels(def.report_criteria, { username });
+          const resolved = resolveCriteriaSentinels(migrateLegacyCriteria(def.report_criteria), { username });
           setLoadedReport(def);
           setLoadedSnapshot(resolved);
           onLoadRef.current?.(resolved);
@@ -116,7 +113,7 @@ export function useSavedReports({
     )) {
       return;
     }
-    const resolved = resolveCriteriaSentinels(report.report_criteria, { username });
+    const resolved = resolveCriteriaSentinels(migrateLegacyCriteria(report.report_criteria), { username });
     setLoadedReport(report);
     setLoadedSnapshot(resolved);
     setEditMode(false);
@@ -133,7 +130,7 @@ export function useSavedReports({
       (r) => r.publication_level === "system" && r.display_name === displayName,
     );
     if (!report || !report.is_active) return false;
-    const resolved = resolveCriteriaSentinels(report.report_criteria, { username });
+    const resolved = resolveCriteriaSentinels(migrateLegacyCriteria(report.report_criteria), { username });
     setLoadedReport(report);
     setLoadedSnapshot(resolved);
     setEditMode(false);
@@ -187,7 +184,7 @@ export function useSavedReports({
         fields: { report_criteria: currentCriteria },
         token,
       });
-      const resolved = resolveCriteriaSentinels(updated.report_criteria, { username });
+      const resolved = resolveCriteriaSentinels(migrateLegacyCriteria(updated.report_criteria), { username });
       setLoadedReport(updated);
       setLoadedSnapshot(resolved);
       setEditMode(false);
@@ -209,7 +206,7 @@ export function useSavedReports({
         reportCriteria: currentCriteria,
         token,
       });
-      const resolved = resolveCriteriaSentinels(created.report_criteria, { username });
+      const resolved = resolveCriteriaSentinels(migrateLegacyCriteria(created.report_criteria), { username });
       setLoadedReport(created);
       setLoadedSnapshot(resolved);
       setEditMode(false);
@@ -278,6 +275,37 @@ export function useSavedReports({
     }
   }, [loadedReport, isLoadedDefault, registryName, token, refresh]);
 
+  const reorderReport = useCallback(
+    async ({ reportId, afterId, beforeId, optimisticReports }) => {
+      // Optimistically reorder locally so the dropped pill snaps to its new
+      // slot before the server round-trip; refresh() reconciles below.
+      if (optimisticReports) setReports(optimisticReports);
+      try {
+        await reorderSavedReport({
+          registryName,
+          reportId,
+          afterId,
+          beforeId,
+          token,
+        });
+        await refresh();
+      } catch (e) {
+        setError(e.message);
+        await refresh();
+      }
+    },
+    [registryName, token, refresh],
+  );
+
+  const sortAlphabetical = useCallback(async () => {
+    try {
+      await sortSavedReportsAlphabetically({ registryName, token });
+      await refresh();
+    } catch (e) {
+      setError(e.message);
+    }
+  }, [registryName, token, refresh]);
+
   const isLoadedActive = loadedReport?.is_active ?? true;
   const editLocked = loadedReport != null && !editMode;
   const isLoggedIn = !!token;
@@ -321,6 +349,8 @@ export function useSavedReports({
     editSettings: isLoggedIn ? editSettings : undefined,
     toggleActive: isLoggedIn ? toggleActive : undefined,
     toggleDefault: isLoggedIn ? toggleDefault : undefined,
+    reorderReport: isLoggedIn ? reorderReport : undefined,
+    sortAlphabetical: isLoggedIn ? sortAlphabetical : undefined,
     refresh,
   };
 }

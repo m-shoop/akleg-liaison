@@ -59,13 +59,14 @@ export async function previewEmailTemplate(
   templateKey,
   hearingId,
   token,
-  { cancellationReason, assignmentType } = {},
+  { billId, cancellationReason, assignmentType } = {},
 ) {
   const res = await apiFetch(`/api/email-templates/${templateKey}/preview`, {
     method: "POST",
     headers: jsonHeaders(token),
     body: JSON.stringify({
       hearing_id: hearingId,
+      bill_id: billId ?? null,
       cancellation_reason: cancellationReason ?? null,
       assignment_type: assignmentType ?? null,
     }),
@@ -77,13 +78,14 @@ export async function testSendEmailTemplate(
   templateKey,
   hearingId,
   token,
-  { cancellationReason, assignmentType } = {},
+  { billId, cancellationReason, assignmentType } = {},
 ) {
   const res = await apiFetch(`/api/email-templates/${templateKey}/test-send`, {
     method: "POST",
     headers: jsonHeaders(token),
     body: JSON.stringify({
       hearing_id: hearingId,
+      bill_id: billId ?? null,
       cancellation_reason: cancellationReason ?? null,
       assignment_type: assignmentType ?? null,
     }),

@@ -1,21 +1,10 @@
-import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { fetchHasOpen } from "../../api/workflows";
 import styles from "./Navbar.module.css";
 
 export default function Navbar() {
-  const { isLoggedIn, can, username, logout, isTokenExpired, token } = useAuth();
+  const { isLoggedIn, can, username, logout, isTokenExpired } = useAuth();
   const navigate = useNavigate();
-  const [hasOpenTasks, setHasOpenTasks] = useState(false);
-
-  useEffect(() => {
-    if (!token) {
-      setHasOpenTasks(false);
-      return;
-    }
-    fetchHasOpen(token).then((data) => setHasOpenTasks(data.has_open ?? false));
-  }, [token]);
 
   function handleLogout() {
     logout();
@@ -59,7 +48,6 @@ export default function Navbar() {
               }
             >
               Tasks
-              {hasOpenTasks && <span className={styles.openBadge} />}
             </NavLink>
           </li>
           <li className={`${styles.dropdown} ${styles.desktopOnly}`}>

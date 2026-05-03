@@ -22,6 +22,7 @@ from app.routers import (
     reports,
     saved_reports,
     tags,
+    user_admin,
     workflows,
 )
 from app.services.email_notification_worker import email_notification_worker_loop
@@ -80,6 +81,7 @@ app.include_router(email_templates.router)
 app.include_router(email_notifications.router)
 app.include_router(comm_prefs.router)
 app.include_router(opt_out.router)
+app.include_router(user_admin.router)
 
 
 @app.get("/health")

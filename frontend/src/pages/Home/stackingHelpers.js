@@ -1,5 +1,6 @@
 import { buildSummary, readBillNumbers } from "../../components/FilterBar/FilterBar";
 import { createInitialState } from "../../components/StackingCriteria/createInitialState";
+import { resolveRelativeRange } from "../../utils/weekBounds";
 
 export function makeDefaultBillRowValue() {
   return {
@@ -8,6 +9,7 @@ export function makeDefaultBillRowValue() {
     hearingDateOn: "",
     hearingDateFrom: "",
     hearingDateTo: "",
+    hearingDateRelative: "",
     advanced: {},
   };
 }
@@ -19,6 +21,7 @@ export function makeNewBillRowValue() {
     hearingDateOn: "",
     hearingDateFrom: "",
     hearingDateTo: "",
+    hearingDateRelative: "",
     advanced: {},
   };
 }
@@ -52,6 +55,15 @@ export function buildBillsRowFilterGroup(rowValue) {
       conditions.push({ field: "hearing_date", op: "after", value: f.hearingDateFrom });
     } else if (f.hearingDateTo) {
       conditions.push({ field: "hearing_date", op: "before", value: f.hearingDateTo });
+    }
+  } else if (f.hearingDateMode === "relative") {
+    const r = resolveRelativeRange(f.hearingDateRelative);
+    if (r) {
+      if (r.start === r.end) {
+        conditions.push({ field: "hearing_date", op: "equals", value: r.start });
+      } else {
+        conditions.push({ field: "hearing_date", op: "between", value: [r.start, r.end] });
+      }
     }
   }
 

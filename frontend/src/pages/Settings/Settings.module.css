@@ -169,3 +169,27 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+.userSelect {
+  padding: 0.45rem 0.6rem;
+  border: 1.5px solid var(--color-border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  min-width: 18rem;
+}
+
+.nameEditRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.success {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-rainforest);
+}

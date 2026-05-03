@@ -20,11 +20,17 @@ export default function SaveAsModal({
     if (open) {
       setName("");
       setSystemLevel(false);
-      setSelectedRoles(new Set());
+      // Default to all roles selected so admins don't have to tick every box
+      // on the common "share with everyone" path. They can uncheck individual
+      // roles before saving if needed.
+      setSelectedRoles(new Set(availableRoles.map((r) => r.name)));
       setError(null);
       setSubmitting(false);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
+    // availableRoles intentionally excluded — re-seeding mid-edit would clobber
+    // the admin's manual checkbox toggles if the role list re-fetched.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   if (!open) return null;

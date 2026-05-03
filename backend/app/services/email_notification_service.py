@@ -53,6 +53,7 @@ _OPT_OUT_MAX_AGE_SECONDS = 90 * 24 * 60 * 60
 #: it via the API and render the helper text alongside the editor.
 TEMPLATE_VARIABLES: list[str] = [
     "bill_number",
+    "bill_number_wo_space",
     "short_title",
     "committee",
     "chamber",
@@ -89,8 +90,10 @@ def build_template_context(
 ) -> dict[str, str]:
     """Materialize the {variable} substitution dict for str.format()."""
     committee_name = hearing.committee_name if hasattr(hearing, "committee_name") else None
+    bill_number = _safe(getattr(bill, "bill_number", None))
     return {
-        "bill_number": _safe(getattr(bill, "bill_number", None)),
+        "bill_number": bill_number,
+        "bill_number_wo_space": bill_number.replace(" ", ""),
         "short_title": _safe(getattr(bill, "short_title", None)),
         "bill_status": _safe(getattr(bill, "status", None)),
         "committee": _safe(committee_name) or "Floor Session",

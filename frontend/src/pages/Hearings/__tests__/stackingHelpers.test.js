@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { getRowDateConstraints, adjustedCalendarStart } from "../stackingHelpers";
+import { resolveRelativeRange, todayJuneau } from "../../../utils/weekBounds";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -10,6 +11,7 @@ const dateRow = (id, mode, opts = {}) =>
     hearingDateOn: opts.on ?? "",
     hearingDateFrom: opts.from ?? "",
     hearingDateTo: opts.to ?? "",
+    hearingDateRelative: opts.relative ?? "",
   });
 
 describe("getRowDateConstraints", () => {
@@ -55,6 +57,28 @@ describe("getRowDateConstraints", () => {
 
   it("ignores 'range' mode with both dates blank", () => {
     expect(getRowDateConstraints([dateRow("A", "range")])).toEqual([]);
+  });
+
+  it("resolves 'relative' mode 'today' to a single-day range", () => {
+    const today = todayJuneau();
+    expect(getRowDateConstraints([dateRow("A", "relative", { relative: "today" })])).toEqual([
+      { start: today, end: today },
+    ]);
+  });
+
+  it("resolves 'relative' mode 'this_week' to the current week's bounds", () => {
+    const week = resolveRelativeRange("this_week");
+    expect(getRowDateConstraints([dateRow("A", "relative", { relative: "this_week" })])).toEqual([
+      { start: week.start, end: week.end },
+    ]);
+  });
+
+  it("ignores 'relative' mode with no selection", () => {
+    expect(getRowDateConstraints([dateRow("A", "relative")])).toEqual([]);
+  });
+
+  it("ignores 'relative' mode with an unknown selection", () => {
+    expect(getRowDateConstraints([dateRow("A", "relative", { relative: "next_year" })])).toEqual([]);
   });
 
   it("collects constraints across multiple rows", () => {

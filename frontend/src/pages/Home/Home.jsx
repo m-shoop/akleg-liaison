@@ -13,6 +13,7 @@ import { compile } from "../../components/StackingCriteria/expression/compiler";
 import { validate } from "../../components/StackingCriteria/expression/validate";
 import SavedReportsBar from "../../components/SavedReports/SavedReportsBar";
 import SaveAsModal from "../../components/SavedReports/SaveAsModal";
+import ReportFiltersSummary from "../../components/SavedReports/ReportFiltersSummary";
 import SettingsModal from "../../components/SavedReports/SettingsModal";
 import { useSavedReports } from "../../hooks/useSavedReports";
 import FiscalDeptFilter from "../../components/FiscalDeptFilter/FiscalDeptFilter";
@@ -122,6 +123,7 @@ export default function Home() {
   const location = useLocation();
   const { can, token, username } = useAuth();
   const isMobile = useMediaQuery("(max-width: 640px)");
+  const canSystemEdit = can("system-report:edit");
   const [toast, setToast] = useState(location.state?.toast ? { message: location.state.toast, type: "success" } : null);
   const [bills, setBills] = useState([]);
   const [allTags, setAllTags] = useState([]);
@@ -224,6 +226,7 @@ export default function Home() {
 
   function handleStackingApply(_filterGroup, value) {
     setAppliedCriteria(value);
+    setReportCriteriaOpen(false);
   }
 
   const hadStoredCriteriaOnMount = useRef(!!sessionStorage.getItem(STORAGE_KEY));
@@ -240,7 +243,7 @@ export default function Home() {
     token,
     username,
     skipDefaultLoad: hadStoredCriteriaOnMount.current || hasBillNumberSeed.current,
-    canSystemEdit: can("system-report:edit"),
+    canSystemEdit,
   });
 
   // Fetch hearing bill IDs whenever the filter is on and both dates are set
@@ -290,6 +293,7 @@ export default function Home() {
           }
           setBills(rows.map((row) => rowToBill(row, workflowState)));
           setUpcomingHearings(upcomingData);
+          setError(null);
         })
         .catch((err) => setError(err.message))
         .finally(() => setLoading(false));
@@ -428,11 +432,24 @@ export default function Home() {
               onIncludeInactiveChange={savedReports.setIncludeInactive}
               onSelectReport={savedReports.selectReport}
               error={savedReports.error}
+              isLoadedDefault={savedReports.isLoadedDefault}
+              isLoadedActive={savedReports.isLoadedActive}
+              onToggleDefault={canSystemEdit ? undefined : savedReports.toggleDefault}
+              onReorder={savedReports.reorderReport}
+              onSortAlphabetical={savedReports.sortAlphabetical}
             />
           </div>
         )}
 
+        {!canSystemEdit && (
+          <ReportFiltersSummary
+            criteria={appliedCriteria}
+            summarizeRow={(rowValue) => summarizeBillsRow(rowValue, reportMeta?.fields ?? {})}
+          />
+        )}
+
         {/* ── Report Criteria ────────────────────────────────────── */}
+        {canSystemEdit && (
         <div id="tour-report-criteria" className={styles.panelSection}>
           <button
             type="button"
@@ -458,7 +475,10 @@ export default function Home() {
                 emptyRowValue={makeNewBillRowValue()}
                 summarizeRow={(rowValue) => summarizeBillsRow(rowValue, reportMeta?.fields ?? {})}
                 mobile={isMobile}
-                onSave={isMobile ? undefined : savedReports.save}
+                onSave={isMobile ? undefined : async () => {
+                  await savedReports.save();
+                  setReportCriteriaOpen(false);
+                }}
                 onSaveAs={isMobile ? undefined : savedReports.openSaveAs}
                 saveAvailable={savedReports.canSave}
                 saveAsAvailable={savedReports.canSaveAs}
@@ -479,24 +499,29 @@ export default function Home() {
             </div>
           )}
         </div>
+        )}
 
-        <SaveAsModal
-          open={savedReports.saveAsOpen}
-          onClose={savedReports.closeSaveAs}
-          onSave={savedReports.saveAs}
-          canCreateSystemReports={savedReports.canSystemEdit}
-          availableRoles={savedReports.availableRoles}
-        />
-        <SettingsModal
-          open={savedReports.settingsOpen}
-          onClose={savedReports.closeSettings}
-          onSave={savedReports.editSettings}
-          initialName={savedReports.loadedReport?.display_name ?? ""}
-          isSystemLevel={savedReports.loadedReport?.publication_level === "system"}
-          initialAllowedRoles={savedReports.loadedReport?.allowed_roles ?? []}
-          canEditRoles={savedReports.canSystemEdit}
-          availableRoles={savedReports.availableRoles}
-        />
+        {canSystemEdit && (
+          <>
+            <SaveAsModal
+              open={savedReports.saveAsOpen}
+              onClose={savedReports.closeSaveAs}
+              onSave={savedReports.saveAs}
+              canCreateSystemReports={savedReports.canSystemEdit}
+              availableRoles={savedReports.availableRoles}
+            />
+            <SettingsModal
+              open={savedReports.settingsOpen}
+              onClose={savedReports.closeSettings}
+              onSave={savedReports.editSettings}
+              initialName={savedReports.loadedReport?.display_name ?? ""}
+              isSystemLevel={savedReports.loadedReport?.publication_level === "system"}
+              initialAllowedRoles={savedReports.loadedReport?.allowed_roles ?? []}
+              canEditRoles={savedReports.canSystemEdit}
+              availableRoles={savedReports.availableRoles}
+            />
+          </>
+        )}
 
         {/* ── Export and Display Options ─────────────────────────── */}
         <div className={styles.panelSection}>
@@ -662,7 +687,7 @@ export default function Home() {
             />
             <button
               className={styles.helpBtn}
-              onClick={() => createBillsTour({ isLoggedIn: !!token }).drive()}
+              onClick={() => createBillsTour({ isLoggedIn: !!token, canSystemEdit }).drive()}
               title="Tour the Bills page"
             >
               ?

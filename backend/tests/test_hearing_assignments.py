@@ -4,7 +4,6 @@ Covers:
 - POST /workflows/hearing-assignment      — admin creates an assignment
 - POST /workflows/{id}/actions            — admin / assignee actions
 - GET  /workflows/assignees               — admin-only assignee lookup
-- GET  /workflows/has-open                — assignee visibility
 """
 
 import datetime
@@ -445,47 +444,6 @@ async def test_assignee_comm_prefs_unknown_email_returns_404(client: AsyncClient
         headers={"Authorization": f"Bearer {admin_tok}"},
     )
     assert resp.status_code == 404
-
-
-# ---------------------------------------------------------------------------
-# GET /workflows/has-open — assignee visibility
-# ---------------------------------------------------------------------------
-
-
-async def test_has_open_true_for_assignee(client: AsyncClient, db, uid: str):
-    hearing_id = await _seed_hearing(db, uid)
-    assignee_email, assignee_tok = await _viewer_token(client, db, uid, suffix="_assignee")
-    _, admin_tok = await _admin_token(client, db, uid)
-
-    # Before any assignment: false
-    resp = await client.get(
-        "/workflows/has-open",
-        headers={"Authorization": f"Bearer {assignee_tok}"},
-    )
-    assert resp.json() == {"has_open": False}
-
-    await _create_assignment(client, admin_tok, hearing_id, assignee_email)
-
-    resp = await client.get(
-        "/workflows/has-open",
-        headers={"Authorization": f"Bearer {assignee_tok}"},
-    )
-    assert resp.json() == {"has_open": True}
-
-
-async def test_has_open_false_for_unrelated_viewer(client: AsyncClient, db, uid: str):
-    hearing_id = await _seed_hearing(db, uid)
-    assignee_email, _ = await _viewer_token(client, db, uid, suffix="_assignee")
-    _, bystander_tok = await _viewer_token(client, db, uid, suffix="_bystander")
-    _, admin_tok = await _admin_token(client, db, uid)
-
-    await _create_assignment(client, admin_tok, hearing_id, assignee_email)
-
-    resp = await client.get(
-        "/workflows/has-open",
-        headers={"Authorization": f"Bearer {bystander_tok}"},
-    )
-    assert resp.json() == {"has_open": False}
 
 
 # ---------------------------------------------------------------------------

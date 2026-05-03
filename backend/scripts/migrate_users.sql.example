@@ -1,0 +1,106 @@
+-- Template for the one-shot user migration script used during the
+-- unique-logins release. Copy this file to migrate_users.sql, fill in real
+-- emails, and run it once. The real file is gitignored so emails never
+-- enter version control.
+--
+--     cp migrate_users.sql.example migrate_users.sql
+--     # edit the two temp-table inserts below
+--     psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrate_users.sql
+--
+-- RUN THIS *AFTER* `alembic upgrade head` (which creates user_status_enum,
+-- renames users.username -> users.email, and sets every existing row to
+-- user_status='active').
+--
+-- Effect, in order:
+--   1. Mark every pre-existing account as 'deleted' so legacy usernames /
+--      stale credentials cannot log in or self-register.
+--   2. UPSERT the approved viewer + admin emails as 'inactive' shells (no
+--      password). Approved users will pick up an activation email when they
+--      hit POST /auth/register/request from the Login page.
+--   3. Reset role assignments for the approved users so each lands in
+--      exactly one of {viewer, admin}.
+--
+-- Wrapped in a transaction so a typo or constraint violation rolls back
+-- cleanly.
+
+BEGIN;
+
+-- 1. Approved emails — single source of truth for the rest of the script.
+--    Edit these two temp tables and nothing else.
+
+CREATE TEMP TABLE _approved_viewers (email text PRIMARY KEY) ON COMMIT DROP;
+INSERT INTO _approved_viewers (email) VALUES
+    ('viewer1@example.com'),
+    ('viewer2@example.com'),
+    ('viewer3@example.com');
+    -- Add as many viewer emails as needed, one per line.
+
+CREATE TEMP TABLE _approved_admins (email text PRIMARY KEY) ON COMMIT DROP;
+INSERT INTO _approved_admins (email) VALUES
+    ('admin1@example.com'),
+    ('admin2@example.com');
+    -- Typically two admins; adjust as needed.
+
+-- 2. Lock out everyone first. Any account not re-added below stays 'deleted'.
+UPDATE users
+SET user_status   = 'deleted',
+    hashed_password = NULL;
+
+-- 3. UPSERT approved emails as 'inactive' shells (no password).
+INSERT INTO users (email, user_status)
+SELECT email, 'inactive'::user_status_enum FROM _approved_viewers
+ON CONFLICT (email) DO UPDATE
+SET user_status     = 'inactive',
+    hashed_password = NULL;
+
+INSERT INTO users (email, user_status)
+SELECT email, 'inactive'::user_status_enum FROM _approved_admins
+ON CONFLICT (email) DO UPDATE
+SET user_status     = 'inactive',
+    hashed_password = NULL;
+
+-- 4. Reset role membership for the approved set, then re-assign.
+--    Wiping first lets you re-run the script with a corrected list.
+DELETE FROM user_roles
+WHERE user_id IN (
+    SELECT id FROM users
+    WHERE email IN (SELECT email FROM _approved_viewers)
+       OR email IN (SELECT email FROM _approved_admins)
+);
+
+INSERT INTO user_roles (user_id, role_id)
+SELECT u.id, r.id
+FROM users u
+JOIN _approved_viewers v ON v.email = u.email
+JOIN roles r ON r.name = 'viewer';
+
+INSERT INTO user_roles (user_id, role_id)
+SELECT u.id, r.id
+FROM users u
+JOIN _approved_admins a ON a.email = u.email
+JOIN roles r ON r.name = 'admin';
+
+-- 5. Sanity checks. These RAISE NOTICE; they don't fail the txn — review
+--    the output before COMMIT.
+DO $$
+DECLARE
+    viewer_count int;
+    admin_count  int;
+    deleted_count int;
+BEGIN
+    SELECT count(*) INTO viewer_count
+    FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+    WHERE r.name = 'viewer';
+
+    SELECT count(*) INTO admin_count
+    FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+    WHERE r.name = 'admin';
+
+    SELECT count(*) INTO deleted_count
+    FROM users WHERE user_status = 'deleted';
+
+    RAISE NOTICE 'viewers with role: %, admins with role: %, deleted users: %',
+        viewer_count, admin_count, deleted_count;
+END$$;
+
+COMMIT;

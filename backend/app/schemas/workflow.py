@@ -73,10 +73,6 @@ class WorkflowRead(BaseModel):
         )
 
 
-class HasOpenResponse(BaseModel):
-    has_open: bool
-
-
 class CreateWorkflowRequest(BaseModel):
     bill_id: int
 

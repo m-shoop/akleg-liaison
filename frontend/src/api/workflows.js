@@ -6,13 +6,6 @@ function authHeaders(token) {
   return { Authorization: `Bearer ${token}` };
 }
 
-export async function fetchHasOpen(token) {
-  const headers = token ? authHeaders(token) : {};
-  const res = await apiFetch(`${BASE}/has-open`, { headers });
-  if (!res.ok) return { has_open: false };
-  return res.json();
-}
-
 export async function fetchWorkflows({ token, includeClosed = false } = {}) {
   const url = includeClosed ? `${BASE}?include_closed=true` : BASE;
   const res = await apiFetch(url, { headers: authHeaders(token) });

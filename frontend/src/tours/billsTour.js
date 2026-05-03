@@ -1,7 +1,7 @@
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
 
-export function createBillsTour({ isLoggedIn = false } = {}) {
+export function createBillsTour({ isLoggedIn = false, canSystemEdit = false } = {}) {
   return driver({
     showProgress: true,
     steps: [
@@ -20,28 +20,34 @@ export function createBillsTour({ isLoggedIn = false } = {}) {
               element: "#tour-saved-reports",
               popover: {
                 title: "Saved Reports",
+                description: canSystemEdit
+                  ? "Save the criteria you've built as a named report and re-load it with one click. Click any badge to load that report. ★ marks your default — it loads automatically when you return to this page. System reports are visible to all users; user reports are private to you. Toggle 'Include Inactive' to see archived reports."
+                  : "Pick a report to load it — these are the system reports built by your admin. ★ marks your default and loads automatically when you return to this page; use the ☆/★ Default Report button at the bottom-right of this section to set or unset your default for the loaded report. Toggle 'Include Inactive' to see archived reports.",
+              },
+            },
+          ]
+        : []),
+
+      ...(canSystemEdit
+        ? [
+            {
+              element: "#tour-report-criteria",
+              popover: {
+                title: "Report Criteria",
                 description:
-                  "Save the criteria you've built as a named report and re-load it with one click. Click any badge to load that report. ★ marks your default — it loads automatically when you return to this page. System reports are visible to all users; user reports are private to you. Toggle 'Include Inactive' to see archived reports.",
+                  "Build the list of measures you want to see by stacking rows of criteria — bill number, sponsor, status, tags, fiscal-note department, and more. Combine rows with AND / OR in the Custom Logic box for complex queries (e.g. '(A AND B) OR C'). Click Run Query to apply, then Save or Save As to keep the result as a report.",
               },
             },
           ]
         : []),
 
       {
-        element: "#tour-report-criteria",
-        popover: {
-          title: "Report Criteria",
-          description:
-            "Build the list of measures you want to see by stacking rows of criteria — bill number, sponsor, status, tags, fiscal-note department, and more. Combine rows with AND / OR in the Custom Logic box for complex queries (e.g. '(A AND B) OR C'). Click Run Query to apply, then Save or Save As to keep the result as a report.",
-        },
-      },
-
-      {
         element: "#tour-search",
         popover: {
           title: "Search",
-          description:
-            "Filter the bills currently shown on this page by bill number, title, tags, outcome types, or committees. Search runs locally on the loaded bills — narrow with Report Criteria first if you don't see what you expect.",
+          description: canSystemEdit
+            ? "Filter the bills currently shown on this page by bill number, title, tags, outcome types, or committees. Search runs locally on the loaded bills — narrow with Report Criteria first if you don't see what you expect."
+            : "Filter the bills currently shown on this page by bill number, title, tags, outcome types, or committees. Search runs locally on the loaded bills — pick a different report above if you don't see what you expect.",
         },
       },
 

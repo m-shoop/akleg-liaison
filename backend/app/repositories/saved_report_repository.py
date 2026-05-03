@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-from sqlalchemy import and_, delete, false, or_, select
+from sqlalchemy import and_, case, delete, false, nulls_last, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.saved_report import DefaultUserReport, PublicationLevel, SavedReport
+from app.models.saved_report import (
+    DefaultUserReport,
+    PublicationLevel,
+    SavedReport,
+    UserReportOrder,
+)
 from app.models.user import Role
 
 # Admin satisfies any role gate. This is enforced in two places (the SQL
@@ -40,16 +45,187 @@ async def list_visible_reports(
     user_roles: frozenset[str],
     registry_name: str,
     include_inactive: bool,
-) -> list[SavedReport]:
-    stmt = select(SavedReport).where(
-        SavedReport.registry_name == registry_name,
-        _visibility_clause(user_id, user_roles),
+) -> list[tuple[SavedReport, float | None]]:
+    """Return reports visible to the caller along with each one's per-user
+    sort_key (None when unranked).  Ordering matches what the UI renders:
+    system section first, user section second; within each section by
+    sort_key (NULLS LAST), tiebroken by display_name."""
+    section_rank = case(
+        (SavedReport.publication_level == PublicationLevel.system, 0),
+        else_=1,
+    )
+    stmt = (
+        select(SavedReport, UserReportOrder.sort_key)
+        .outerjoin(
+            UserReportOrder,
+            and_(
+                UserReportOrder.report_id == SavedReport.id,
+                UserReportOrder.user_id == user_id,
+            ),
+        )
+        .where(
+            SavedReport.registry_name == registry_name,
+            _visibility_clause(user_id, user_roles),
+        )
     )
     if not include_inactive:
         stmt = stmt.where(SavedReport.is_active.is_(True))
-    stmt = stmt.order_by(SavedReport.publication_level, SavedReport.display_name)
+    stmt = stmt.order_by(
+        section_rank,
+        nulls_last(UserReportOrder.sort_key.asc()),
+        SavedReport.display_name,
+    )
     result = await session.execute(stmt)
-    return list(result.scalars().all())
+    return [(row[0], row[1]) for row in result.all()]
+
+
+# ---------------------------------------------------------------------------
+# Per-user ordering
+# ---------------------------------------------------------------------------
+
+# Step used when extending past either edge of the section.  Mid-list
+# inserts halve the gap between neighbours, so it shrinks geometrically —
+# fine for typical reorder counts; the router compacts when the gap gets
+# too small to halve safely.
+_EDGE_STEP = 1.0
+# Below this gap, halving would lose precision in float64 mantissa once
+# multiple adjacent inserts stack up.  When we hit this we rebalance the
+# whole section to integer keys before inserting.
+_MIN_GAP = 1e-6
+
+
+async def _get_section_orders(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    registry_name: str,
+    publication_level: PublicationLevel,
+    user_roles: frozenset[str],
+) -> list[tuple[SavedReport, float | None]]:
+    rows = await list_visible_reports(
+        session,
+        user_id=user_id,
+        user_roles=user_roles,
+        registry_name=registry_name,
+        include_inactive=True,
+    )
+    return [(r, k) for (r, k) in rows if r.publication_level == publication_level]
+
+
+async def _upsert_sort_key(
+    session: AsyncSession, *, user_id: int, report_id: int, sort_key: float
+) -> None:
+    existing = await session.execute(
+        select(UserReportOrder).where(
+            UserReportOrder.user_id == user_id,
+            UserReportOrder.report_id == report_id,
+        )
+    )
+    row = existing.scalar_one_or_none()
+    if row is None:
+        session.add(
+            UserReportOrder(user_id=user_id, report_id=report_id, sort_key=sort_key)
+        )
+    else:
+        row.sort_key = sort_key
+    await session.flush()
+
+
+async def _rebalance_section(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    section: list[tuple[SavedReport, float | None]],
+) -> dict[int, float]:
+    """Assign integer sort_keys 0, 1, 2, ... to every report in the section
+    in their currently-rendered order.  Returns the new key for each report
+    by id.  Used both for Sort Alphabetically (after re-sorting `section`)
+    and as a backstop when fractional gaps grow too small to halve."""
+    new_keys: dict[int, float] = {}
+    for index, (report, _) in enumerate(section):
+        key = float(index)
+        new_keys[report.id] = key
+        await _upsert_sort_key(
+            session, user_id=user_id, report_id=report.id, sort_key=key
+        )
+    return new_keys
+
+
+async def reorder_report(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    user_roles: frozenset[str],
+    report: SavedReport,
+    after_id: int | None,
+    before_id: int | None,
+) -> None:
+    """Move `report` so it sits between `after_id` (above) and `before_id`
+    (below) within its section.  Rebalances when the gap shrinks past float
+    precision."""
+    section = await _get_section_orders(
+        session,
+        user_id=user_id,
+        registry_name=report.registry_name,
+        publication_level=report.publication_level,
+        user_roles=user_roles,
+    )
+    keys: dict[int, float | None] = {r.id: k for (r, k) in section}
+
+    # Unranked rows in the section get integer keys based on current order
+    # before we compute a midpoint — otherwise the midpoint formula has no
+    # numbers to work with.
+    if any(k is None for k in keys.values()):
+        keys = await _rebalance_section(session, user_id=user_id, section=section)
+
+    after_key = keys.get(after_id) if after_id is not None else None
+    before_key = keys.get(before_id) if before_id is not None else None
+
+    if after_key is None and before_key is None:
+        new_key = 0.0
+    elif before_key is None:
+        new_key = after_key + _EDGE_STEP  # type: ignore[operator]
+    elif after_key is None:
+        new_key = before_key - _EDGE_STEP
+    else:
+        gap = before_key - after_key
+        if gap < _MIN_GAP:
+            # Compact and try once more with the rebalanced keys.
+            keys = await _rebalance_section(session, user_id=user_id, section=section)
+            after_key = keys[after_id] if after_id is not None else None
+            before_key = keys[before_id] if before_id is not None else None
+            new_key = (after_key + before_key) / 2.0  # type: ignore[operator]
+        else:
+            new_key = (after_key + before_key) / 2.0
+
+    await _upsert_sort_key(
+        session, user_id=user_id, report_id=report.id, sort_key=new_key
+    )
+
+
+async def sort_reports_alphabetically(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    user_roles: frozenset[str],
+    registry_name: str,
+) -> None:
+    """Assign integer sort_keys to every visible report (both sections,
+    independently), in display_name order.  Inactive reports are included
+    so that toggling Include Inactive doesn't reveal a stale order."""
+    rows = await list_visible_reports(
+        session,
+        user_id=user_id,
+        user_roles=user_roles,
+        registry_name=registry_name,
+        include_inactive=True,
+    )
+    for level in (PublicationLevel.system, PublicationLevel.user):
+        section = sorted(
+            [(r, k) for (r, k) in rows if r.publication_level == level],
+            key=lambda pair: pair[0].display_name.lower(),
+        )
+        await _rebalance_section(session, user_id=user_id, section=section)
 
 
 async def get_report_by_id(session: AsyncSession, report_id: int) -> SavedReport | None:

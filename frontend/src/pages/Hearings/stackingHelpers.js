@@ -1,4 +1,5 @@
-import { weekBounds, todayJuneau } from "../../utils/weekBounds";
+import { weekBounds, todayJuneau, resolveRelativeRange } from "../../utils/weekBounds";
+import { resolveRelativeAssignee } from "../../utils/relativeAssignees";
 import { buildSummary, readBillNumbers } from "../../components/HearingsFilterBar/HearingsFilterBar";
 import { createInitialState } from "../../components/StackingCriteria/createInitialState";
 
@@ -9,6 +10,7 @@ export function makeDefaultRowValue() {
     hearingDateOn: "",
     hearingDateFrom: week.start,
     hearingDateTo: week.end,
+    hearingDateRelative: "",
     chamber: [],
     legislature_session: [],
     showInactive: false,
@@ -23,6 +25,7 @@ export function makeNewRowValue() {
     hearingDateOn: "",
     hearingDateFrom: "",
     hearingDateTo: "",
+    hearingDateRelative: "",
     chamber: [],
     legislature_session: [],
     showInactive: false,
@@ -35,7 +38,7 @@ export function makeDefaultHearingsCriteria() {
   return createInitialState({ seedRows: [makeDefaultRowValue()] });
 }
 
-export function buildHearingsRowFilterGroup(rowValue, { canNotes }) {
+export function buildHearingsRowFilterGroup(rowValue, { canNotes, username }) {
   if (!rowValue) return null;
   const conditions = [];
   const f = rowValue;
@@ -47,6 +50,15 @@ export function buildHearingsRowFilterGroup(rowValue, { canNotes }) {
     if (from && to) conditions.push({ field: "hearing_date", op: "between", value: [from, to] });
     else if (from) conditions.push({ field: "hearing_date", op: "after", value: from });
     else if (to) conditions.push({ field: "hearing_date", op: "before", value: to });
+  } else if (f.hearingDateMode === "relative") {
+    const r = resolveRelativeRange(f.hearingDateRelative);
+    if (r) {
+      if (r.start === r.end) {
+        conditions.push({ field: "hearing_date", op: "equals", value: r.start });
+      } else {
+        conditions.push({ field: "hearing_date", op: "between", value: [r.start, r.end] });
+      }
+    }
   }
 
   if (f.chamber?.length > 0) {
@@ -97,7 +109,12 @@ export function buildHearingsRowFilterGroup(rowValue, { canNotes }) {
     conditions.push({ field: "has_prior_agendas", op: "equals", value: true });
   }
 
-  if (adv.assignment_assignee_email?.trim()) {
+  if (adv.assignment_assignee_email_mode === "relative") {
+    const resolved = resolveRelativeAssignee(adv.assignment_assignee_email_relative, { username });
+    if (resolved) {
+      conditions.push({ field: "assignment_assignee_email", op: "equals", value: resolved });
+    }
+  } else if (adv.assignment_assignee_email?.trim()) {
     conditions.push({ field: "assignment_assignee_email", op: "contains", value: adv.assignment_assignee_email.trim() });
   }
   if (adv.assignment_bill_number?.trim()) {
@@ -127,6 +144,9 @@ export function getRowDateConstraints(criteria) {
       const from = v.hearingDateFrom || null;
       const to = v.hearingDateTo || null;
       if (from || to) ranges.push({ start: from, end: to });
+    } else if (v.hearingDateMode === "relative") {
+      const r = resolveRelativeRange(v.hearingDateRelative);
+      if (r) ranges.push({ start: r.start, end: r.end });
     }
   }
   return ranges;

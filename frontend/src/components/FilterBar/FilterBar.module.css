@@ -110,6 +110,35 @@
   gap: 6px;
 }
 
+.weekShortcuts {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+}
+
+.shortcut {
+  font-size: 0.78rem;
+  padding: 3px 8px;
+  border: 1px solid var(--color-border, #cbd5e1);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-muted, #64748b);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.shortcut:hover {
+  background: var(--color-surface-hover, #f1f5f9);
+  color: var(--color-text, #334155);
+}
+
+.shortcut.shortcutActive {
+  background: var(--color-rainy-sky);
+  border-color: var(--color-rainy-sky);
+  color: #fff;
+}
+
 .rangeSep {
   font-size: 0.8rem;
   color: var(--color-text-muted, #64748b);

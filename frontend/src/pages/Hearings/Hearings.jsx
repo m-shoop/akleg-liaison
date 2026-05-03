@@ -17,6 +17,7 @@ import { validate } from "../../components/StackingCriteria/expression/validate"
 import SavedReportsBar from "../../components/SavedReports/SavedReportsBar";
 import SaveAsModal from "../../components/SavedReports/SaveAsModal";
 import SettingsModal from "../../components/SavedReports/SettingsModal";
+import ReportFiltersSummary from "../../components/SavedReports/ReportFiltersSummary";
 import { useSavedReports } from "../../hooks/useSavedReports";
 import { createHearingsTour } from "../../tours/hearingsTour";
 import { addDays, todayJuneau, weekBounds, weekBoundsTitle } from "../../utils/weekBounds";
@@ -128,6 +129,7 @@ function loadStoredCriteria() {
 
 export default function Hearings() {
   const { can, token, isTokenExpired, username } = useAuth();
+  const canSystemEdit = can("system-report:edit");
   const [searchParams, setSearchParams] = useSearchParams();
   const isMobile = useMediaQuery("(max-width: 640px)");
 
@@ -319,7 +321,7 @@ export default function Hearings() {
 
   // ─── Compile applied criteria into a FilterGroup ───────────────────────────
   function compileRow(row) {
-    return buildHearingsRowFilterGroup(row.value, { canNotes });
+    return buildHearingsRowFilterGroup(row.value, { canNotes, username });
   }
 
   function compileAppliedFilterGroup() {
@@ -436,6 +438,7 @@ export default function Hearings() {
       }
     }
     setAppliedCriteria(value);
+    setReportCriteriaOpen(false);
   }
 
   const hadStoredCriteriaOnMount = useRef(!!sessionStorage.getItem(STORAGE_KEY));
@@ -449,7 +452,7 @@ export default function Hearings() {
     token,
     username,
     skipDefaultLoad: hadStoredCriteriaOnMount.current,
-    canSystemEdit: can("system-report:edit"),
+    canSystemEdit,
   });
 
   // ─── Derived data (list view) ──────────────────────────────────────────────
@@ -463,6 +466,7 @@ export default function Hearings() {
     const assignmentText = (h.hearing_assignments_summary ?? [])
       .flatMap((a) => [
         a.assignee_email,
+        a.assignee_name,
         a.bill_number,
         a.assignment_type,
         ASSIGNMENT_STATUS_SEARCH_TERMS[a.latest_action_type],
@@ -550,7 +554,7 @@ export default function Hearings() {
           <div id="tour-controls" className={styles.btnRow}>
             <button
               className={styles.helpBtn}
-              onClick={() => createHearingsTour({ isEditor: can("hearing:query"), isLoggedIn: !!token, activeView }).drive()}
+              onClick={() => createHearingsTour({ isEditor: can("hearing:query"), isLoggedIn: !!token, activeView, canSystemEdit }).drive()}
               title="Tour the Hearings page"
             >
               ?
@@ -569,14 +573,24 @@ export default function Hearings() {
             onIncludeInactiveChange={savedReports.setIncludeInactive}
             onSelectReport={savedReports.selectReport}
             error={savedReports.error}
+            isLoadedDefault={savedReports.isLoadedDefault}
+            isLoadedActive={savedReports.isLoadedActive}
+            onToggleDefault={canSystemEdit ? undefined : savedReports.toggleDefault}
+            onReorder={savedReports.reorderReport}
+            onSortAlphabetical={savedReports.sortAlphabetical}
           />
         </div>
       )}
 
+      {activeView === "list" && !canSystemEdit && (
+        <ReportFiltersSummary criteria={appliedCriteria} summarizeRow={summarizeRow} />
+      )}
+
       {/* Report Criteria collapsible — list view only. Calendar view is intentionally
           a "see everything" view and uses the date-range navigation plus the
-          Show Hidden / Show Inactive toggles in Options. */}
-      {activeView === "list" && (
+          Show Hidden / Show Inactive toggles in Options.  Hidden for non-admins:
+          viewers only choose from the system reports listed in the Reports bar. */}
+      {activeView === "list" && canSystemEdit && (
         <div id="tour-report-criteria" className={styles.additionalFilters}>
           <button
             className={styles.additionalFiltersHeader}
@@ -596,11 +610,14 @@ export default function Hearings() {
                 fields: reportFields,
                 canNotes,
               }}
-              compileRow={(row) => buildHearingsRowFilterGroup(row.value, { canNotes })}
+              compileRow={(row) => buildHearingsRowFilterGroup(row.value, { canNotes, username })}
               emptyRowValue={makeNewRowValue()}
               summarizeRow={summarizeRow}
               mobile={isMobile}
-              onSave={isMobile ? undefined : savedReports.save}
+              onSave={isMobile ? undefined : async () => {
+                await savedReports.save();
+                setReportCriteriaOpen(false);
+              }}
               onSaveAs={isMobile ? undefined : savedReports.openSaveAs}
               saveAvailable={savedReports.canSave}
               saveAsAvailable={savedReports.canSaveAs}
@@ -622,7 +639,7 @@ export default function Hearings() {
         </div>
       )}
 
-      {activeView === "list" && (
+      {activeView === "list" && canSystemEdit && (
         <>
           <SaveAsModal
             open={savedReports.saveAsOpen}
@@ -786,7 +803,7 @@ export default function Hearings() {
 
       {activeView === "list" && allHearings !== null && hearings.length === 0 && !loading && (
         <p className={styles.notice}>
-          No hearings found for this date range.
+          No hearings match the current criteria.
           {can("hearing:query") && ' Use "Refresh hearings from akleg.gov" to import them.'}
         </p>
       )}

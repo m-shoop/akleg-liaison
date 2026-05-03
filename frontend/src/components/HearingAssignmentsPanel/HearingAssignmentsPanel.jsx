@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { addWorkflowAction, createHearingAssignment, updateHearingAssignmentType } from "../../api/workflows";
 import { useAssigneeOptedOut, OPT_OUT_WARNING } from "../../hooks/useAssigneeOptedOut";
-import UserCombobox from "../UserCombobox/UserCombobox";
+import { useAssignees } from "../../hooks/useAssignees";
+import UserSelect from "../UserSelect/UserSelect";
 import styles from "./HearingAssignmentsPanel.module.css";
 
 function fmtDate(isoDate) {
@@ -62,6 +63,11 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
 
   const canViewSuggestions = can("hearing-assignment:view-auto-suggestions");
   const canCreate = can("workflow:view-all");
+
+  const needsAssigneeList =
+    showCreateAssignment ||
+    selectedAssignment?.latest_action_type === "reassignment_request";
+  const allAssignees = useAssignees(needsAssigneeList, token);
 
   const createAssigneeOptedOut = useAssigneeOptedOut(
     showCreateAssignment ? assignmentForm.assigneeEmail : "",
@@ -233,7 +239,7 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
                     }
                   }}
                 >
-                  <td className={styles.cellEmail}>{a.assignee_email}</td>
+                  <td className={styles.cellEmail} title={a.assignee_email}>{a.assignee_name || a.assignee_email}</td>
                   <td className={styles.cellBill}>{a.bill_number || ""}</td>
                   <td className={styles.cellType}>{assignmentTypeLabel(a.assignment_type)}</td>
                   <td><span className={statusClass}>{statusLabel}</span></td>
@@ -261,12 +267,12 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
             <h3 className={styles.modalTitle}>Create Assignment</h3>
             <p className={styles.modalHearingInfo}>{hearingInfo}</p>
             <div className={styles.modalField}>
-              <label className={styles.modalLabel}>Assignee email *</label>
-              <UserCombobox
+              <label className={styles.modalLabel}>Assignee *</label>
+              <UserSelect
+                users={allAssignees}
                 value={assignmentForm.assigneeEmail}
                 onChange={(email) => setAssignmentForm((f) => ({ ...f, assigneeEmail: email }))}
-                token={token}
-                placeholder="staff@dps.alaska.gov"
+                className={styles.modalSelect}
                 autoFocus
               />
             </div>
@@ -345,7 +351,10 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
               <h3 className={styles.modalTitle}>Assignment</h3>
               <p className={styles.modalHearingInfo}>{hearingInfo}</p>
               <p className={styles.modalHearingInfo}>
-                {a.bill_number ? `${a.bill_number} · ` : ""}{a.assignee_email}
+                {a.bill_number ? `${a.bill_number} · ` : ""}{a.assignee_name || a.assignee_email}
+                {a.assignee_name && (
+                  <span className={styles.modalReadOnly}> ({a.assignee_email})</span>
+                )}
               </p>
               {canManage && isSuggested && !showCancelReason ? (
                 <div className={styles.modalField}>
@@ -369,11 +378,11 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
               {canManage && isReassignRequest && !showCancelReason && (
                 <div className={styles.modalField}>
                   <label className={styles.modalLabel}>New assignee</label>
-                  <UserCombobox
+                  <UserSelect
+                    users={allAssignees}
                     value={reassignEmail}
                     onChange={setReassignEmail}
-                    token={token}
-                    placeholder="New assignee email…"
+                    className={styles.modalSelect}
                     autoFocus
                   />
                 </div>
@@ -459,23 +468,23 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
                     {assignmentActing === "hearing_assignment_canceled" ? "…" : "Confirm Cancel"}
                   </button>
                 )}
+                {(isAssignee || canManage) && isAssigned && !showCancelReason && (
+                  <button
+                    className={styles.modalSubmitBtn}
+                    onClick={() => handleAssignmentAction("hearing_assignment_complete")}
+                    disabled={assignmentActing !== null}
+                  >
+                    {assignmentActing === "hearing_assignment_complete" ? "…" : "Mark Complete"}
+                  </button>
+                )}
                 {isAssignee && isAssigned && !showCancelReason && (
-                  <>
-                    <button
-                      className={styles.modalSubmitBtn}
-                      onClick={() => handleAssignmentAction("hearing_assignment_complete")}
-                      disabled={assignmentActing !== null}
-                    >
-                      {assignmentActing === "hearing_assignment_complete" ? "…" : "Mark Complete"}
-                    </button>
-                    <button
-                      className={styles.modalSecondaryBtn}
-                      onClick={() => handleAssignmentAction("reassignment_request")}
-                      disabled={assignmentActing !== null}
-                    >
-                      {assignmentActing === "reassignment_request" ? "…" : "Request Reassignment"}
-                    </button>
-                  </>
+                  <button
+                    className={styles.modalSecondaryBtn}
+                    onClick={() => handleAssignmentAction("reassignment_request")}
+                    disabled={assignmentActing !== null}
+                  >
+                    {assignmentActing === "reassignment_request" ? "…" : "Request Reassignment"}
+                  </button>
                 )}
               </div>
             </div>

@@ -71,3 +71,27 @@ export async function fetchRoles(token) {
   });
   return parseOrThrow(res, "Failed to load roles");
 }
+
+export async function reorderSavedReport({ registryName, reportId, afterId, beforeId, token }) {
+  const res = await apiFetch(`/api/user-reports/${registryName}/order`, {
+    method: "PUT",
+    headers: jsonHeaders(token),
+    body: JSON.stringify({
+      report_id: reportId,
+      after_id: afterId ?? null,
+      before_id: beforeId ?? null,
+    }),
+  });
+  return parseOrThrow(res, "Failed to reorder report");
+}
+
+export async function sortSavedReportsAlphabetically({ registryName, token }) {
+  const res = await apiFetch(
+    `/api/user-reports/${registryName}/order/sort-alphabetical`,
+    {
+      method: "POST",
+      headers: jsonHeaders(token),
+    },
+  );
+  return parseOrThrow(res, "Failed to sort reports alphabetically");
+}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { RELATIVE_DATE_RANGES, relativeDateRangeLabel, resolveRelativeRange, todayJuneau, weekBounds, weekBoundsTitle } from "../../utils/weekBounds";
 import styles from "./FilterBar.module.css";
 
 function EnumMultiSelect({ options, selected, onChange }) {
@@ -68,6 +69,7 @@ const HEARING_DATE_MODES = [
   { value: "any", label: "Any Date" },
   { value: "on", label: "On Date" },
   { value: "range", label: "In Range" },
+  { value: "relative", label: "Relative" },
 ];
 
 // Reads the bill_number filter as an array. Falls back to the legacy single-string
@@ -182,6 +184,19 @@ export function buildSummary(filters, fields) {
     } else if (to) {
       parts.push(`Hearing ${formatDateLong(to)} or before`);
     }
+  } else if (filters.hearingDateMode === "relative") {
+    const label = relativeDateRangeLabel(filters.hearingDateRelative);
+    if (label) {
+      const range = resolveRelativeRange(filters.hearingDateRelative);
+      if (range) {
+        const resolved = range.start === range.end
+          ? formatDate(range.start)
+          : `${formatDate(range.start)} – ${formatDate(range.end)}`;
+        parts.push(`Hearing: ${label} (${resolved})`);
+      } else {
+        parts.push(`Hearing: ${label}`);
+      }
+    }
   }
 
   const advanced = filters.advanced ?? {};
@@ -222,9 +237,14 @@ export function buildSummary(filters, fields) {
 
 export default function FilterBar({ fields, filters, onChange }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const today = todayJuneau();
 
   function set(key, value) {
     onChange({ ...filters, [key]: value });
+  }
+
+  function applyHearingDateRange(from, to) {
+    onChange({ ...filters, hearingDateMode: "range", hearingDateFrom: from, hearingDateTo: to });
   }
 
   const advancedFields = Object.entries(fields ?? {}).filter(
@@ -370,21 +390,43 @@ export default function FilterBar({ fields, filters, onChange }) {
             />
           )}
           {filters.hearingDateMode === "range" && (
-            <span className={styles.rangePair}>
-              <input
-                type="date"
-                className={`${styles.dateInput} ${filters.hearingDateFrom ? styles.dateInputFilled : ""}`}
-                value={filters.hearingDateFrom}
-                onChange={(e) => set("hearingDateFrom", e.target.value)}
-              />
-              <span className={styles.rangeSep}>to</span>
-              <input
-                type="date"
-                className={`${styles.dateInput} ${filters.hearingDateTo ? styles.dateInputFilled : ""}`}
-                value={filters.hearingDateTo}
-                onChange={(e) => set("hearingDateTo", e.target.value)}
-              />
-            </span>
+            <>
+              <span className={styles.rangePair}>
+                <input
+                  type="date"
+                  className={`${styles.dateInput} ${filters.hearingDateFrom ? styles.dateInputFilled : ""}`}
+                  value={filters.hearingDateFrom}
+                  onChange={(e) => set("hearingDateFrom", e.target.value)}
+                />
+                <span className={styles.rangeSep}>to</span>
+                <input
+                  type="date"
+                  className={`${styles.dateInput} ${filters.hearingDateTo ? styles.dateInputFilled : ""}`}
+                  value={filters.hearingDateTo}
+                  onChange={(e) => set("hearingDateTo", e.target.value)}
+                />
+              </span>
+              <div className={styles.weekShortcuts}>
+                <button type="button" className={`${styles.shortcut} ${filters.hearingDateFrom === today && filters.hearingDateTo === today ? styles.shortcutActive : ""}`} onClick={() => applyHearingDateRange(today, today)}>Today</button>
+                <button type="button" className={`${styles.shortcut} ${filters.hearingDateFrom === weekBounds(-1).start && filters.hearingDateTo === weekBounds(-1).end ? styles.shortcutActive : ""}`} onClick={() => { const b = weekBounds(-1); applyHearingDateRange(b.start, b.end); }} title={weekBoundsTitle(-1)}>Last Week</button>
+                <button type="button" className={`${styles.shortcut} ${filters.hearingDateFrom === weekBounds(0).start && filters.hearingDateTo === weekBounds(0).end ? styles.shortcutActive : ""}`} onClick={() => { const b = weekBounds(0); applyHearingDateRange(b.start, b.end); }} title={weekBoundsTitle(0)}>This Week</button>
+                <button type="button" className={`${styles.shortcut} ${filters.hearingDateFrom === weekBounds(1).start && filters.hearingDateTo === weekBounds(1).end ? styles.shortcutActive : ""}`} onClick={() => { const b = weekBounds(1); applyHearingDateRange(b.start, b.end); }} title={weekBoundsTitle(1)}>Next Week</button>
+              </div>
+            </>
+          )}
+          {filters.hearingDateMode === "relative" && (
+            <div className={styles.segmented}>
+              {RELATIVE_DATE_RANGES.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`${styles.seg} ${filters.hearingDateRelative === opt.value ? styles.segActive : ""}`}
+                  onClick={() => set("hearingDateRelative", opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           )}
         </div>
 

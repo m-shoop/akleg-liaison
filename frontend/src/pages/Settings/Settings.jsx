@@ -9,6 +9,8 @@ import {
   fetchMyCommPrefsHistory,
   updateMyCommPrefs,
 } from "../../api/email";
+import { adminListUsers, adminUpdateUserName } from "../../api/users";
+import UserSelect from "../../components/UserSelect/UserSelect";
 import styles from "./Settings.module.css";
 
 function fmtDateTime(iso) {
@@ -102,6 +104,14 @@ export default function Settings() {
   const [adminBusy, setAdminBusy] = useState(false);
   const [adminError, setAdminError] = useState(null);
 
+  // Admin: edit display names
+  const [allUsers, setAllUsers] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [nameDraft, setNameDraft] = useState("");
+  const [nameBusy, setNameBusy] = useState(false);
+  const [nameError, setNameError] = useState(null);
+  const [nameSavedAt, setNameSavedAt] = useState(null);
+
   useEffect(() => {
     if (!isLoggedIn || !token) return;
     Promise.all([fetchMyCommPrefs(token), fetchMyCommPrefsHistory(token)])
@@ -111,6 +121,42 @@ export default function Settings() {
       })
       .catch((err) => setError(err.message));
   }, [isLoggedIn, token]);
+
+  useEffect(() => {
+    if (!isAdmin || !token) return;
+    adminListUsers(token)
+      .then((users) => setAllUsers(users))
+      .catch((err) => setNameError(err.message));
+  }, [isAdmin, token]);
+
+  useEffect(() => {
+    const u = allUsers.find((x) => String(x.id) === String(selectedUserId));
+    setNameDraft(u?.name ?? "");
+    setNameSavedAt(null);
+    setNameError(null);
+  }, [selectedUserId, allUsers]);
+
+  async function handleSaveName() {
+    if (!selectedUserId) return;
+    setNameBusy(true);
+    setNameError(null);
+    setNameSavedAt(null);
+    try {
+      const updated = await adminUpdateUserName(
+        selectedUserId,
+        nameDraft.trim() || null,
+        token,
+      );
+      setAllUsers((prev) =>
+        prev.map((u) => (u.id === updated.id ? updated : u)),
+      );
+      setNameSavedAt(new Date());
+    } catch (err) {
+      setNameError(err.message);
+    } finally {
+      setNameBusy(false);
+    }
+  }
 
   async function handleToggle(newEnabled) {
     setBusy(true);
@@ -127,27 +173,35 @@ export default function Settings() {
     }
   }
 
-  async function handleAdminLookup(e) {
-    e.preventDefault();
+  useEffect(() => {
+    if (!adminEmail) {
+      setAdminPrefs(null);
+      setAdminHistory([]);
+      setAdminError(null);
+      return;
+    }
+    let cancelled = false;
     setAdminError(null);
     setAdminBusy(true);
     setAdminPrefs(null);
     setAdminHistory([]);
-    try {
-      const email = adminEmail.trim();
-      if (!email) throw new Error("Enter an email address");
-      const [p, h] = await Promise.all([
-        adminFetchCommPrefs(email, token),
-        adminFetchCommPrefsHistory(email, token),
-      ]);
-      setAdminPrefs(p);
-      setAdminHistory(h);
-    } catch (err) {
-      setAdminError(err.message);
-    } finally {
-      setAdminBusy(false);
-    }
-  }
+    Promise.all([
+      adminFetchCommPrefs(adminEmail, token),
+      adminFetchCommPrefsHistory(adminEmail, token),
+    ])
+      .then(([p, h]) => {
+        if (cancelled) return;
+        setAdminPrefs(p);
+        setAdminHistory(h);
+      })
+      .catch((err) => {
+        if (!cancelled) setAdminError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setAdminBusy(false);
+      });
+    return () => { cancelled = true; };
+  }, [adminEmail, token]);
 
   async function handleAdminToggle(newEnabled) {
     if (!adminPrefs) return;
@@ -190,22 +244,15 @@ export default function Settings() {
       {isAdmin && (
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Admin: view another user's preferences</h2>
-          <form onSubmit={handleAdminLookup} className={styles.adminLookup}>
-            <input
-              type="email"
-              className={styles.input}
-              placeholder="email@example.com"
+          <div className={styles.nameEditRow}>
+            <UserSelect
+              users={allUsers}
               value={adminEmail}
-              onChange={(e) => setAdminEmail(e.target.value)}
+              onChange={setAdminEmail}
+              className={styles.userSelect}
+              disabled={adminBusy}
             />
-            <button
-              type="submit"
-              className={styles.primaryBtn}
-              disabled={adminBusy || !adminEmail.trim()}
-            >
-              Look up
-            </button>
-          </form>
+          </div>
           {adminError && <p className={styles.error}>{adminError}</p>}
           {adminPrefs && (
             <>
@@ -219,6 +266,54 @@ export default function Settings() {
               />
               <ChangeHistory history={adminHistory} />
             </>
+          )}
+        </section>
+      )}
+
+      {isAdmin && (
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Admin: edit user display name</h2>
+          <p className={styles.muted}>
+            The display name appears on assignment dropdowns and tables. Email
+            remains the unique identifier.
+          </p>
+          <div className={styles.nameEditRow}>
+            <select
+              className={styles.userSelect}
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+            >
+              <option value="">— Select a user —</option>
+              {allUsers.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name ? `${u.name} (${u.email})` : u.email}
+                </option>
+              ))}
+            </select>
+          </div>
+          {selectedUserId && (
+            <div className={styles.nameEditRow}>
+              <input
+                type="text"
+                className={styles.input}
+                placeholder="Full name"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                maxLength={255}
+              />
+              <button
+                type="button"
+                className={styles.primaryBtn}
+                disabled={nameBusy}
+                onClick={handleSaveName}
+              >
+                {nameBusy ? "Saving…" : "Save name"}
+              </button>
+            </div>
+          )}
+          {nameError && <p className={styles.error}>{nameError}</p>}
+          {nameSavedAt && (
+            <p className={styles.success}>Saved at {nameSavedAt.toLocaleTimeString()}</p>
           )}
         </section>
       )}

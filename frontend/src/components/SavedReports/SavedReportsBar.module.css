@@ -12,11 +12,36 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.6rem;
 }
 
 .title {
   font-weight: 600;
   font-size: 0.95rem;
+  color: var(--color-text-primary);
+}
+
+.headerControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.sortBtn {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.sortBtn:hover {
+  background: var(--color-surface);
   color: var(--color-text-primary);
 }
 
@@ -27,6 +52,26 @@
   font-size: 0.8125rem;
   color: var(--color-text-secondary);
   cursor: pointer;
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.sectionHeader {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
 }
 
 .empty {
@@ -60,12 +105,23 @@
   color: var(--color-text-primary);
   border-radius: 999px;
   font-size: 0.875rem;
-  cursor: pointer;
+  cursor: grab;
   transition: background 120ms ease, border-color 120ms ease;
+  touch-action: manipulation;
 }
 
 .badge:hover {
   background: var(--color-surface-raised);
+}
+
+.badge:active {
+  cursor: grabbing;
+}
+
+.badgeDragging {
+  opacity: 0.55;
+  cursor: grabbing;
+  z-index: 1;
 }
 
 .badgeUser {
@@ -144,6 +200,47 @@
 
 .legendLabel:last-child {
   margin-right: 0;
+}
+
+.defaultToggleSlot {
+  align-self: flex-end;
+  min-height: 1.65rem;
+}
+
+.defaultToggle {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.defaultToggle:hover {
+  background: var(--color-surface);
+}
+
+.defaultToggleOn {
+  background: var(--color-rainforest);
+  color: var(--color-text-on-dark);
+  border-color: var(--color-rainforest);
+}
+
+.defaultToggleOn:hover {
+  filter: brightness(1.05);
+}
+
+.defaultToggle:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.defaultToggle:disabled:hover {
+  background: var(--color-surface-raised);
 }
 
 .inactiveTag {

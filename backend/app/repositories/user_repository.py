@@ -1,20 +1,31 @@
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import Permission, Role, RolePermission, TokenType, User, UserRoles, UserStatus, UserToken
 
 
-async def search_users_by_email(session: AsyncSession, query: str, limit: int = 20) -> list[User]:
+async def search_users(session: AsyncSession, query: str, limit: int = 20) -> list[User]:
+    """Substring match on email or name (case-insensitive). Active users only."""
+    pattern = f"%{query}%"
     result = await session.execute(
         select(User)
         .where(
             User.user_status == UserStatus.active,
-            User.email.ilike(f"%{query}%"),
+            or_(User.email.ilike(pattern), User.name.ilike(pattern)),
         )
-        .order_by(User.email)
+        .order_by(User.name.nulls_last(), User.email)
         .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def list_active_users(session: AsyncSession) -> list[User]:
+    result = await session.execute(
+        select(User)
+        .where(User.user_status == UserStatus.active)
+        .order_by(User.name.nulls_last(), User.email)
     )
     return list(result.scalars().all())
 
@@ -148,3 +159,16 @@ async def activate_user_with_password(
     user.hashed_password = hashed_password
     user.user_status = UserStatus.active
     await session.flush()
+
+
+async def update_user_name(
+    session: AsyncSession,
+    user_id: int,
+    name: str | None,
+) -> User:
+    user = await get_user_by_id(session, user_id)
+    if user is None:
+        raise ValueError(f"User {user_id} not found")
+    user.name = name
+    await session.flush()
+    return user

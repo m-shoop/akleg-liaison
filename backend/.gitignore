@@ -8,4 +8,5 @@ dist/
 *.egg-info/
 test_scraper.py
 *.dump
+scripts/migrate_users.sql
 test_fiscal_sync.py

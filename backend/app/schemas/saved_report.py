@@ -18,6 +18,7 @@ class SavedReportRead(BaseModel):
     report_criteria: dict
     created_at: datetime
     updated_at: datetime
+    sort_key: float | None = None
 
 
 class SavedReportListResponse(BaseModel):
@@ -48,3 +49,13 @@ class DefaultUserReportSet(BaseModel):
 class RoleRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     name: str
+
+
+class ReorderReportRequest(BaseModel):
+    # Place `report_id` between `after_id` (the report immediately above) and
+    # `before_id` (the report immediately below).  Either neighbour may be
+    # null to mean "edge of the section".  Must be in the same section
+    # (publication_level) as `report_id`.
+    report_id: int
+    after_id: int | None = None
+    before_id: int | None = None

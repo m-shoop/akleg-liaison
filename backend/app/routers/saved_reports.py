@@ -18,12 +18,15 @@ from app.repositories.saved_report_repository import (
     is_report_visible_to,
     list_roles,
     list_visible_reports,
+    reorder_report,
     set_default_report,
+    sort_reports_alphabetically,
     update_saved_report,
 )
 from app.repositories.user_repository import get_user_roles
 from app.schemas.saved_report import (
     DefaultUserReportSet,
+    ReorderReportRequest,
     RoleRead,
     SavedReportCreate,
     SavedReportListResponse,
@@ -79,7 +82,7 @@ async def list_user_reports(
     _validate_registry_name(registry_name)
 
     user_roles = await _caller_roles(db, current_user.user.id)
-    reports = await list_visible_reports(
+    rows = await list_visible_reports(
         db,
         user_id=current_user.user.id,
         user_roles=user_roles,
@@ -87,8 +90,12 @@ async def list_user_reports(
         include_inactive=include_inactive,
     )
     default = await get_default_report(db, current_user.user.id, registry_name)
+    reports = [
+        SavedReportRead.model_validate(r).model_copy(update={"sort_key": sort_key})
+        for (r, sort_key) in rows
+    ]
     return SavedReportListResponse(
-        reports=[SavedReportRead.model_validate(r) for r in reports],
+        reports=reports,
         default_report_id=default.report_id if default else None,
     )
 
@@ -304,3 +311,142 @@ async def list_all_roles(
 ) -> list[RoleRead]:
     roles = await list_roles(db)
     return [RoleRead.model_validate(r) for r in roles if r.name != ADMIN_ROLE]
+
+
+# ---------------------------------------------------------------------------
+# Per-user ordering
+# ---------------------------------------------------------------------------
+
+async def _require_section_neighbour(
+    db: AsyncSession,
+    *,
+    moved: SavedReport,
+    neighbour_id: int | None,
+    user_id: int,
+    user_roles: frozenset[str],
+    label: str,
+) -> None:
+    """Validate that a before/after neighbour exists, is in the same registry
+    and section as the moved report, and is visible to the caller."""
+    if neighbour_id is None:
+        return
+    if neighbour_id == moved.id:
+        raise HTTPException(
+            status_code=422, detail=f"{label} cannot be the moved report itself"
+        )
+    neighbour = await get_report_by_id(db, neighbour_id)
+    if neighbour is None:
+        raise HTTPException(status_code=404, detail=f"{label} report not found")
+    if neighbour.registry_name != moved.registry_name:
+        raise HTTPException(
+            status_code=422, detail=f"{label} report is in a different registry"
+        )
+    if neighbour.publication_level != moved.publication_level:
+        raise HTTPException(
+            status_code=422,
+            detail="Cannot reorder across System and User sections",
+        )
+    if not await is_report_visible_to(
+        db, neighbour, user_id=user_id, user_roles=user_roles
+    ):
+        raise HTTPException(status_code=403, detail=f"{label} report not accessible")
+
+
+@router.put("/user-reports/{registry_name}/order", status_code=204)
+async def reorder_user_report(
+    registry_name: str,
+    body: ReorderReportRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_permission("user-report:edit")),
+):
+    """Move a report inside its section.  `after_id`/`before_id` are the
+    neighbours bracketing the new position; either may be null to mean the
+    edge of the section."""
+    _validate_registry_name(registry_name)
+
+    moved = await get_report_by_id(db, body.report_id)
+    if moved is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if moved.registry_name != registry_name:
+        raise HTTPException(
+            status_code=422,
+            detail="Report's registry_name does not match the path",
+        )
+
+    user_roles = await _caller_roles(db, current_user.user.id)
+    if not await is_report_visible_to(
+        db, moved, user_id=current_user.user.id, user_roles=user_roles
+    ):
+        raise HTTPException(status_code=403, detail="Report not accessible")
+
+    await _require_section_neighbour(
+        db,
+        moved=moved,
+        neighbour_id=body.after_id,
+        user_id=current_user.user.id,
+        user_roles=user_roles,
+        label="after_id",
+    )
+    await _require_section_neighbour(
+        db,
+        moved=moved,
+        neighbour_id=body.before_id,
+        user_id=current_user.user.id,
+        user_roles=user_roles,
+        label="before_id",
+    )
+
+    await reorder_report(
+        db,
+        user_id=current_user.user.id,
+        user_roles=user_roles,
+        report=moved,
+        after_id=body.after_id,
+        before_id=body.before_id,
+    )
+    await log_action(
+        db,
+        current_user.user,
+        "saved_report_reordered",
+        entity_type="saved_report",
+        entity_id=moved.id,
+        details={
+            "registry_name": registry_name,
+            "publication_level": moved.publication_level.value,
+            "after_id": body.after_id,
+            "before_id": body.before_id,
+        },
+        request=request,
+    )
+    await db.commit()
+
+
+@router.post("/user-reports/{registry_name}/order/sort-alphabetical", status_code=204)
+async def sort_user_reports_alphabetical(
+    registry_name: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_permission("user-report:edit")),
+):
+    """Reset both sections to alphabetical order by display_name (case
+    insensitive).  Sections remain independent — system reports stay above
+    user reports."""
+    _validate_registry_name(registry_name)
+
+    user_roles = await _caller_roles(db, current_user.user.id)
+    await sort_reports_alphabetically(
+        db,
+        user_id=current_user.user.id,
+        user_roles=user_roles,
+        registry_name=registry_name,
+    )
+    await log_action(
+        db,
+        current_user.user,
+        "saved_reports_sorted_alphabetically",
+        entity_type="saved_report",
+        details={"registry_name": registry_name},
+        request=request,
+    )
+    await db.commit()

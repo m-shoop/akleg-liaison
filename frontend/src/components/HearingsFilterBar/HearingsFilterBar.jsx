@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { todayJuneau, weekBounds, weekBoundsTitle } from "../../utils/weekBounds";
+import { todayJuneau, weekBounds, weekBoundsTitle, RELATIVE_DATE_RANGES, relativeDateRangeLabel, resolveRelativeRange } from "../../utils/weekBounds";
+import { RELATIVE_ASSIGNEES, relativeAssigneeLabel } from "../../utils/relativeAssignees";
 import styles from "./HearingsFilterBar.module.css";
 
 function EnumMultiSelect({ options, selected, onChange }) {
@@ -68,6 +69,7 @@ const DATE_MODES = [
   { value: "any", label: "Any Date" },
   { value: "on", label: "On Date" },
   { value: "range", label: "In Range" },
+  { value: "relative", label: "Relative" },
 ];
 
 const ASSIGNMENT_STATUS_LABELS = {
@@ -164,6 +166,19 @@ export function buildSummary(filters, fields) {
     if (from && to) parts.push(`Date: ${formatDate(from)} – ${formatDate(to)}`);
     else if (from) parts.push(`Date: ${formatDate(from)} or after`);
     else if (to) parts.push(`Date: ${formatDate(to)} or before`);
+  } else if (filters.hearingDateMode === "relative") {
+    const label = relativeDateRangeLabel(filters.hearingDateRelative);
+    if (label) {
+      const range = resolveRelativeRange(filters.hearingDateRelative);
+      if (range) {
+        const resolved = range.start === range.end
+          ? formatDate(range.start)
+          : `${formatDate(range.start)} – ${formatDate(range.end)}`;
+        parts.push(`Date: ${label} (${resolved})`);
+      } else {
+        parts.push(`Date: ${label}`);
+      }
+    }
   }
 
   if (filters.chamber?.length > 0) {
@@ -189,6 +204,14 @@ export function buildSummary(filters, fields) {
       if (mode === "has") parts.push("Notes: Has Notes");
       else if (mode === "empty") parts.push("Notes: No Notes");
       else if (mode === "contains" && adv.dps_notes) parts.push(`Notes: "${adv.dps_notes}"`);
+    } else if (key === "assignment_assignee_email") {
+      const mode = adv.assignment_assignee_email_mode ?? "email";
+      if (mode === "relative") {
+        const label = relativeAssigneeLabel(adv.assignment_assignee_email_relative);
+        if (label) parts.push(`${field.label}: ${label}`);
+      } else if (adv.assignment_assignee_email) {
+        parts.push(`${field.label}: "${adv.assignment_assignee_email}"`);
+      }
     } else if (field.type === "text") {
       const val = adv[key];
       if (val) parts.push(`${field.label}: "${val}"`);
@@ -288,6 +311,20 @@ export default function HearingsFilterBar({ filters, onChange, fields, canHide, 
                 <button type="button" className={`${styles.shortcut} ${filters.hearingDateFrom === weekBounds(1).start && filters.hearingDateTo === weekBounds(1).end ? styles.shortcutActive : ""}`} onClick={() => { const b = weekBounds(1); applyDateRange(b.start, b.end); }} title={weekBoundsTitle(1)}>Next Week</button>
               </div>
             </>
+          )}
+          {filters.hearingDateMode === "relative" && (
+            <div className={styles.weekShortcuts}>
+              {RELATIVE_DATE_RANGES.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`${styles.shortcut} ${filters.hearingDateRelative === opt.value ? styles.shortcutActive : ""}`}
+                  onClick={() => set("hearingDateRelative", opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           )}
         </div>}
 
@@ -483,13 +520,44 @@ export default function HearingsFilterBar({ filters, onChange, fields, canHide, 
                 {fields.assignment_assignee_email && (
                   <div className={styles.filterGroup}>
                     <span className={styles.label}>Assignee</span>
-                    <input
-                      type="text"
-                      className={styles.textInput}
-                      placeholder="email…"
-                      value={filters.advanced?.assignment_assignee_email ?? ""}
-                      onChange={(e) => setAdvanced("assignment_assignee_email", e.target.value)}
-                    />
+                    <div className={styles.segmented}>
+                      {[
+                        { value: "email", label: "Email" },
+                        { value: "relative", label: "Relative" },
+                      ].map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          className={`${styles.seg} ${(filters.advanced?.assignment_assignee_email_mode ?? "email") === opt.value ? styles.segActive : ""}`}
+                          onClick={() => setAdvanced("assignment_assignee_email_mode", opt.value)}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    {(filters.advanced?.assignment_assignee_email_mode ?? "email") === "email" && (
+                      <input
+                        type="text"
+                        className={styles.textInput}
+                        placeholder="email…"
+                        value={filters.advanced?.assignment_assignee_email ?? ""}
+                        onChange={(e) => setAdvanced("assignment_assignee_email", e.target.value)}
+                      />
+                    )}
+                    {filters.advanced?.assignment_assignee_email_mode === "relative" && (
+                      <div className={styles.weekShortcuts}>
+                        {RELATIVE_ASSIGNEES.map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            className={`${styles.shortcut} ${filters.advanced?.assignment_assignee_email_relative === opt.value ? styles.shortcutActive : ""}`}
+                            onClick={() => setAdvanced("assignment_assignee_email_relative", opt.value)}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
                 {fields.assignment_bill_number && (

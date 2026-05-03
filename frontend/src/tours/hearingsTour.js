@@ -5,6 +5,7 @@ export function createHearingsTour({
   isEditor = false,
   isLoggedIn = false,
   activeView = "list",
+  canSystemEdit = false,
 } = {}) {
   const isCalendar = activeView === "calendar";
 
@@ -35,14 +36,15 @@ export function createHearingsTour({
               element: "#tour-saved-reports",
               popover: {
                 title: "Saved Reports",
-                description:
-                  "Save the criteria you've built as a named report and re-load it with one click. Click any badge to load that report. ★ marks your default — it loads automatically when you return to this page. System reports are visible to all users; user reports are private to you. Toggle 'Include Inactive' to see archived reports.",
+                description: canSystemEdit
+                  ? "Save the criteria you've built as a named report and re-load it with one click. Click any badge to load that report. ★ marks your default — it loads automatically when you return to this page. System reports are visible to all users; user reports are private to you. Toggle 'Include Inactive' to see archived reports."
+                  : "Pick a report to load it — these are the system reports built by your admin. ★ marks your default and loads automatically when you return to this page; use the ☆/★ Default Report button at the bottom-right of this section to set or unset your default for the loaded report. Toggle 'Include Inactive' to see archived reports.",
               },
             },
           ]
         : []),
 
-      ...(!isCalendar
+      ...(!isCalendar && canSystemEdit
         ? [
             {
               element: "#tour-report-criteria",
@@ -111,8 +113,9 @@ export function createHearingsTour({
         element: "#tour-meetings-search",
         popover: {
           title: "Search",
-          description:
-            "Filter the hearings shown on this page by committee, bill number, agenda content, location, or your own notes. Search runs locally on the loaded hearings — narrow with Report Criteria first if you don't see what you expect.",
+          description: canSystemEdit
+            ? "Filter the hearings shown on this page by committee, bill number, agenda content, location, or your own notes. Search runs locally on the loaded hearings — narrow with Report Criteria first if you don't see what you expect."
+            : "Filter the hearings shown on this page by committee, bill number, agenda content, location, or your own notes. Search runs locally on the loaded hearings — pick a different report above if you don't see what you expect.",
         },
       },
 

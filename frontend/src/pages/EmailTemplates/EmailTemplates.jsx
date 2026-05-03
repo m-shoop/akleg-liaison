@@ -26,6 +26,7 @@ export default function EmailTemplates() {
   const [bodyMarkdown, setBodyMarkdown] = useState("");
   const [defaultCcEmail, setDefaultCcEmail] = useState("");
   const [previewHearingId, setPreviewHearingId] = useState("");
+  const [previewBillId, setPreviewBillId] = useState("");
   const [previewCancelReason, setPreviewCancelReason] = useState(
     "Bill removed from agenda (sample reason)",
   );
@@ -64,6 +65,8 @@ export default function EmailTemplates() {
         }
         if (hrs.length > 0) {
           setPreviewHearingId(String(hrs[0].id));
+          const firstBill = hrs[0].bills?.[0];
+          setPreviewBillId(firstBill ? String(firstBill.bill_id) : "");
         }
       })
       .catch((err) => setError(err.message));
@@ -88,6 +91,28 @@ export default function EmailTemplates() {
   // only has a real value during an actual cancel flow. Without a sample, the
   // preview shows "Reason:" with nothing after it.
   const isCancelTemplate = activeKey?.includes("canceled");
+
+  const previewHearing = useMemo(
+    () => hearings.find((h) => String(h.id) === previewHearingId) ?? null,
+    [hearings, previewHearingId],
+  );
+  const previewBills = previewHearing?.bills ?? [];
+
+  // Reset the bill picker when the hearing changes (or when the previously
+  // selected bill is no longer on the new hearing's agenda). Mirrors the
+  // assignment-modal pattern: bill choices are scoped to a specific hearing.
+  useEffect(() => {
+    if (previewBills.length === 0) {
+      if (previewBillId !== "") setPreviewBillId("");
+      return;
+    }
+    const stillPresent = previewBills.some(
+      (b) => String(b.bill_id) === previewBillId,
+    );
+    if (!stillPresent) {
+      setPreviewBillId(String(previewBills[0].bill_id));
+    }
+  }, [previewBills, previewBillId]);
 
   // Default the Sample Assignment Type to match the template's intent so an
   // admin opening the awareness template sees "Awareness" in the preview
@@ -116,6 +141,7 @@ export default function EmailTemplates() {
           parseInt(previewHearingId, 10),
           token,
           {
+            billId: previewBillId ? parseInt(previewBillId, 10) : undefined,
             assignmentType: previewAssignmentType,
             ...(isCancelTemplate ? { cancellationReason: previewCancelReason } : {}),
           },
@@ -132,6 +158,7 @@ export default function EmailTemplates() {
   }, [
     activeKey,
     previewHearingId,
+    previewBillId,
     activeTemplate,
     token,
     isCancelTemplate,
@@ -163,6 +190,7 @@ export default function EmailTemplates() {
           parseInt(previewHearingId, 10),
           token,
           {
+            billId: previewBillId ? parseInt(previewBillId, 10) : undefined,
             assignmentType: previewAssignmentType,
             ...(isCancelTemplate ? { cancellationReason: previewCancelReason } : {}),
           },
@@ -187,6 +215,7 @@ export default function EmailTemplates() {
         parseInt(previewHearingId, 10),
         token,
         {
+          billId: previewBillId ? parseInt(previewBillId, 10) : undefined,
           assignmentType: previewAssignmentType,
           ...(isCancelTemplate ? { cancellationReason: previewCancelReason } : {}),
         },
@@ -318,6 +347,25 @@ export default function EmailTemplates() {
               {hearings.map((h) => (
                 <option key={h.id} value={h.id}>
                   {h.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className={styles.fieldLabel}>
+            Bill
+            <select
+              className={styles.input}
+              value={previewBillId}
+              onChange={(e) => setPreviewBillId(e.target.value)}
+              disabled={previewBills.length === 0}
+            >
+              {previewBills.length === 0 && (
+                <option value="">— No bills on this hearing's agenda —</option>
+              )}
+              {previewBills.map((b) => (
+                <option key={b.bill_id} value={b.bill_id}>
+                  {b.bill_number}{b.content ? ` — ${b.content}` : ""}
                 </option>
               ))}
             </select>

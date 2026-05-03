@@ -61,6 +61,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(
         String(255), unique=True, nullable=False, index=True
     )
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     user_status: Mapped[UserStatus] = mapped_column(
         Enum(UserStatus, name="user_status_enum"),

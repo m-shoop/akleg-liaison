@@ -37,6 +37,33 @@ function ordinal(n) {
   }
 }
 
+export const RELATIVE_DATE_RANGES = [
+  { value: "today", label: "Today" },
+  { value: "last_week", label: "Last Week" },
+  { value: "this_week", label: "This Week" },
+  { value: "next_week", label: "Next Week" },
+];
+
+export function relativeDateRangeLabel(name) {
+  return RELATIVE_DATE_RANGES.find((o) => o.value === name)?.label ?? null;
+}
+
+/**
+ * Resolves a symbolic relative date range to literal {start, end} ISO date
+ * strings.  For "today" start === end.  Returns null for unknown names so
+ * callers can fall through gracefully.
+ */
+export function resolveRelativeRange(name) {
+  if (name === "today") {
+    const t = todayJuneau();
+    return { start: t, end: t };
+  }
+  if (name === "last_week") return weekBounds(-1);
+  if (name === "this_week") return weekBounds(0);
+  if (name === "next_week") return weekBounds(1);
+  return null;
+}
+
 export function weekBoundsTitle(offsetWeeks) {
   const { start, end } = weekBounds(offsetWeeks);
   const fmt = (iso) => {

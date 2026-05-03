@@ -4,7 +4,6 @@ Covers:
 - POST /workflows            — creating a tracking request
 - POST /workflows/{id}/actions — admin approve / deny
 - GET  /workflows            — per-user visibility
-- GET  /workflows/has-open   — per-user open-work flag
 """
 
 from httpx import AsyncClient
@@ -286,40 +285,6 @@ async def test_admin_sees_all_workflows(client: AsyncClient, db, uid: str):
     assert resp.status_code == 200
     bill_ids = {wf["bill"]["id"] for wf in resp.json() if wf["bill"]}
     assert {bill_a, bill_b}.issubset(bill_ids)
-
-
-# ---------------------------------------------------------------------------
-# GET /workflows/has-open
-# ---------------------------------------------------------------------------
-
-
-async def test_has_open_unauthenticated_returns_false(client: AsyncClient):
-    resp = await client.get("/workflows/has-open")
-    assert resp.status_code == 200
-    assert resp.json() == {"has_open": False}
-
-
-async def test_has_open_reflects_user_workflows(client: AsyncClient, db, uid: str):
-    _, viewer_tok = await _viewer_token(client, db, uid)
-
-    resp = await client.get(
-        "/workflows/has-open",
-        headers={"Authorization": f"Bearer {viewer_tok}"},
-    )
-    assert resp.json() == {"has_open": False}
-
-    bill_id = await _seed_bill(db, uid)
-    await client.post(
-        "/workflows",
-        json={"bill_id": bill_id},
-        headers={"Authorization": f"Bearer {viewer_tok}"},
-    )
-
-    resp = await client.get(
-        "/workflows/has-open",
-        headers={"Authorization": f"Bearer {viewer_tok}"},
-    )
-    assert resp.json() == {"has_open": True}
 
 
 # ---------------------------------------------------------------------------

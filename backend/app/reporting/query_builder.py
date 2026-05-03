@@ -172,6 +172,42 @@ def _build_exists_condition(
     return _build_exists_shell(report, field_def, [col_condition])
 
 
+def _build_aggregate_subquery(report: ReportDefinition, field_def: FieldDefinition) -> str:
+    """Emit an aggregate field as a correlated scalar subquery.
+
+    Walks the same join chain (leaf → root via depends_on) that would otherwise
+    be added to the main FROM, but folds it into a self-contained SELECT in the
+    outer column list. Keeps multiple one-to-many aggregates (outcomes,
+    fiscal_notes, sponsors, …) from cross-producting against each other.
+    """
+    chain: list[str] = []
+    key = field_def.join
+    while key:
+        chain.append(key)
+        key = report.joins[key].depends_on
+
+    root_key = chain[-1]
+    root_jd = report.joins[root_key]
+    root_table = ENTITY_TABLE[root_jd.entity]
+    root_table_ref = f"{root_table} AS {root_jd.alias}" if root_jd.alias else root_table
+
+    join_parts: list[str] = []
+    for join_key in reversed(chain[:-1]):
+        jd = report.joins[join_key]
+        table = ENTITY_TABLE[jd.entity]
+        table_ref = f"{table} AS {jd.alias}" if jd.alias else table
+        clause = f"{jd.join_type} JOIN {table_ref} ON {jd.on}"
+        for cond in jd.fixed_conditions:
+            clause += f" AND {cond}"
+        join_parts.append(clause)
+
+    where_parts = [root_jd.on, *root_jd.fixed_conditions]
+    where_clause = " AND ".join(where_parts)
+    joins_sql = " ".join(join_parts)
+
+    return f"(SELECT {field_def.aggregate} FROM {root_table_ref} {joins_sql} WHERE {where_clause})"
+
+
 def _build_filter_group(
     report: ReportDefinition,
     group: FilterGroup,
@@ -321,7 +357,10 @@ async def run_report(
     required_joins: set[str] = set(filter_joins)
     for col in columns:
         field = report.fields[col]
-        if field.join:
+        # Aggregate columns become correlated scalar subqueries (see
+        # _build_aggregate_subquery), so their join chain stays out of the main
+        # FROM — that's what avoids cross-producting one-to-many children.
+        if field.join and not field.aggregate:
             required_joins.add(field.join)
     for sf in sort_fields:
         if sf.join:
@@ -333,7 +372,8 @@ async def run_report(
 
     has_aggregates = any(report.fields[c].aggregate for c in columns)
     select_exprs = ", ".join(
-        f"{report.fields[c].aggregate} AS {c}" if report.fields[c].aggregate
+        f"{_build_aggregate_subquery(report, report.fields[c])} AS {c}"
+        if report.fields[c].aggregate
         else f"{report.fields[c].column} AS {c}"
         for c in columns
     )

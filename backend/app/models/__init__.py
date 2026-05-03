@@ -18,7 +18,12 @@ from app.models.email import (
 from app.models.fiscal_note_query_failed import FiscalNoteQueryFailed
 from app.models.hearing import AgendaItem, CommitteeHearing, Hearing, HearingAgendaVersion
 from app.models.tag import BillTag, Tag
-from app.models.saved_report import DefaultUserReport, PublicationLevel, SavedReport
+from app.models.saved_report import (
+    DefaultUserReport,
+    PublicationLevel,
+    SavedReport,
+    UserReportOrder,
+)
 from app.models.user import Permission, Role, RolePermission, TokenType, User, UserRoles, UserStatus, UserToken
 from app.models.workflow import (
     BillTrackingRequest,
@@ -67,4 +72,5 @@ __all__ = [
     "SavedReport",
     "DefaultUserReport",
     "PublicationLevel",
+    "UserReportOrder",
 ]

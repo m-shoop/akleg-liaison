@@ -76,37 +76,6 @@ async def list_workflows(
     return list(result.scalars().all())
 
 
-async def has_open_workflows(
-    db: AsyncSession,
-    *,
-    created_by_user_id: int | None = None,
-) -> bool:
-    """
-    Return True if there are open request_bill_tracking workflows.
-    If created_by_user_id is provided, scope to that user's workflows.
-    """
-    q = select(
-        exists().where(
-            and_(
-                Workflow.type == WorkflowType.REQUEST_BILL_TRACKING,
-                Workflow.status == WorkflowStatus.OPEN,
-            )
-        )
-    )
-    if created_by_user_id is not None:
-        q = select(
-            exists().where(
-                and_(
-                    Workflow.type == WorkflowType.REQUEST_BILL_TRACKING,
-                    Workflow.status == WorkflowStatus.OPEN,
-                    Workflow.created_by == created_by_user_id,
-                )
-            )
-        )
-    result = await db.execute(q)
-    return bool(result.scalar())
-
-
 async def get_open_workflow_for_bill_by_user(
     db: AsyncSession, bill_id: int, user_id: int
 ) -> Workflow | None:
@@ -140,39 +109,6 @@ async def user_has_any_workflow_for_bill(
             )
         )
     )
-    return bool(result.scalar())
-
-
-async def has_open_hearing_assignments(
-    db: AsyncSession,
-    *,
-    assignee_user_id: int | None = None,
-) -> bool:
-    """
-    Return True if there are open hearing_assignment workflows.
-    If assignee_user_id is provided, scope to assignments for that user.
-    """
-    if assignee_user_id is not None:
-        q = select(
-            exists().where(
-                and_(
-                    Workflow.type == WorkflowType.HEARING_ASSIGNMENT,
-                    Workflow.status == WorkflowStatus.OPEN,
-                    HearingAssignment.workflow_id == Workflow.id,
-                    HearingAssignment.assignee_id == assignee_user_id,
-                )
-            )
-        )
-    else:
-        q = select(
-            exists().where(
-                and_(
-                    Workflow.type == WorkflowType.HEARING_ASSIGNMENT,
-                    Workflow.status == WorkflowStatus.OPEN,
-                )
-            )
-        )
-    result = await db.execute(q)
     return bool(result.scalar())
 
 

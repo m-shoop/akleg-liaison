@@ -29,6 +29,7 @@ from app.schemas.email import (
     EmailTemplatePreviewResponse,
     EmailTemplateRead,
     EmailTemplateUpdate,
+    PreviewBillItem,
     PreviewHearingItem,
 )
 from app.services.email_notification_dispatcher import render_for_user
@@ -105,16 +106,22 @@ async def list_preview_hearings(db: AsyncSession = Depends(get_db)):
     for h in hearings:
         committee = h.committee_name or "Floor"
         time_str = h.hearing_time.strftime("%H:%M") if h.hearing_time else "—"
-        bill_numbers = sorted(
-            {
-                ai.bill_number
-                for ai in h.agenda_items
-                if ai.is_bill and ai.bill_number
-            }
-        )
-        bills_label = ", ".join(bill_numbers) if bill_numbers else "(no bills)"
+        # De-duplicate by bill_id so a bill appearing twice on the agenda
+        # collapses into a single picker entry. The Test Send picker mirrors
+        # the assignment-modal pattern (HearingAssignmentsPanel) where bill
+        # items are listed once per bill.
+        bills_by_id: dict[int, PreviewBillItem] = {}
+        for ai in h.agenda_items:
+            if ai.is_bill and ai.bill_id and ai.bill_number and ai.bill_id not in bills_by_id:
+                bills_by_id[ai.bill_id] = PreviewBillItem(
+                    bill_id=ai.bill_id,
+                    bill_number=ai.bill_number,
+                    content=ai.content,
+                )
+        bills = sorted(bills_by_id.values(), key=lambda b: b.bill_number)
+        bills_label = ", ".join(b.bill_number for b in bills) if bills else "(no bills)"
         label = f"{h.hearing_date.isoformat()} {time_str} {committee} — {bills_label}"
-        items.append(PreviewHearingItem(id=h.id, label=label))
+        items.append(PreviewHearingItem(id=h.id, label=label, bills=bills))
 
     return items
 
@@ -223,6 +230,7 @@ async def preview_template_route(
             template_key=template_key,
             hearing_id=body.hearing_id,
             user=current_user.user,
+            bill_id=body.bill_id,
             cancellation_reason=body.cancellation_reason,
             assignment_type=body.assignment_type,
         )
@@ -252,6 +260,7 @@ async def test_send_template_route(
             template_key=template_key,
             hearing_id=body.hearing_id,
             user=current_user.user,
+            bill_id=body.bill_id,
             cancellation_reason=body.cancellation_reason,
             assignment_type=body.assignment_type,
         )

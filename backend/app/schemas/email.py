@@ -32,6 +32,7 @@ class EmailTemplateUpdate(BaseModel):
 
 class EmailTemplatePreviewRequest(BaseModel):
     hearing_id: int
+    bill_id: int | None = None
     cancellation_reason: str | None = None
     assignment_type: AssignmentType | None = None
 
@@ -42,9 +43,16 @@ class EmailTemplatePreviewResponse(BaseModel):
     text_body: str
 
 
+class PreviewBillItem(BaseModel):
+    bill_id: int
+    bill_number: str
+    content: str | None = None
+
+
 class PreviewHearingItem(BaseModel):
     id: int
     label: str  # "<date> <time> <committee> <bill #s>"
+    bills: list[PreviewBillItem] = []
 
 
 # ---------------------------------------------------------------------------
