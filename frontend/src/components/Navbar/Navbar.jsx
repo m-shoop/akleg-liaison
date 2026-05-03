@@ -40,16 +40,18 @@ export default function Navbar() {
               Hearings
             </NavLink>
           </li>
-          <li>
-            <NavLink
-              to="/requests"
-              className={({ isActive }) =>
-                isActive ? `${styles.link} ${styles.active}` : styles.link
-              }
-            >
-              Tasks
-            </NavLink>
-          </li>
+          {isLoggedIn && (
+            <li>
+              <NavLink
+                to="/requests"
+                className={({ isActive }) =>
+                  isActive ? `${styles.link} ${styles.active}` : styles.link
+                }
+              >
+                Tasks
+              </NavLink>
+            </li>
+          )}
           <li className={`${styles.dropdown} ${styles.desktopOnly}`}>
             <button className={styles.dropdownBtn}>Helpful Links ▾</button>
             <ul className={styles.dropdownMenu}>

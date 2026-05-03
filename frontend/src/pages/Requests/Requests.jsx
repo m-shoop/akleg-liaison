@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { addWorkflowAction, updateHearingAssignmentType } from "../../api/workflows";
 import { useAssigneeOptedOut, OPT_OUT_WARNING } from "../../hooks/useAssigneeOptedOut";
@@ -883,7 +884,7 @@ function loadStoredRequestsCriteria() {
 }
 
 export default function Tasks() {
-  const { token, username, can } = useAuth();
+  const { token, username, can, isLoggedIn } = useAuth();
   const canApprove = can("workflow:approve-tracking");
   const canViewAll = can("workflow:view-all");
   const canManageAssignments = can("workflow:view-all");
@@ -1042,6 +1043,8 @@ export default function Tasks() {
     (a) => !CLOSED_ASSIGNMENT_ACTIONS.has(a.latest_action_type)
   ).length;
   const openRequestCount = requests.filter((r) => r.workflow_status === "open").length;
+
+  if (!isLoggedIn) return <Navigate to="/login" replace />;
 
   return (
     <div className={styles.page}>
