@@ -21,10 +21,17 @@ async def search_users(session: AsyncSession, query: str, limit: int = 20) -> li
     return list(result.scalars().all())
 
 
-async def list_active_users(session: AsyncSession) -> list[User]:
+async def list_manageable_users(session: AsyncSession) -> list[User]:
+    """Users an admin can manage on the Settings page.
+
+    Includes both `active` and `inactive` accounts so admins can update names
+    and comm preferences for users who registered but haven't completed setup
+    (or were temporarily deactivated). Excludes soft-deleted users — they
+    should not surface in any admin dropdown.
+    """
     result = await session.execute(
         select(User)
-        .where(User.user_status == UserStatus.active)
+        .where(User.user_status != UserStatus.deleted)
         .order_by(User.name.nulls_last(), User.email)
     )
     return list(result.scalars().all())

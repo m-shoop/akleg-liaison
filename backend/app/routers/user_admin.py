@@ -1,8 +1,9 @@
 """Admin user-management API.
 
-Lets admins (gated by comm-prefs:admin) list active users and update each
-user's display name. Email remains the unique identifier; name is purely a
-human-readable label surfaced in dropdowns and assignment displays.
+Lets admins (gated by comm-prefs:admin) list manageable users (active +
+inactive, excluding soft-deleted) and update each user's display name. Email
+remains the unique identifier; name is purely a human-readable label surfaced
+in dropdowns and assignment displays.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,9 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import require_permission
+from app.models.user import UserStatus
 from app.repositories.user_repository import (
     get_user_by_id,
-    list_active_users,
+    list_manageable_users,
     update_user_name,
 )
 
@@ -25,10 +27,15 @@ class UserRead(BaseModel):
     id: int
     email: str
     name: str | None
+    user_status: UserStatus
 
 
 class UserNameUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=255)
+
+
+def _user_read(u) -> UserRead:
+    return UserRead(id=u.id, email=u.email, name=u.name, user_status=u.user_status)
 
 
 @router.get(
@@ -37,8 +44,8 @@ class UserNameUpdate(BaseModel):
     dependencies=[Depends(require_permission("comm-prefs:admin"))],
 )
 async def list_users(db: AsyncSession = Depends(get_db)) -> list[UserRead]:
-    users = await list_active_users(db)
-    return [UserRead(id=u.id, email=u.email, name=u.name) for u in users]
+    users = await list_manageable_users(db)
+    return [_user_read(u) for u in users]
 
 
 @router.patch(
@@ -57,4 +64,4 @@ async def patch_user(
     cleaned = body.name.strip() if body.name else None
     updated = await update_user_name(db, user_id, cleaned or None)
     await db.commit()
-    return UserRead(id=updated.id, email=updated.email, name=updated.name)
+    return _user_read(updated)

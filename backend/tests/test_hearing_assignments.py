@@ -384,7 +384,7 @@ async def test_assignees_endpoint_filters_by_query(client: AsyncClient, db, uid:
         headers={"Authorization": f"Bearer {admin_tok}"},
     )
     assert resp.status_code == 200
-    assert target_email in resp.json()
+    assert target_email in [u["email"] for u in resp.json()]
 
 
 # ---------------------------------------------------------------------------

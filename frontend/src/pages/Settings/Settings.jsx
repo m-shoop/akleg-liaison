@@ -284,11 +284,15 @@ export default function Settings() {
               onChange={(e) => setSelectedUserId(e.target.value)}
             >
               <option value="">— Select a user —</option>
-              {allUsers.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name ? `${u.name} (${u.email})` : u.email}
-                </option>
-              ))}
+              {allUsers.map((u) => {
+                const base = u.name ? `${u.name} (${u.email})` : u.email;
+                const label = u.user_status === "inactive" ? `${base} — inactive` : base;
+                return (
+                  <option key={u.id} value={u.id}>
+                    {label}
+                  </option>
+                );
+              })}
             </select>
           </div>
           {selectedUserId && (
