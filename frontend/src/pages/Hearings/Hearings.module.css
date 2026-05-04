@@ -386,7 +386,7 @@
 }
 
 .notice {
-  color: darkorange;
+  color: var(--color-text-primary);
   font-size: 0.95rem;
   padding: 1rem 0;
 }

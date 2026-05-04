@@ -22,7 +22,18 @@ function groupByDate(hearings) {
   }, {});
 }
 
-export default function PrintHearingsSection({ hearings, startDate, endDate }) {
+const PRINT_VISIBLE_ASSIGNMENT_TYPES = new Set([
+  "hearing_assigned",
+  "hearing_reassigned",
+  "hearing_assignment_complete",
+  "reassignment_request",
+]);
+
+function assignmentTypeLabel(t) {
+  return t === "awareness" ? "Awareness" : "Monitoring";
+}
+
+export default function PrintHearingsSection({ hearings, startDate, endDate, showAssignments = false }) {
   if (hearings === null) return null;
 
   const visible = hearings.filter((h) => !h.hidden);
@@ -98,6 +109,38 @@ export default function PrintHearingsSection({ hearings, startDate, endDate }) {
                           </table>
                         )}
                       </div>
+                      {showAssignments && (() => {
+                        const assignments = (h.hearing_assignments_summary ?? []).filter(
+                          (a) => PRINT_VISIBLE_ASSIGNMENT_TYPES.has(a.latest_action_type)
+                        );
+                        return (
+                          <div className={styles.printAssignmentsBox}>
+                            <div className={styles.printAssignmentsTitle}>Assignments</div>
+                            {assignments.length === 0 ? (
+                              <p className={styles.printAssignmentsEmpty}>—</p>
+                            ) : (
+                              <table className={styles.printAssignmentsTable}>
+                                <thead>
+                                  <tr>
+                                    <th>Assigned To</th>
+                                    <th>Bill</th>
+                                    <th>Type</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {assignments.map((a) => (
+                                    <tr key={a.id}>
+                                      <td className={styles.printAssignmentAssignee}>{a.assignee_name || a.assignee_email}</td>
+                                      <td className={styles.printAssignmentBill}>{a.bill_number || ""}</td>
+                                      <td className={styles.printAssignmentType}>{assignmentTypeLabel(a.assignment_type)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        );
+                      })()}
                       <div className={styles.printDpsNotes}>{h.dps_notes ?? ""}</div>
                     </div>
                     {h.last_sync && (

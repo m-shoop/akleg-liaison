@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useReactToPrint } from "react-to-print";
-import { fetchHearings, fetchUpcomingHearings } from "../../api/hearings";
+import { fetchUpcomingHearings } from "../../api/hearings";
 import { fetchReport, fetchReportMeta } from "../../api/reports";
 import { fetchTags } from "../../api/tags";
 import { fetchBillTrackingState } from "../../api/workflows";
@@ -386,8 +386,40 @@ export default function Home() {
 
   async function exportPDF() {
     if (printStartDate && printEndDate) {
-      const data = await fetchHearings({ startDate: printStartDate, endDate: printEndDate, token });
-      setPrintMeetings(data);
+      const columns = [
+        "id", "hearing_date", "hearing_time", "chamber", "hearing_type", "location",
+        "legislature_session", "is_active", "hidden", "last_sync", "committee_name",
+        "committee_type", "committee_url", "agenda_items",
+      ];
+      if (can("hearing-notes:view")) columns.push("dps_notes");
+      if (can("hearing-assignment:view")) columns.push("hearing_assignments_summary");
+      const filters = {
+        logic: "AND",
+        conditions: [
+          { field: "hearing_date", op: "between", value: [printStartDate, printEndDate] },
+          { field: "is_active", op: "equals", value: true },
+        ],
+        groups: [],
+      };
+      const data = await fetchReport({
+        reportId: "hearings",
+        columns,
+        filters,
+        sortBy: ["hearing_date", "hearing_time"],
+        sortDir: "asc",
+        pageSize: 2000,
+        token,
+      });
+      const hearings = data.rows.map((row) => ({
+        ...row,
+        agenda_items: Array.isArray(row.agenda_items)
+          ? [...row.agenda_items].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+          : [],
+        hearing_assignments_summary: Array.isArray(row.hearing_assignments_summary)
+          ? row.hearing_assignments_summary
+          : [],
+      }));
+      setPrintMeetings(hearings);
       setPendingPrint(true);
     } else {
       setPrintMeetings(null);
@@ -704,7 +736,12 @@ export default function Home() {
 
       <div ref={contentRef} style={loading ? { display: "none" } : undefined}>
         <ReportHeaderEditor printStartDate={printStartDate} printEndDate={printEndDate} />
-        <PrintHearingsSection hearings={printMeetings} startDate={printStartDate} endDate={printEndDate} />
+        <PrintHearingsSection
+          hearings={printMeetings}
+          startDate={printStartDate}
+          endDate={printEndDate}
+          showAssignments={can("hearing-assignment:view")}
+        />
 
         <p className={styles.aiLegendPrint}>
           ✨ Content marked with this symbol is AI-generated and may contain false information. Please review for accuracy.

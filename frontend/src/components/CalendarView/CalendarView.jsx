@@ -489,10 +489,7 @@ export default function CalendarView({
             <div className={styles.calendarDaysRow}>
               {days.map((dateStr) => {
                 const dayHearings = hearingsByDate[dateStr] ?? [];
-                const timedLayout = [
-                  ...computeDayLayout(dayHearings.filter((h) => h.hearing_time && h.committee_name)),
-                  ...computeDayLayout(dayHearings.filter((h) => h.hearing_time && !h.committee_name)),
-                ];
+                const timedLayout = computeDayLayout(dayHearings.filter((h) => h.hearing_time));
                 const untimedHearings = dayHearings.filter((h) => !h.hearing_time);
 
                 return (

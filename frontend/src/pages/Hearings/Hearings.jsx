@@ -804,7 +804,6 @@ export default function Hearings() {
       {activeView === "list" && allHearings !== null && hearings.length === 0 && !loading && (
         <p className={styles.notice}>
           No hearings match the current criteria.
-          {can("hearing:query") && ' Use "Refresh hearings from akleg.gov" to import them.'}
         </p>
       )}
 
