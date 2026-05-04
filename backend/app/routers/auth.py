@@ -264,8 +264,12 @@ async def validate_token(
 ):
     """
     Validate a registration or password-reset token from an email link.
-    On success: clears the token from the DB, sets a short-lived httpOnly
-    cookie, and returns the purpose so the frontend can navigate to /set-password.
+    On success: sets a short-lived httpOnly cookie and returns the purpose so
+    the frontend can navigate to /set-password. The token row is *not* deleted
+    here — corporate email security (Microsoft Safe Links, Gmail's URL scanner)
+    pre-fetches every link in inbound mail, which would consume single-use
+    tokens before the human clicks. Token deletion happens in /set-password,
+    which the scanner cannot replicate without an actual password payload.
     Rate-limited to 10 requests/hour/IP by the limiter applied in main.py.
     """
     if body.type not in ("registration", "password_reset"):
@@ -301,10 +305,8 @@ async def validate_token(
             detail=body.type,  # "registration" or "password_reset" — used by frontend
         )
 
-    # Valid — clear token, issue set-password cookie
-    await delete_user_token(db, matched_token.user_id, token_type)
-    await db.commit()
-
+    # Valid — issue set-password cookie. Token row is left in place; it gets
+    # deleted in /set-password once the user actually completes the flow.
     from app.config import settings
     cookie_token = create_set_password_cookie_token(matched_token.user_id, body.type)
     response.set_cookie(
@@ -360,6 +362,8 @@ async def set_password(
         raise HTTPException(status_code=404, detail="User not found")
 
     await activate_user_with_password(db, user_id, hash_password(body.password))
+    token_type = TokenType.registration if purpose == "registration" else TokenType.password_reset
+    await delete_user_token(db, user_id, token_type)
     action = "account_activated" if purpose == "registration" else "password_reset"
     await log_action(
         db,
