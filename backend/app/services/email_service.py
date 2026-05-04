@@ -1,16 +1,15 @@
 """
-Postmark email service.
+Transactional email service (Resend).
 
-Sends transactional emails for account registration and password reset.
-The HTML templates mirror the website's color palette.
+Sends the activation and password-reset emails. HTML templates mirror the
+website's color palette.
 """
 
 import httpx
 
 from app.config import settings
 
-_POSTMARK_API = "https://api.postmarkapp.com/email"
-_FROM_ADDRESS = "contact@aklegup.com"
+_RESEND_API = "https://api.resend.com/emails"
 _SUPPORT_ADDRESS = "contact@aklegup.com"
 
 # ---------------------------------------------------------------------------
@@ -159,18 +158,18 @@ async def send_password_reset_email(to_email: str, token: str) -> None:
 async def _send(to_email: str, subject: str, html_body: str) -> None:
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            _POSTMARK_API,
+            _RESEND_API,
             headers={
                 "Accept": "application/json",
                 "Content-Type": "application/json",
-                "X-Postmark-Server-Token": settings.postmark_server_token,
+                "Authorization": f"Bearer {settings.resend_api_key}",
             },
             json={
-                "From": _FROM_ADDRESS,
-                "To": to_email,
-                "Subject": subject,
-                "HtmlBody": html_body,
-                "MessageStream": "outbound",
+                "from": settings.email_from_address,
+                "to": to_email,
+                "reply_to": settings.email_reply_to_address,
+                "subject": subject,
+                "html": html_body,
             },
             timeout=10.0,
         )

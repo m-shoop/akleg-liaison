@@ -1,14 +1,14 @@
 """
 Background worker that drains pending email_notifications rows and sends them
-via Postmark.
+via Resend.
 
 Lifecycle: started by app.main as an asyncio.Task. Iterates every
 EMAIL_NOTIFICATION_WORKER_INTERVAL_SECONDS seconds, picks up to
 EMAIL_NOTIFICATION_WORKER_BATCH_SIZE rows per pass.
 
 State machine (per the design):
-- pending → sent if Postmark accepts.
-- pending → failed if Postmark rejects or the request raises.
+- pending → sent if Resend accepts.
+- pending → failed if Resend rejects or the request raises.
 - pending → suppressed if the user opted out between insert time and send time
   (this layer rechecks the preference; the dispatcher already wrote
   suppressed_reason for users who were opted out at insert time).
@@ -37,7 +37,7 @@ from app.repositories.email_repository import (
 )
 from app.services.email_notification_service import (
     build_thread_headers,
-    send_via_postmark,
+    send_via_resend,
 )
 
 logger = logging.getLogger(__name__)
@@ -130,23 +130,23 @@ async def _process_batch(batch_size: int) -> int:
                     recipient_user_id=row.recipient_user_id,
                     before_id=row.id,
                 )
-            postmark_headers = build_thread_headers(
+            email_headers = build_thread_headers(
                 notification_id=row.id,
                 thread_root_notification_id=thread_root_id,
             )
 
             try:
-                await send_via_postmark(
+                await send_via_resend(
                     to_email=row.recipient_email,
                     subject=row.subject,
                     html_body=row.body,
                     text_body=text_body,
                     cc=cc_email,
-                    headers=postmark_headers,
+                    headers=email_headers,
                 )
             except Exception as exc:
                 logger.warning(
-                    "[email-worker] Postmark send failed for row %s: %s",
+                    "[email-worker] Resend send failed for row %s: %s",
                     row.id, exc,
                 )
                 await mark_notification_failed(db, row.id, str(exc)[:1000])

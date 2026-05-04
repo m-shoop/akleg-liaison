@@ -587,10 +587,9 @@ def test_build_thread_headers_root_only_sets_message_id():
     headers = build_thread_headers(
         notification_id=42, thread_root_notification_id=None
     )
-    by_name = {h["Name"]: h["Value"] for h in headers}
-    assert by_name["Message-ID"] == "<email-notification-42@aklegup.com>"
-    assert "In-Reply-To" not in by_name
-    assert "References" not in by_name
+    assert headers["Message-ID"] == "<email-notification-42@aklegup.com>"
+    assert "In-Reply-To" not in headers
+    assert "References" not in headers
 
 
 def test_build_thread_headers_followup_references_root():
@@ -599,10 +598,9 @@ def test_build_thread_headers_followup_references_root():
     headers = build_thread_headers(
         notification_id=99, thread_root_notification_id=42
     )
-    by_name = {h["Name"]: h["Value"] for h in headers}
-    assert by_name["Message-ID"] == "<email-notification-99@aklegup.com>"
-    assert by_name["In-Reply-To"] == "<email-notification-42@aklegup.com>"
-    assert by_name["References"] == "<email-notification-42@aklegup.com>"
+    assert headers["Message-ID"] == "<email-notification-99@aklegup.com>"
+    assert headers["In-Reply-To"] == "<email-notification-42@aklegup.com>"
+    assert headers["References"] == "<email-notification-42@aklegup.com>"
 
 
 async def test_thread_root_lookup_skips_unsent_and_self(client: AsyncClient, db, uid: str):

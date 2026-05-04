@@ -36,7 +36,7 @@ from app.services.email_notification_dispatcher import render_for_user
 from app.services.email_notification_service import (
     TEMPLATE_VARIABLES,
     TemplateRenderError,
-    send_via_postmark,
+    send_via_resend,
 )
 
 logger = logging.getLogger(__name__)
@@ -271,14 +271,14 @@ async def test_send_template_route(
         raise HTTPException(status_code=404, detail="Template or hearing not found")
     subject, html, text = rendered
     try:
-        await send_via_postmark(
+        await send_via_resend(
             to_email=current_user.user.email,
             subject=f"[TEST] {subject}",
             html_body=html,
             text_body=text,
         )
     except Exception as exc:
-        logger.warning("[test-send] Postmark failure: %s", exc)
-        raise HTTPException(status_code=502, detail=f"Postmark error: {exc}")
+        logger.warning("[test-send] Resend failure: %s", exc)
+        raise HTTPException(status_code=502, detail=f"Resend error: {exc}")
 
     return {"sent_to": current_user.user.email}

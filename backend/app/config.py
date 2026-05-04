@@ -10,7 +10,9 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 240  # 4 hours
 
-    postmark_server_token: str = ""
+    resend_api_key: str = ""
+    email_from_address: str = "Leg Up <noreply@mail.aklegup.com>"
+    email_reply_to_address: str = "contact@aklegup.com"
     frontend_base_url: str = "https://www.aklegup.com"
     cookie_secure: bool = True
 

@@ -6,7 +6,7 @@ Responsibilities:
 - Render a template's subject (plain-text format) and body (markdown -> HTML
   -> CSS-inlined HTML via premailer).
 - Issue and verify opt-out tokens via itsdangerous.
-- Send rendered notifications through Postmark with a plain-text fallback.
+- Send rendered notifications through Resend with a plain-text fallback.
 
 The render functions are pure so they can also serve the admin Live Preview /
 Test Send endpoints.
@@ -30,8 +30,7 @@ from app.models.workflow import AssignmentType
 logger = logging.getLogger(__name__)
 
 
-_POSTMARK_API = "https://api.postmarkapp.com/email"
-_FROM_ADDRESS = "contact@aklegup.com"
+_RESEND_API = "https://api.resend.com/emails"
 _SUPPORT_ADDRESS = "contact@aklegup.com"
 
 # Domain we sign Message-ID headers with. Should be a domain we own so the IDs
@@ -265,8 +264,8 @@ def build_thread_headers(
     *,
     notification_id: int,
     thread_root_notification_id: int | None,
-) -> list[dict[str, str]]:
-    """Build the Postmark Headers array for a notification.
+) -> dict[str, str]:
+    """Build the headers map for a notification.
 
     Always sets Message-ID. If thread_root_notification_id is given, also sets
     In-Reply-To and References pointing at that root so the recipient's mail
@@ -276,55 +275,55 @@ def build_thread_headers(
     hearing assignment — typically the assignment_created notification. Any
     cancellation we send afterwards threads back to it.
     """
-    headers: list[dict[str, str]] = [
-        {"Name": "Message-ID", "Value": message_id_for_notification(notification_id)},
-    ]
+    headers: dict[str, str] = {
+        "Message-ID": message_id_for_notification(notification_id),
+    }
     if thread_root_notification_id is not None:
         root = message_id_for_notification(thread_root_notification_id)
-        headers.append({"Name": "In-Reply-To", "Value": root})
-        headers.append({"Name": "References", "Value": root})
+        headers["In-Reply-To"] = root
+        headers["References"] = root
     return headers
 
 
 # ---------------------------------------------------------------------------
-# Postmark send
+# Resend send
 # ---------------------------------------------------------------------------
 
 
-async def send_via_postmark(
+async def send_via_resend(
     *,
     to_email: str,
     subject: str,
     html_body: str,
     text_body: str,
     cc: str | None = None,
-    headers: list[dict[str, str]] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> None:
-    """Send an email via Postmark. Raises on non-2xx; the worker translates
-    that into the row's error column.
+    """Send an email via Resend. Raises on non-2xx; the worker translates that
+    into the row's error column.
 
-    `headers` is forwarded to Postmark's `Headers` field — used for
+    `headers` is forwarded to Resend's `headers` field — used for
     Message-ID / In-Reply-To / References so cancellation emails thread with
     the original assignment notification in the recipient's inbox."""
     payload: dict[str, Any] = {
-        "From": _FROM_ADDRESS,
-        "To": to_email,
-        "Subject": subject,
-        "HtmlBody": html_body,
-        "TextBody": text_body,
-        "MessageStream": "outbound",
+        "from": settings.email_from_address,
+        "to": to_email,
+        "reply_to": settings.email_reply_to_address,
+        "subject": subject,
+        "html": html_body,
+        "text": text_body,
     }
     if cc:
-        payload["Cc"] = cc
+        payload["cc"] = cc
     if headers:
-        payload["Headers"] = headers
+        payload["headers"] = headers
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            _POSTMARK_API,
+            _RESEND_API,
             headers={
                 "Accept": "application/json",
                 "Content-Type": "application/json",
-                "X-Postmark-Server-Token": settings.postmark_server_token,
+                "Authorization": f"Bearer {settings.resend_api_key}",
             },
             json=payload,
             timeout=15.0,
