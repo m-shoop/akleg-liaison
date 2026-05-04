@@ -13,9 +13,21 @@ Usage (run from backend/):
 """
 import argparse
 import asyncio
+import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+# Load every model module so SQLAlchemy can resolve string-named relationships
+# (e.g. Bill.fiscal_notes -> FiscalNote). The FastAPI app does this transitively
+# via router imports; the script doesn't.
+import app.models  # noqa: F401
+import app.models.audit_log  # noqa: F401
+import app.models.fiscal_note  # noqa: F401
+import app.models.job  # noqa: F401
 
 from app.config import settings
 from app.models.user import TokenType, UserStatus
