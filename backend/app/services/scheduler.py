@@ -71,7 +71,7 @@ def _hearing_sync_date_range() -> tuple[date, date]:
     """Return (last_sunday, saturday_after_next) from the current Juneau date."""
     today = datetime.now(_JUNEAU_TZ).date()
     days_until_sunday = (6 - today.weekday()) % 7 or 7
-    last_sunday = today + timedelta(days=days_until_sunday) - 7
+    last_sunday = today + timedelta(days=days_until_sunday - 7)
     saturday_after_next = last_sunday + timedelta(days=13)
     return last_sunday, saturday_after_next
 

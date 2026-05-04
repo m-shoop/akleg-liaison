@@ -9,4 +9,5 @@ dist/
 test_scraper.py
 *.dump
 scripts/migrate_users.sql
+scripts/add_user.sql
 test_fiscal_sync.py
