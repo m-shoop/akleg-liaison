@@ -60,6 +60,7 @@ TEMPLATE_VARIABLES: list[str] = [
     "bill_status",
     "cancellation_reason",
     "assignment_type",
+    "previous_assignment_type",
 ]
 
 
@@ -86,6 +87,7 @@ def build_template_context(
     hearing: Any,
     cancellation_reason: str | None = None,
     assignment_type: AssignmentType | None = None,
+    previous_assignment_type: AssignmentType | None = None,
 ) -> dict[str, str]:
     """Materialize the {variable} substitution dict for str.format()."""
     committee_name = hearing.committee_name if hasattr(hearing, "committee_name") else None
@@ -101,6 +103,11 @@ def build_template_context(
         "cancellation_reason": _safe(cancellation_reason),
         "assignment_type": (
             ASSIGNMENT_TYPE_LABELS[assignment_type] if assignment_type else ""
+        ),
+        "previous_assignment_type": (
+            ASSIGNMENT_TYPE_LABELS[previous_assignment_type]
+            if previous_assignment_type
+            else ""
         ),
     }
 

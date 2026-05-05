@@ -3,7 +3,7 @@
 Two surfaces:
 - /users/me/comm-prefs* — the logged-in user reads/updates their own preferences
   and views their history. Source recorded as 'settings_page'.
-- /admin/users/comm-prefs* — admins (with comm-prefs:admin) can read and
+- /admin/users/comm-prefs* — admins (with user:manage) can read and
   override any user's preferences, looked up by ?email=<address>. Source
   recorded as 'admin_override'.
 """
@@ -98,7 +98,7 @@ async def get_my_comm_prefs_history(
 @router.get(
     "/admin/users/comm-prefs",
     response_model=CommPrefsRead,
-    dependencies=[Depends(require_permission("comm-prefs:admin"))],
+    dependencies=[Depends(require_permission("user:manage"))],
 )
 async def admin_get_comm_prefs(
     email: str = Query(..., min_length=1),
@@ -119,7 +119,7 @@ async def admin_update_comm_prefs(
     body: CommPrefsUpdate,
     email: str = Query(..., min_length=1),
     db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(require_permission("comm-prefs:admin")),
+    current_user: CurrentUser = Depends(require_permission("user:manage")),
 ):
     user = await get_user_by_email(db, email)
     if user is None:
@@ -139,7 +139,7 @@ async def admin_update_comm_prefs(
 @router.get(
     "/admin/users/comm-prefs/history",
     response_model=list[CommPrefsHistoryItem],
-    dependencies=[Depends(require_permission("comm-prefs:admin"))],
+    dependencies=[Depends(require_permission("user:manage"))],
 )
 async def admin_get_comm_prefs_history(
     email: str = Query(..., min_length=1),

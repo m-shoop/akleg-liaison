@@ -246,6 +246,24 @@
   margin: 0;
 }
 
+.modalHint {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary, #5A6E7F);
+  margin: 0.35rem 0 0;
+  font-style: italic;
+}
+
+.reassignReason {
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary, #5A6E7F);
+  font-style: italic;
+  /* Wrap inside the status cell rather than forcing the table wider; long
+     reasons display in full once the row reflows. */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 .modalError {
   font-size: 0.82rem;
   color: #b33a3a;

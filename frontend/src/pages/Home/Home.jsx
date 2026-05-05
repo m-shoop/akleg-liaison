@@ -814,7 +814,7 @@ export default function Home() {
       </div>
       <SyncSchedule entries={[
         { label: "Bills, Legislative Outcomes & Fiscal Notes", frequency: "Daily at 4:05 AM and 4:05 PM (Juneau time)" },
-        { label: "Hearings",                     frequency: "Daily at 4:05 AM and 4:05 PM (Juneau time)" },
+        { label: "Hearings",                     frequency: "Daily at 4:05 AM, 8:05 AM, 12:05 PM, and 4:05 PM (Juneau time)" },
       ]} />
     </div>
 

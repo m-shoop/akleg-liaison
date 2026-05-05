@@ -217,6 +217,14 @@ async def create_hearing_assignment(
 # ---------------------------------------------------------------------------
 
 
+_TYPE_CHANGE_ACTIVE_ACTIONS = {
+    WorkflowActionType.HEARING_ASSIGNED,
+    WorkflowActionType.HEARING_REASSIGNED,
+    WorkflowActionType.REASSIGNMENT_REQUEST,
+    WorkflowActionType.HEARING_ASSIGNMENT_TYPE_CHANGED,
+}
+
+
 @router.patch(
     "/hearing-assignments/{assignment_id}",
     response_model=HearingAssignmentRead,
@@ -229,10 +237,22 @@ async def update_hearing_assignment_type_route(
     current_user: CurrentUser = Depends(require_permission("workflow:view-all")),
 ):
     """
-    Change the assignment_type on an auto-suggested hearing assignment before
-    it's been confirmed. Once the suggestion has been promoted to
-    hearing_assigned (or any later state), the type is locked — admins can
-    cancel the assignment and create a new one if they need a different type.
+    Change the assignment_type on a hearing assignment.
+
+    Two paths, gated on the assignment's current workflow state:
+
+    - **Auto-suggested** (latest action is auto_suggested_hearing_assignment):
+      no workflow_action recorded, no email queued — the suggestion hasn't
+      been promoted yet, so this is just an admin tweak.
+
+    - **Active** (latest action is hearing_assigned, hearing_reassigned,
+      reassignment_request, or a prior type-change): a
+      `hearing_assignment_type_changed` workflow_action is recorded and an
+      `assignment_type_change` email is queued for the current assignee, with
+      both the old and new type available as template variables.
+
+    Terminal states (canceled/discarded/complete) are rejected — the
+    assignment is no longer actionable.
     """
     ha = await get_hearing_assignment_with_workflow(db, assignment_id)
     if ha is None:
@@ -240,19 +260,45 @@ async def update_hearing_assignment_type_route(
 
     actions = ha.workflow.actions  # ordered ASC by action_timestamp
     latest = actions[-1] if actions else None
-    if latest is None or latest.type != WorkflowActionType.AUTO_SUGGESTED_HEARING_ASSIGNMENT:
+    if latest is None:
+        raise HTTPException(status_code=409, detail="Assignment has no workflow actions")
+
+    is_suggestion = latest.type == WorkflowActionType.AUTO_SUGGESTED_HEARING_ASSIGNMENT
+    is_active = latest.type in _TYPE_CHANGE_ACTIVE_ACTIONS
+    if not (is_suggestion or is_active):
         raise HTTPException(
             status_code=409,
-            detail=(
-                "Assignment type can only be changed before the suggestion is "
-                "confirmed. Cancel and recreate the assignment to change it now."
-            ),
+            detail="Assignment type cannot be changed in its current state.",
         )
 
     if ha.assignment_type == body.assignment_type:
         return ha  # No-op; return current state.
 
+    previous_type = ha.assignment_type
     await update_hearing_assignment_type(db, assignment_id, body.assignment_type)
+
+    if is_active:
+        # Record the change as a workflow_action so we have a real FK target
+        # for the email_notifications row (and an entry in the workflow's
+        # timeline). The reporting layer filters this action type out of
+        # `latest_action_type` so the UI's status gating isn't disrupted.
+        action = await add_workflow_action(
+            db,
+            ha.workflow,
+            WorkflowActionType.HEARING_ASSIGNMENT_TYPE_CHANGED,
+            current_user.user.id,
+        )
+        await queue_assignment_notification(
+            db,
+            hearing_assignment_id=ha.id,
+            workflow_action_id=action.id,
+            event_type=EmailEventType.ASSIGNMENT_TYPE_CHANGED,
+            recipient_user_id=ha.assignee_id,
+            hearing_id=ha.hearing_id,
+            bill_id=ha.bill_id,
+            previous_assignment_type=previous_type,
+        )
+
     await log_action(
         db,
         current_user.user,
@@ -261,8 +307,9 @@ async def update_hearing_assignment_type_route(
         entity_id=assignment_id,
         target_user_id=ha.assignee_id,
         details={
-            "from": ha.assignment_type.value,
+            "from": previous_type.value,
             "to": body.assignment_type.value,
+            "active": is_active,
         },
         request=request,
     )
@@ -444,13 +491,20 @@ async def add_action(
 
         action = await add_workflow_action(db, workflow, recorded_type, current_user.user.id)
 
-        # ── Workflow-action messages (e.g. cancellation reason) ─────────────
+        # ── Workflow-action messages (e.g. cancellation/reassignment reason) ─
         if body.type == WorkflowActionType.HEARING_ASSIGNMENT_CANCELED and body.cancellation_reason:
             await upsert_workflow_action_message(
                 db,
                 workflow_action_id=action.id,
                 message_type="cancellation_reason",
                 action_message=body.cancellation_reason.strip(),
+            )
+        if body.type == WorkflowActionType.REASSIGNMENT_REQUEST and body.reassignment_reason:
+            await upsert_workflow_action_message(
+                db,
+                workflow_action_id=action.id,
+                message_type="reassignment_reason",
+                action_message=body.reassignment_reason.strip(),
             )
 
         # ── Email notifications (queued in this same transaction) ───────────
@@ -531,6 +585,8 @@ async def add_action(
             audit_details["to_assignee_id"] = new_assignee_id
         if body.type == WorkflowActionType.HEARING_ASSIGNMENT_CANCELED and body.cancellation_reason:
             audit_details["cancellation_reason"] = body.cancellation_reason.strip()
+        if body.type == WorkflowActionType.REASSIGNMENT_REQUEST and body.reassignment_reason:
+            audit_details["reassignment_reason"] = body.reassignment_reason.strip()
 
         await log_action(
             db,

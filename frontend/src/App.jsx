@@ -14,6 +14,7 @@ import ForgotPassword from "./pages/ForgotPassword/ForgotPassword";
 import ActivateToken from "./pages/ActivateToken/ActivateToken";
 import SetPassword from "./pages/SetPassword/SetPassword";
 import EmailTemplates from "./pages/EmailTemplates/EmailTemplates";
+import ManageUsers from "./pages/ManageUsers/ManageUsers";
 import Settings from "./pages/Settings/Settings";
 import OptOut from "./pages/OptOut/OptOut";
 import styles from "./App.module.css";
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="/requests"        element={<Requests />} />
           <Route path="/tasks"           element={<Navigate to="/requests" replace />} />
           <Route path="/email-templates" element={<EmailTemplates />} />
+          <Route path="/manage-users"    element={<ManageUsers />} />
           <Route path="/settings"        element={<Settings />} />
           <Route path="/opt-out/:token"  element={<OptOut />} />
         </Routes>

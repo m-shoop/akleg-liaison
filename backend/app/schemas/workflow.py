@@ -81,6 +81,7 @@ class AddActionRequest(BaseModel):
     type: WorkflowActionType
     new_assignee_email: str | None = None
     cancellation_reason: str | None = None
+    reassignment_reason: str | None = None
 
 
 class BillTrackingStateRequest(BaseModel):

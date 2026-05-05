@@ -87,10 +87,11 @@ export async function fetchAssigneeCommPrefs(email, token) {
   return res.json();
 }
 
-export async function addWorkflowAction(workflowId, actionType, token, { newAssigneeEmail, cancellationReason } = {}) {
+export async function addWorkflowAction(workflowId, actionType, token, { newAssigneeEmail, cancellationReason, reassignmentReason } = {}) {
   const body = { type: actionType };
   if (newAssigneeEmail) body.new_assignee_email = newAssigneeEmail;
   if (cancellationReason) body.cancellation_reason = cancellationReason;
+  if (reassignmentReason) body.reassignment_reason = reassignmentReason;
   const res = await apiFetch(`${BASE}/${workflowId}/actions`, {
     method: "POST",
     headers: { ...authHeaders(token), "Content-Type": "application/json" },

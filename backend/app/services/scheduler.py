@@ -2,10 +2,10 @@
 Background scheduler: syncs all bills from akleg.gov twice per day at 4:05 AM
 and 4:05 PM Juneau time.
 
-Also syncs committee meeting hearings from akleg.gov every day at 4:05 am and 4:05 PM
-Juneau time. The sync covers hearings from last Sunday through the Saturday after next
-(14 days); this helps capture the week whose hearings must be finalized by the Thursday
-4 PM policy deadline.
+Also syncs committee meeting hearings from akleg.gov every day at 4:05 AM, 8:05 AM, 
+12:05 PM and 4:05 PM Juneau time. The sync covers hearings from last Sunday through the 
+Saturday after next (14 days); this helps capture the week whose hearings must be finalized 
+by the Thursday 4 PM policy deadline.
 
 For each bill on the website:
   - Bill metadata (title, status, sponsors) is always upserted.
@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 _JUNEAU_TZ = ZoneInfo("America/Anchorage")
 _BILL_SYNC_TIMES = [(4, 5), (16, 5)]    # 4:05 AM and 4:05 PM Juneau
-_HEARING_SYNC_TIMES = [(4, 5), (16, 5)] # 4:05 AM and 4:05 PM Juneau
+_HEARING_SYNC_TIMES = [(4, 5), (8, 5), (12, 5), (16, 5)] # 4:05 AM, 8:05 AM, 12:05 PM and 4:05 PM Juneau
 _LEGISLATURE_SESSION = 34
 
 

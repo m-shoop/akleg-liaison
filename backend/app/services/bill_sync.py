@@ -14,11 +14,13 @@ from app.repositories.bill_repository import (
     deactivate_stale_events,
     get_bill_tracking_status,
     get_inactive_event_source_urls,
+    insert_content_outcomes,
     insert_outcomes,
     upsert_bill,
     upsert_event,
 )
 from app.services.bill_scraper import ScrapedEvent, scrape_bill
+from app.services.content_outcome_parser import parse_outcomes_from_raw_text
 from app.services.fiscal_note_sync import sync_fiscal_notes_for_bill
 from app.services.outcome_analyzer import MISTRAL_MODEL, analyze_event as analyze_event_with_mistral
 
@@ -74,6 +76,27 @@ async def analyze_new_events(
                     )
             except Exception as exc:
                 logger.warning("analyze_event failed for event %d: %s", event_id, exc)
+
+            content_outcomes = parse_outcomes_from_raw_text(
+                se.raw_text, se.chamber, se.source_url
+            )
+            inserted_content = await insert_content_outcomes(db, event_id, content_outcomes)
+            for oc in inserted_content:
+                await log_system_action(
+                    db,
+                    action="content_outcome_generated",
+                    entity_type="bill_event",
+                    entity_id=event_id,
+                    details={
+                        "bill_number": bill_number,
+                        "event_date": se.event_date.isoformat(),
+                        "outcome_type": oc.outcome_type.value,
+                        "chamber": oc.chamber.value,
+                        "description": oc.description,
+                        "committee": oc.committee,
+                        "source": "raw_text_regex",
+                    },
+                )
 
     active_urls = {se.source_url for se in scraped_events}
     deactivated = await deactivate_stale_events(db, bill_id, active_urls)

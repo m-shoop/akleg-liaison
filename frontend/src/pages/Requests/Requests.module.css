@@ -419,6 +419,12 @@
   white-space: nowrap;
 }
 
+.actionReason {
+  color: var(--color-text-primary);
+  font-size: 0.82rem;
+  font-style: italic;
+}
+
 /* ── Assignments filter bar ───────────────────────────────────────────────── */
 
 .filterBar {

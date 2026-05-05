@@ -85,9 +85,11 @@ async def create_user(
     role_name: str = "viewer",
     hashed_password: str | None = None,
     user_status: UserStatus = UserStatus.inactive,
+    name: str | None = None,
 ) -> User:
     user = User(
         email=email.lower(),
+        name=name,
         hashed_password=hashed_password,
         user_status=user_status,
     )
@@ -95,6 +97,40 @@ async def create_user(
     await session.flush()  # populate user.id
     await _assign_user_role(session, user.id, role_name)
     return user
+
+
+async def soft_delete_user(session: AsyncSession, user_id: int) -> User:
+    """Mark a user as deleted and revoke any outstanding registration / reset
+    tokens so a stale link can't reactivate the account."""
+    user = await get_user_by_id(session, user_id)
+    if user is None:
+        raise ValueError(f"User {user_id} not found")
+    user.user_status = UserStatus.deleted
+    for token_type in TokenType:
+        await delete_user_token(session, user_id, token_type)
+    await session.flush()
+    return user
+
+
+async def revive_user(session: AsyncSession, user_id: int) -> User:
+    """Move a soft-deleted user back to inactive and clear their password so
+    they must re-activate via the registration flow."""
+    user = await get_user_by_id(session, user_id)
+    if user is None:
+        raise ValueError(f"User {user_id} not found")
+    user.user_status = UserStatus.inactive
+    user.hashed_password = None
+    await session.flush()
+    return user
+
+
+async def list_deleted_users(session: AsyncSession) -> list[User]:
+    result = await session.execute(
+        select(User)
+        .where(User.user_status == UserStatus.deleted)
+        .order_by(User.name.nulls_last(), User.email)
+    )
+    return list(result.scalars().all())
 
 
 # ---------------------------------------------------------------------------

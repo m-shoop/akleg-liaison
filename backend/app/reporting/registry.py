@@ -693,7 +693,25 @@ REPORTS: dict[str, ReportDefinition] = {
                     'assignment_type',     hearing_assignments.assignment_type,
                     'latest_action_type',  (SELECT type FROM workflow_actions wa
                                             WHERE wa.workflow_id = hearing_assignments.workflow_id
-                                            ORDER BY wa.action_timestamp DESC LIMIT 1)
+                                              AND wa.type != 'hearing_assignment_type_changed'
+                                            ORDER BY wa.action_timestamp DESC LIMIT 1),
+                    -- Reason attached to the latest non-type-change action,
+                    -- but only if that action is reassignment_request. The
+                    -- LEFT JOIN pulls the message if it's there; the outer
+                    -- LIMIT 1 picks just the latest action. After a reassign
+                    -- (latest becomes hearing_reassigned) the LEFT JOIN
+                    -- returns NULL and the field disappears from the card.
+                    'latest_reassignment_reason', (
+                        SELECT wam.action_message
+                        FROM workflow_actions wa
+                        LEFT JOIN workflow_action_messages wam
+                          ON wam.workflow_action_id = wa.id
+                          AND wam.message_type = 'reassignment_reason'
+                        WHERE wa.workflow_id = hearing_assignments.workflow_id
+                          AND wa.type != 'hearing_assignment_type_changed'
+                        ORDER BY wa.action_timestamp DESC
+                        LIMIT 1
+                    )
                 )) FILTER (WHERE hearing_assignments.id IS NOT NULL)""",
                 join="hearing_assignments",
                 operators=[],
@@ -955,7 +973,16 @@ REPORTS: dict[str, ReportDefinition] = {
                     "json_agg(json_build_object("
                     "'type', workflow_actions.type,"
                     " 'actor', (SELECT email FROM users WHERE id = workflow_actions.user_id),"
-                    " 'at', workflow_actions.action_timestamp"
+                    " 'at', workflow_actions.action_timestamp,"
+                    # Pull whichever reason message is attached to this action.
+                    # Each action carries at most one of these message types
+                    # (cancellation on canceled actions, reassignment on
+                    # reassignment_request actions), so the LIMIT 1 is safe.
+                    " 'reason', (SELECT action_message"
+                    "            FROM workflow_action_messages wam"
+                    "            WHERE wam.workflow_action_id = workflow_actions.id"
+                    "              AND wam.message_type IN ('cancellation_reason', 'reassignment_reason')"
+                    "            LIMIT 1)"
                     ") ORDER BY workflow_actions.action_timestamp)"
                     " FILTER (WHERE workflow_actions.id IS NOT NULL)"
                 ),
@@ -1059,6 +1086,7 @@ REPORTS: dict[str, ReportDefinition] = {
                 column=(
                     "(SELECT type FROM workflow_actions wa"
                     " WHERE wa.workflow_id = hearing_assignments.workflow_id"
+                    "   AND wa.type != 'hearing_assignment_type_changed'"
                     " ORDER BY wa.action_timestamp DESC LIMIT 1)"
                 ),
                 filter_tier="basic",
@@ -1203,7 +1231,16 @@ REPORTS: dict[str, ReportDefinition] = {
                     "json_agg(json_build_object("
                     "'type', workflow_actions.type,"
                     " 'actor', (SELECT email FROM users WHERE id = workflow_actions.user_id),"
-                    " 'at', workflow_actions.action_timestamp"
+                    " 'at', workflow_actions.action_timestamp,"
+                    # Pull whichever reason message is attached to this action.
+                    # Each action carries at most one of these message types
+                    # (cancellation on canceled actions, reassignment on
+                    # reassignment_request actions), so the LIMIT 1 is safe.
+                    " 'reason', (SELECT action_message"
+                    "            FROM workflow_action_messages wam"
+                    "            WHERE wam.workflow_action_id = workflow_actions.id"
+                    "              AND wam.message_type IN ('cancellation_reason', 'reassignment_reason')"
+                    "            LIMIT 1)"
                     ") ORDER BY workflow_actions.action_timestamp)"
                     " FILTER (WHERE workflow_actions.id IS NOT NULL)"
                 ),

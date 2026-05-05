@@ -59,6 +59,8 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
   const [reassignEmail, setReassignEmail] = useState("");
   const [showCancelReason, setShowCancelReason] = useState(false);
   const [cancellationReason, setCancellationReason] = useState("");
+  const [showReassignReasonForm, setShowReassignReasonForm] = useState(false);
+  const [reassignmentReason, setReassignmentReason] = useState("");
   const [updatingType, setUpdatingType] = useState(false);
 
   const canViewSuggestions = can("hearing-assignment:view-auto-suggestions");
@@ -135,6 +137,8 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
       setReassignEmail("");
       setShowCancelReason(false);
       setCancellationReason("");
+      setShowReassignReasonForm(false);
+      setReassignmentReason("");
       onAssignmentCreated?.();
     } catch (err) {
       setAssignmentActionError(err.message);
@@ -143,7 +147,7 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
     }
   }
 
-  async function handleSuggestionTypeChange(newType) {
+  async function handleAssignmentTypeChange(newType) {
     if (!selectedAssignment || newType === selectedAssignment.assignment_type) return;
     setAssignmentActionError(null);
     setUpdatingType(true);
@@ -173,6 +177,8 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
     setReassignEmail("");
     setShowCancelReason(false);
     setCancellationReason("");
+    setShowReassignReasonForm(false);
+    setReassignmentReason("");
   }
 
   const chamberPrefix = hearing.chamber ? `(${hearing.chamber}) ` : "";
@@ -242,7 +248,14 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
                   <td className={styles.cellEmail} title={a.assignee_email}>{a.assignee_name || a.assignee_email}</td>
                   <td className={styles.cellBill}>{a.bill_number || ""}</td>
                   <td className={styles.cellType}>{assignmentTypeLabel(a.assignment_type)}</td>
-                  <td><span className={statusClass}>{statusLabel}</span></td>
+                  <td>
+                    <span className={statusClass}>{statusLabel}</span>
+                    {a.latest_action_type === "reassignment_request" && a.latest_reassignment_reason && (
+                      <div className={styles.reassignReason} title={a.latest_reassignment_reason}>
+                        {a.latest_reassignment_reason}
+                      </div>
+                    )}
+                  </td>
                 </tr>
               );
             })}
@@ -356,18 +369,23 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
                   <span className={styles.modalReadOnly}> ({a.assignee_email})</span>
                 )}
               </p>
-              {canManage && isSuggested && !showCancelReason ? (
+              {canManage && (isSuggested || isAssigned || isReassignRequest) && !showCancelReason ? (
                 <div className={styles.modalField}>
                   <label className={styles.modalLabel}>Type</label>
                   <select
                     className={styles.modalSelect}
                     value={a.assignment_type ?? "monitoring"}
-                    onChange={(e) => handleSuggestionTypeChange(e.target.value)}
+                    onChange={(e) => handleAssignmentTypeChange(e.target.value)}
                     disabled={updatingType || assignmentActing !== null}
                   >
                     <option value="monitoring">Monitoring Reports</option>
                     <option value="awareness">Awareness</option>
                   </select>
+                  {!isSuggested && (
+                    <p className={styles.modalHint}>
+                      Changing the type will email the assignee.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className={styles.modalField}>
@@ -398,6 +416,27 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
                     placeholder="Why is this assignment being canceled?"
                     autoFocus
                   />
+                </div>
+              )}
+              {showReassignReasonForm && (
+                <div className={styles.modalField}>
+                  <label className={styles.modalLabel}>Reassignment Reason</label>
+                  <textarea
+                    className={styles.modalSelect}
+                    rows={3}
+                    value={reassignmentReason}
+                    onChange={(e) => setReassignmentReason(e.target.value)}
+                    placeholder="Why are you requesting reassignment?"
+                    autoFocus
+                  />
+                </div>
+              )}
+              {!showCancelReason && !showReassignReasonForm
+                && a.latest_action_type === "reassignment_request"
+                && a.latest_reassignment_reason && (
+                <div className={styles.modalField}>
+                  <label className={styles.modalLabel}>Reassignment Reason</label>
+                  <p className={styles.modalReadOnly}>{a.latest_reassignment_reason}</p>
                 </div>
               )}
               {(suggestedAssigneeOptedOut || reassignAssigneeOptedOut) && (
@@ -468,7 +507,18 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
                     {assignmentActing === "hearing_assignment_canceled" ? "…" : "Confirm Cancel"}
                   </button>
                 )}
-                {(isAssignee || canManage) && isAssigned && !showCancelReason && (
+                {showReassignReasonForm && (
+                  <button
+                    className={styles.modalSubmitBtn}
+                    onClick={() => handleAssignmentAction("reassignment_request", {
+                      reassignmentReason: reassignmentReason.trim() || null,
+                    })}
+                    disabled={assignmentActing !== null}
+                  >
+                    {assignmentActing === "reassignment_request" ? "…" : "Confirm Request"}
+                  </button>
+                )}
+                {(isAssignee || canManage) && isAssigned && !showCancelReason && !showReassignReasonForm && (
                   <button
                     className={styles.modalSubmitBtn}
                     onClick={() => handleAssignmentAction("hearing_assignment_complete")}
@@ -477,13 +527,13 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
                     {assignmentActing === "hearing_assignment_complete" ? "…" : "Mark Complete"}
                   </button>
                 )}
-                {isAssignee && isAssigned && !showCancelReason && (
+                {isAssignee && isAssigned && !showCancelReason && !showReassignReasonForm && (
                   <button
                     className={styles.modalSecondaryBtn}
-                    onClick={() => handleAssignmentAction("reassignment_request")}
+                    onClick={() => setShowReassignReasonForm(true)}
                     disabled={assignmentActing !== null}
                   >
-                    {assignmentActing === "reassignment_request" ? "…" : "Request Reassignment"}
+                    Request Reassignment
                   </button>
                 )}
               </div>

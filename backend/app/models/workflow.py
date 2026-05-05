@@ -18,6 +18,7 @@ class WorkflowActionType(str, enum.Enum):
     HEARING_REASSIGNED = "hearing_reassigned"
     AUTO_SUGGESTED_HEARING_ASSIGNMENT = "auto_suggested_hearing_assignment"
     HEARING_ASSIGNMENT_DISCARDED = "hearing_assignment_discarded"
+    HEARING_ASSIGNMENT_TYPE_CHANGED = "hearing_assignment_type_changed"
 
 
 class WorkflowType(str, enum.Enum):

@@ -22,6 +22,7 @@ class EmailEventType(str, enum.Enum):
     not a Postgres enum, per the design (start simple)."""
     ASSIGNMENT_CREATED = "assignment_created"
     ASSIGNMENT_CANCELED = "assignment_canceled"
+    ASSIGNMENT_TYPE_CHANGED = "assignment_type_changed"
 
 
 class EmailTemplate(Base):

@@ -2,21 +2,20 @@
  * Flattens a bill's nested events→outcomes into a single deduplicated list.
  *
  * Deduplication key: (event_date, chamber, outcome_type, committee)
- * When duplicates exist the first occurrence (earliest date) is kept.
+ * When duplicates exist within a key, ai_generated=true wins over false
+ * (its description is richer than what the regex content parser produces).
+ * "amended" is excluded from deduplication so amendment counts stay accurate.
  *
  * Returns rows sorted by date ascending.
  */
 export function flattenOutcomes(events) {
-  const seen = new Set();
+  const byKey = new Map();
   const rows = [];
 
   // Events arrive ordered by date from the API
   for (const event of events) {
     for (const outcome of event.outcomes) {
-      const key = `${event.event_date}|${outcome.chamber}|${outcome.outcome_type}|${outcome.committee ?? ""}`;
-      if (outcome.outcome_type !== "amended" && seen.has(key)) continue;
-      seen.add(key);
-      rows.push({
+      const row = {
         date: event.event_date,
         source_url: event.source_url,
         outcome_type: outcome.outcome_type,
@@ -24,7 +23,24 @@ export function flattenOutcomes(events) {
         description: outcome.description,
         chamber: outcome.chamber,
         ai_generated: outcome.ai_generated ?? false,
-      });
+      };
+
+      if (outcome.outcome_type === "amended") {
+        rows.push(row);
+        continue;
+      }
+
+      const key = `${event.event_date}|${outcome.chamber}|${outcome.outcome_type}|${outcome.committee ?? ""}`;
+      const existingIdx = byKey.get(key);
+      if (existingIdx === undefined) {
+        byKey.set(key, rows.length);
+        rows.push(row);
+        continue;
+      }
+      // Replace only when the new row is AI-generated and the kept one is not.
+      if (row.ai_generated && !rows[existingIdx].ai_generated) {
+        rows[existingIdx] = row;
+      }
     }
   }
 

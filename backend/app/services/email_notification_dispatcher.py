@@ -54,6 +54,7 @@ _CREATED_TEMPLATE_KEYS: dict[AssignmentType, str] = {
     AssignmentType.AWARENESS: "hearing_assignment_awareness",
 }
 _CANCELED_TEMPLATE_KEY = "hearing_assignment_canceled"
+_TYPE_CHANGED_TEMPLATE_KEY = "assignment_type_change"
 
 
 async def _resolve_template_key_and_type(
@@ -75,6 +76,8 @@ async def _resolve_template_key_and_type(
 
     if event_type == EmailEventType.ASSIGNMENT_CANCELED:
         return _CANCELED_TEMPLATE_KEY, assignment_type
+    if event_type == EmailEventType.ASSIGNMENT_TYPE_CHANGED:
+        return _TYPE_CHANGED_TEMPLATE_KEY, assignment_type
     return _CREATED_TEMPLATE_KEYS[assignment_type], assignment_type
 
 
@@ -93,6 +96,7 @@ async def queue_assignment_notification(
     hearing_id: int,
     bill_id: int | None,
     cancellation_reason: str | None = None,
+    previous_assignment_type: AssignmentType | None = None,
     suppressed_reason_override: str | None = None,
 ) -> EmailNotification | None:
     """
@@ -160,6 +164,7 @@ async def queue_assignment_notification(
         hearing=hearing,
         cancellation_reason=cancellation_reason,
         assignment_type=assignment_type,
+        previous_assignment_type=previous_assignment_type,
     )
     opt_out_url = opt_out_url_for(recipient)
 
@@ -196,6 +201,7 @@ async def render_for_user(
     bill_id: int | None = None,
     cancellation_reason: str | None = None,
     assignment_type: AssignmentType | None = None,
+    previous_assignment_type: AssignmentType | None = None,
 ) -> tuple[str, str, str] | None:
     """Render a (subject, html, text) tuple for the admin Live Preview / Test
     Send routes. Returns None if the template doesn't exist."""
@@ -228,11 +234,22 @@ async def render_for_user(
         else:
             assignment_type = AssignmentType.MONITORING
 
+    # Default the preview's previous_assignment_type to the *opposite* of the
+    # current assignment_type so the type-change template renders with both
+    # variables populated.
+    if previous_assignment_type is None and template_key == _TYPE_CHANGED_TEMPLATE_KEY:
+        previous_assignment_type = (
+            AssignmentType.AWARENESS
+            if assignment_type == AssignmentType.MONITORING
+            else AssignmentType.MONITORING
+        )
+
     ctx = build_template_context(
         bill=bill,
         hearing=hearing,
         cancellation_reason=cancellation_reason,
         assignment_type=assignment_type,
+        previous_assignment_type=previous_assignment_type,
     )
     opt_out_url = opt_out_url_for(user)
     subject = render_subject(template.subject_template, ctx)

@@ -354,6 +354,8 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
   const [reassignEmail, setReassignEmail] = useState("");
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancellationReason, setCancellationReason] = useState("");
+  const [showReassignReasonForm, setShowReassignReasonForm] = useState(false);
+  const [reassignmentReason, setReassignmentReason] = useState("");
   const [updatingType, setUpdatingType] = useState(false);
   const [localAssignmentType, setLocalAssignmentType] = useState(assignment.assignment_type ?? "monitoring");
   const allAssignees = useAssignees(showReassignForm, token);
@@ -374,7 +376,12 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
   const isClosed = CLOSED_ASSIGNMENT_ACTIONS.has(latest_action_type);
   const isSuggested = latest_action_type === "auto_suggested_hearing_assignment";
   const isReassignRequest = latest_action_type === "reassignment_request";
-  const isAssigned = latest_action_type === "hearing_assigned";
+  // hearing_reassigned is the same actionable state as hearing_assigned —
+  // the new assignee can request reassignment, mark complete, or have it
+  // canceled by an admin.
+  const isAssigned =
+    latest_action_type === "hearing_assigned"
+    || latest_action_type === "hearing_reassigned";
   const isAssignee = username === assignee_email;
 
   const reassignAssigneeOptedOut = useAssigneeOptedOut(
@@ -391,6 +398,8 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
       setReassignEmail("");
       setShowCancelForm(false);
       setCancellationReason("");
+      setShowReassignReasonForm(false);
+      setReassignmentReason("");
       onActionTaken();
     } catch (err) {
       setError(err.message);
@@ -424,13 +433,25 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
 
   const cols = isMobile ? 3 : 7;
 
-  const typeControl = canManage && isSuggested ? (
+  // Admins can change type anywhere the backend accepts it: open suggestions,
+  // confirmed/reassigned assignments, and pending reassignment requests.
+  // Confirmed-state changes also email the assignee (server-side).
+  const canChangeType =
+    canManage && (
+      isSuggested
+      || latest_action_type === "hearing_assigned"
+      || latest_action_type === "hearing_reassigned"
+      || latest_action_type === "reassignment_request"
+    );
+
+  const typeControl = canChangeType ? (
     <select
       className={styles.typeSelect}
       value={localAssignmentType}
       onChange={(e) => handleTypeChange(e.target.value)}
       disabled={updatingType || acting !== null}
       aria-label="Assignment type"
+      title={isSuggested ? undefined : "Changing the type will email the assignee."}
     >
       <option value="monitoring">Monitoring</option>
       <option value="awareness">Awareness</option>
@@ -471,9 +492,9 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
           {acting === "hearing_assignment_complete" ? "…" : "Mark Complete"}
         </button>
       )}
-      {isAssignee && !isClosed && isAssigned && !showCancelForm && (
-        <button className={styles.reassignRequestBtn} onClick={() => handleAction("reassignment_request")} disabled={acting !== null}>
-          {acting === "reassignment_request" ? "…" : "Request Reassignment"}
+      {isAssignee && !isClosed && isAssigned && !showCancelForm && !showReassignReasonForm && (
+        <button className={styles.reassignRequestBtn} onClick={() => setShowReassignReasonForm(true)} disabled={acting !== null}>
+          Request Reassignment
         </button>
       )}
     </div>
@@ -607,6 +628,42 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
         </tr>
       )}
 
+      {showReassignReasonForm && (
+        <tr className={styles.assignmentSubRow}>
+          <td colSpan={cols}>
+            <div className={styles.reassignForm}>
+              <span className={styles.reassignFormLabel}>Reassignment reason</span>
+              <input
+                type="text"
+                className={styles.reassignEmailInput}
+                value={reassignmentReason}
+                onChange={(e) => setReassignmentReason(e.target.value)}
+                placeholder="Why are you requesting reassignment?"
+                autoFocus
+              />
+              <button
+                className={styles.assignBtn}
+                onClick={() =>
+                  handleAction("reassignment_request", {
+                    reassignmentReason: reassignmentReason.trim() || null,
+                  })
+                }
+                disabled={acting !== null}
+              >
+                {acting === "reassignment_request" ? "…" : "Confirm Request"}
+              </button>
+              <button
+                className={styles.expandBtn}
+                onClick={() => { setShowReassignReasonForm(false); setReassignmentReason(""); }}
+                disabled={acting !== null}
+              >
+                Back
+              </button>
+            </div>
+          </td>
+        </tr>
+      )}
+
       {error && (
         <tr className={styles.assignmentSubRow}>
           <td colSpan={cols}>
@@ -620,7 +677,7 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
           <td colSpan={cols}>
             <table className={styles.actionsTable}>
               <thead>
-                <tr><th>Action</th><th>User</th><th>Timestamp</th></tr>
+                <tr><th>Action</th><th>User</th><th>Timestamp</th><th>Reason</th></tr>
               </thead>
               <tbody>
                 {assignment.actions.map((action, i) => (
@@ -628,6 +685,7 @@ function AssignmentRow({ assignment, canManage, canViewSuggestions, token, onAct
                     <td><span className={styles.actionBadge}>{assignmentStatusLabel(action.type)}</span></td>
                     <td className={styles.actionUser}>{action.actor}</td>
                     <td className={styles.actionTimestamp}>{formatTimestamp(action.at)}</td>
+                    <td className={styles.actionReason}>{action.reason || ""}</td>
                   </tr>
                 ))}
               </tbody>

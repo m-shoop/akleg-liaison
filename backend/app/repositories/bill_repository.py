@@ -22,6 +22,7 @@ from sqlalchemy.orm import with_loader_criteria
 from app.models.bill import Bill, BillEvent, BillEventOutcome, BillSponsor, BillKeyword
 from app.models.fiscal_note import FiscalNote
 from app.services.bill_scraper import ScrapedBill, ScrapedEvent
+from app.services.content_outcome_parser import ContentParsedOutcome
 from app.services.outcome_analyzer import ScrapedOutcome
 
 
@@ -148,6 +149,52 @@ async def insert_outcomes(
         .where(BillEvent.id == event_id)
         .values(analyzed=True, updated_at=func.now())
     )
+
+
+async def insert_content_outcomes(
+    session: AsyncSession,
+    event_id: int,
+    outcomes: list[ContentParsedOutcome],
+) -> list[BillEventOutcome]:
+    """
+    Insert regex-derived outcomes for an event with ai_generated=False.
+
+    Idempotent: any outcome_type that already has a non-AI row on this event
+    is skipped, so re-running the content parser (e.g. via the backfill
+    script) doesn't accumulate duplicates.
+
+    Does NOT touch the parent event's `analyzed` flag — that flag tracks
+    whether the Mistral pass has run, not the regex pass.
+
+    Returns the BillEventOutcome rows that were actually inserted.
+    """
+    if not outcomes:
+        return []
+
+    existing_types_result = await session.execute(
+        select(BillEventOutcome.outcome_type).where(
+            BillEventOutcome.event_id == event_id,
+            BillEventOutcome.ai_generated == False,  # noqa: E712
+        )
+    )
+    existing_types = {row[0] for row in existing_types_result.all()}
+
+    inserted: list[BillEventOutcome] = []
+    for oc in outcomes:
+        if oc.outcome_type in existing_types:
+            continue
+        row = BillEventOutcome(
+            event_id=event_id,
+            chamber=oc.chamber,
+            outcome_type=oc.outcome_type,
+            description=oc.description,
+            committee=oc.committee,
+            ai_generated=False,
+        )
+        session.add(row)
+        inserted.append(row)
+        existing_types.add(oc.outcome_type)
+    return inserted
 
 
 async def get_inactive_event_source_urls(

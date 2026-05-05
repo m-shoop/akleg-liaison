@@ -1,0 +1,441 @@
+.page {
+  padding: 1.5rem 2rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.title {
+  font-size: 1.5rem;
+  color: var(--color-rainforest);
+  margin-bottom: 1rem;
+}
+
+.section {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.sectionTitle {
+  font-size: 1.1rem;
+  color: var(--color-rainforest);
+  margin: 0 0 0.5rem;
+}
+
+.muted {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+/* ------------------------------------------------------------------ */
+/* Create form */
+/* ------------------------------------------------------------------ */
+
+.form {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.fieldLabel {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.input {
+  padding: 0.45rem 0.6rem;
+  border: 1.5px solid var(--color-border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  min-width: 16rem;
+}
+
+.primaryBtn {
+  background-color: var(--color-rainforest);
+  color: var(--color-text-on-dark);
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.primaryBtn:hover:not(:disabled) {
+  background-color: #3a5e43;
+}
+
+.primaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #b33a3a;
+}
+
+.success {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-rainforest);
+}
+
+/* ------------------------------------------------------------------ */
+/* User table */
+/* ------------------------------------------------------------------ */
+
+.userTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+.userTable th,
+.userTable td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.userTable th {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.expandCell {
+  width: 1%;
+  padding-right: 0;
+}
+
+.expandBtn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+}
+
+.expandBtn:hover {
+  color: var(--color-rainforest);
+}
+
+.statusActive {
+  color: var(--color-rainforest);
+  font-weight: 500;
+}
+
+.statusInactive {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.statusDeleted {
+  color: #b33a3a;
+  font-style: italic;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.actionCell {
+  text-align: right;
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ */
+/* Inline name edit */
+/* ------------------------------------------------------------------ */
+
+.nameCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.iconBtn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.95rem;
+  line-height: 1;
+  border-radius: 3px;
+}
+
+.iconBtn:hover {
+  color: var(--color-rainforest);
+  background: var(--color-surface);
+}
+
+.inlineEdit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.inlineInput {
+  padding: 0.3rem 0.5rem;
+  border: 1.5px solid var(--color-border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.88rem;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  min-width: 14rem;
+}
+
+.smallPrimaryBtn {
+  background-color: var(--color-rainforest);
+  color: var(--color-text-on-dark);
+  border: none;
+  border-radius: 4px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.smallPrimaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.smallCancelBtn {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.smallCancelBtn:hover:not(:disabled) {
+  border-color: var(--color-text-primary);
+  color: var(--color-text-primary);
+}
+
+/* ------------------------------------------------------------------ */
+/* Detail panel (per-row expansion) */
+/* ------------------------------------------------------------------ */
+
+.detailRow td {
+  background: var(--color-surface);
+  padding: 0;
+}
+
+.detailPanel {
+  padding: 0.75rem 1.25rem 1rem;
+  border-left: 3px solid var(--color-glacial-water);
+}
+
+.detailHeader {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  margin: 0 0 0.5rem;
+}
+
+.historyTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.historyTable th,
+.historyTable td {
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.historyTable th {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ------------------------------------------------------------------ */
+/* Delete buttons */
+/* ------------------------------------------------------------------ */
+
+.dangerBtn {
+  background: transparent;
+  color: #b33a3a;
+  border: 1px solid #b33a3a;
+  border-radius: 4px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.dangerBtn:hover:not(:disabled) {
+  background: #b33a3a;
+  color: var(--color-text-on-dark);
+}
+
+.dangerBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.dangerBtnSolid {
+  background: #b33a3a;
+  color: var(--color-text-on-dark);
+  border: none;
+  border-radius: 4px;
+  padding: 0.55rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.dangerBtnSolid:hover:not(:disabled) {
+  background: #962f2f;
+}
+
+.dangerBtnSolid:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ------------------------------------------------------------------ */
+/* Deleted users collapse */
+/* ------------------------------------------------------------------ */
+
+.collapseHeader {
+  background: transparent;
+  border: none;
+  color: var(--color-rainforest);
+  font-size: 1.1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 100%;
+  text-align: left;
+}
+
+.collapseChevron {
+  font-size: 0.85rem;
+  display: inline-block;
+  width: 1ch;
+}
+
+.collapseBody {
+  margin-top: 0.75rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* Delete confirmation modal */
+/* ------------------------------------------------------------------ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-top: 4px solid #b33a3a;
+  border-radius: 8px;
+  padding: 1.75rem 2rem 1.5rem;
+  width: 100%;
+  max-width: 460px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+.modalTitle {
+  font-size: 1.25rem;
+  color: #b33a3a;
+  margin: 0 0 0.75rem;
+}
+
+.modalBody {
+  font-size: 0.9rem;
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  margin: 0 0 0.75rem;
+}
+
+.codeWord {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  padding: 0.05rem 0.35rem;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  color: #b33a3a;
+  font-weight: 600;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.cancelBtn {
+  background: transparent;
+  border: 1.5px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0.55rem 1rem;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.cancelBtn:hover:not(:disabled) {
+  border-color: var(--color-text-primary);
+  color: var(--color-text-primary);
+}
+
+.cancelBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -889,7 +889,7 @@ export default function Hearings() {
       })()}
 
       <SyncSchedule
-        entries={[{ label: "Hearings", frequency: "Daily at 4:05 AM and 4:05 PM (Juneau time)" }]}
+        entries={[{ label: "Hearings", frequency: "Daily at 4:05 AM, 8:05 AM, 12:05 PM, and 4:05 PM (Juneau time)" }]}
       />
     </div>
   );

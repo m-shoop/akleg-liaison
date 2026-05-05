@@ -508,14 +508,21 @@ async def test_change_type_is_idempotent(client: AsyncClient, db, uid: str):
     assert resp.json()["assignment_type"] == "monitoring"
 
 
-async def test_change_type_locked_after_confirmation(client: AsyncClient, db, uid: str):
+async def test_admin_can_change_type_on_confirmed_assignment(client: AsyncClient, db, uid: str):
+    """Admins can change the type of a confirmed assignment without canceling
+    it. The change records a workflow_action and queues an email to the
+    assignee with the previous type as a template variable."""
+    from sqlalchemy import select
+    from app.models.email import EmailNotification
+    from app.models.workflow import WorkflowAction
+    from app.repositories.workflow_repository import get_hearing_assignment_with_workflow
+
     hearing_id = await _seed_hearing(db, uid)
     assignee_email, _ = await _viewer_token(client, db, uid, suffix="_assignee")
     _, admin_tok = await _admin_token(client, db, uid)
     assignment_id = await _seed_suggested_assignment(db, hearing_id, assignee_email)
 
     # Confirm the suggestion (auto_suggested -> hearing_assigned).
-    from app.repositories.workflow_repository import get_hearing_assignment_with_workflow
     ha = await get_hearing_assignment_with_workflow(db, assignment_id)
     workflow_id = ha.workflow_id
     confirm_resp = await client.post(
@@ -525,7 +532,65 @@ async def test_change_type_locked_after_confirmation(client: AsyncClient, db, ui
     )
     assert confirm_resp.status_code == 201, confirm_resp.text
 
-    # Now the type is locked.
+    # Change the type post-confirmation.
+    resp = await client.patch(
+        f"/workflows/hearing-assignments/{assignment_id}",
+        json={"assignment_type": "awareness"},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["assignment_type"] == "awareness"
+
+    # A type-change workflow_action was recorded.
+    actions = (
+        await db.execute(
+            select(WorkflowAction.type)
+            .where(WorkflowAction.workflow_id == workflow_id)
+            .order_by(WorkflowAction.action_timestamp)
+        )
+    ).scalars().all()
+    assert "hearing_assignment_type_changed" in [a.value for a in actions]
+
+    # An email notification was queued for the type change.
+    notifs = (
+        await db.execute(
+            select(EmailNotification)
+            .where(EmailNotification.hearing_assignment_id == assignment_id)
+            .where(EmailNotification.event_type == "assignment_type_changed")
+        )
+    ).scalars().all()
+    assert len(notifs) == 1
+    assert notifs[0].recipient_email == assignee_email
+    # Both old + new type should appear in the rendered body.
+    assert "Awareness" in notifs[0].body
+    assert "Monitoring" in notifs[0].body
+
+
+async def test_change_type_rejected_after_cancellation(client: AsyncClient, db, uid: str):
+    """Once an assignment is canceled, the type can no longer be changed —
+    admins must create a new assignment instead."""
+    from app.repositories.workflow_repository import get_hearing_assignment_with_workflow
+
+    hearing_id = await _seed_hearing(db, uid)
+    assignee_email, _ = await _viewer_token(client, db, uid, suffix="_assignee")
+    _, admin_tok = await _admin_token(client, db, uid)
+    assignment_id = await _seed_suggested_assignment(db, hearing_id, assignee_email)
+
+    ha = await get_hearing_assignment_with_workflow(db, assignment_id)
+    workflow_id = ha.workflow_id
+    confirm_resp = await client.post(
+        f"/workflows/{workflow_id}/actions",
+        json={"type": "hearing_assigned"},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert confirm_resp.status_code == 201
+    cancel_resp = await client.post(
+        f"/workflows/{workflow_id}/actions",
+        json={"type": "hearing_assignment_canceled", "cancellation_reason": "test"},
+        headers={"Authorization": f"Bearer {admin_tok}"},
+    )
+    assert cancel_resp.status_code == 201
+
     resp = await client.patch(
         f"/workflows/hearing-assignments/{assignment_id}",
         json={"assignment_type": "awareness"},

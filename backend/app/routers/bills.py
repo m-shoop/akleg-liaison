@@ -11,6 +11,7 @@ from app.models.bill import BillEventOutcome
 from app.repositories.bill_repository import (
     get_bill_by_id,
     get_event_by_id,
+    insert_content_outcomes,
     insert_outcomes,
     list_bills,
     list_events_for_bill,
@@ -33,6 +34,7 @@ from app.schemas.bill import (
 from app.schemas.job import JobRead
 from app.services.bill_scraper import ScrapedEvent, scrape_bill, scrape_bill_list
 from app.services.bill_sync import refresh_bill as sync_refresh_bill
+from app.services.content_outcome_parser import parse_outcomes_from_raw_text
 from app.services.outcome_analyzer import analyze_event as analyze_event_with_mistral
 
 router = APIRouter(prefix="/bills", tags=["bills"])
@@ -303,6 +305,12 @@ async def analyze_event(
     )
     outcomes = await analyze_event_with_mistral(scraped_event, bill.bill_number)
     await insert_outcomes(db, event_id, outcomes)
+
+    content_outcomes = parse_outcomes_from_raw_text(
+        event.raw_text, event.chamber, event.source_url
+    )
+    await insert_content_outcomes(db, event_id, content_outcomes)
+
     await db.commit()
     refreshed = await _get_event_or_404(event_id, db)
     return refreshed.outcomes

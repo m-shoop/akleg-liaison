@@ -128,6 +128,20 @@ export default function Navbar() {
                     </NavLink>
                   </li>
                 )}
+                {can("user:manage") && (
+                  <li>
+                    <NavLink
+                      to="/manage-users"
+                      className={({ isActive }) =>
+                        isActive
+                          ? `${styles.dropdownItem} ${styles.dropdownItemActive}`
+                          : styles.dropdownItem
+                      }
+                    >
+                      Manage Users
+                    </NavLink>
+                  </li>
+                )}
                 {isLoggedIn && (
                   <li>
                     <NavLink
