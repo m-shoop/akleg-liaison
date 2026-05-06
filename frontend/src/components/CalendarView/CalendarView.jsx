@@ -6,6 +6,7 @@ import { addDays, todayJuneau } from "../../utils/weekBounds";
 import { alaskaLocalToUtc, exportToCalendar } from "../../utils/hearingCalendar";
 import PriorAgendasModal from "../PriorAgendasModal/PriorAgendasModal";
 import HearingAssignmentsPanel from "../HearingAssignmentsPanel/HearingAssignmentsPanel";
+import CallInInfo from "../CallInInfo/CallInInfo";
 import styles from "./CalendarView.module.css";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -305,6 +306,12 @@ function HearingDetailOverlay({ hearing, onClose, onNotesReload, onHiddenChanged
             ) : (
               <p className={styles.overlayNotesReadOnly}>{notes || ""}</p>
             )}
+          </div>
+        )}
+
+        {can("hearing-assignment:view") && (
+          <div className={styles.overlayCallInRow}>
+            <CallInInfo />
           </div>
         )}
 

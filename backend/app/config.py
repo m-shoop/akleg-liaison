@@ -4,16 +4,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    database_url: str = "postgresql+asyncpg://postgres:password@localhost:5432/akleg_liaison"
+    database_url: str
     mistral_api_key: str = ""
     secret_key: str
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 240  # 4 hours
 
     resend_api_key: str = ""
-    email_from_address: str = "Leg Up <noreply@mail.aklegup.com>"
-    email_reply_to_address: str = "contact@aklegup.com"
-    frontend_base_url: str = "https://www.aklegup.com"
+    email_from_address: str
+    email_reply_to_address: str
+    frontend_base_url: str
     cookie_secure: bool = True
 
     # Worker that drains pending email_notifications rows. Disabled in tests so

@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { addWorkflowAction, createHearingAssignment, updateHearingAssignmentType } from "../../api/workflows";
+import { addWorkflowAction, createHearingAssignment, updateHearingAssignmentCallIn, updateHearingAssignmentType } from "../../api/workflows";
 import { useAssigneeOptedOut, OPT_OUT_WARNING } from "../../hooks/useAssigneeOptedOut";
 import { useAssignees } from "../../hooks/useAssignees";
 import UserSelect from "../UserSelect/UserSelect";
+import CallInInfo from "../CallInInfo/CallInInfo";
 import styles from "./HearingAssignmentsPanel.module.css";
 
 function fmtDate(isoDate) {
@@ -24,6 +25,15 @@ function fmtTime(timeStr) {
 
 function assignmentTypeLabel(t) {
   return t === "awareness" ? "Awareness" : "Monitoring";
+}
+
+// bootstrap-icons "telephone-fill" path; fill via CSS `currentColor`.
+function PhoneIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M1.885.511a1.745 1.745 0 0 1 2.61.163L6.29 2.98c.329.423.445.974.315 1.494l-.547 2.19a.678.678 0 0 0 .178.643l2.457 2.457a.678.678 0 0 0 .644.178l2.189-.547a1.745 1.745 0 0 1 1.494.315l2.306 1.794c.829.645.905 1.87.163 2.611l-1.034 1.034c-.74.74-1.846 1.066-2.877.704-2.65-.931-5.055-2.45-7.27-4.665C4.328 9.946 2.808 7.542 1.876 4.892c-.36-1.031-.034-2.137.706-2.877z"/>
+    </svg>
+  );
 }
 
 const ACTIVE_ASSIGNMENT_TYPES = new Set([
@@ -65,6 +75,23 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
 
   const canViewSuggestions = can("hearing-assignment:view-auto-suggestions");
   const canCreate = can("workflow:view-all");
+  const canManage = can("workflow:view-all");
+  const [callInBusyId, setCallInBusyId] = useState(null);
+
+  async function handleToggleCallIn(assignment, e) {
+    e.stopPropagation();
+    setCallInBusyId(assignment.id);
+    try {
+      await updateHearingAssignmentCallIn({
+        assignmentId: assignment.id,
+        callIn: !assignment.call_in,
+        token,
+      });
+      onAssignmentCreated?.();
+    } finally {
+      setCallInBusyId(null);
+    }
+  }
 
   const needsAssigneeList =
     showCreateAssignment ||
@@ -208,6 +235,7 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
               <th>Assigned To</th>
               <th>Bill Number</th>
               <th>Type</th>
+              <th className={styles.cellCallIn}>Call In</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -248,6 +276,32 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
                   <td className={styles.cellEmail} title={a.assignee_email}>{a.assignee_name || a.assignee_email}</td>
                   <td className={styles.cellBill}>{a.bill_number || ""}</td>
                   <td className={styles.cellType}>{assignmentTypeLabel(a.assignment_type)}</td>
+                  <td className={styles.cellCallIn}>
+                    {canManage ? (
+                      <button
+                        type="button"
+                        className={`${styles.callInBtn} ${a.call_in ? "" : styles.callInOff}`}
+                        onClick={(e) => handleToggleCallIn(a, e)}
+                        disabled={callInBusyId === a.id}
+                        title={
+                          a.call_in
+                            ? "Call into this hearing with the call-in information below"
+                            : "Click to instruct this user to call into the hearing"
+                        }
+                        aria-label={a.call_in ? "Call-in required" : "Call-in not required (click to require)"}
+                      >
+                        <PhoneIcon />
+                      </button>
+                    ) : a.call_in ? (
+                      <span
+                        className={styles.callInIcon}
+                        title="Call into this hearing with the call-in information below"
+                        aria-label="Call-in required"
+                      >
+                        <PhoneIcon />
+                      </span>
+                    ) : null}
+                  </td>
                   <td>
                     <span className={statusClass}>{statusLabel}</span>
                     {a.latest_action_type === "reassignment_request" && a.latest_reassignment_reason && (
@@ -368,6 +422,15 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
                 {a.assignee_name && (
                   <span className={styles.modalReadOnly}> ({a.assignee_email})</span>
                 )}
+                {a.call_in && (
+                  <span
+                    className={styles.modalCallInIndicator}
+                    title="Call into this hearing with the call-in information below"
+                    aria-label="Call-in required"
+                  >
+                    <PhoneIcon />
+                  </span>
+                )}
               </p>
               {canManage && (isSuggested || isAssigned || isReassignRequest) && !showCancelReason ? (
                 <div className={styles.modalField}>
@@ -441,6 +504,11 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
               )}
               {(suggestedAssigneeOptedOut || reassignAssigneeOptedOut) && (
                 <p className={styles.optOutWarning}>{OPT_OUT_WARNING}</p>
+              )}
+              {(hearing.hearing_assignments_summary ?? []).some((x) => x.call_in) && (
+                <div className={styles.modalField}>
+                  <CallInInfo />
+                </div>
               )}
               {assignmentActionError && (
                 <p className={styles.modalError}>{assignmentActionError}</p>

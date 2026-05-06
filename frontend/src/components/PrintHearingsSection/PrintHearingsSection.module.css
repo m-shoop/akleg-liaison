@@ -241,6 +241,12 @@
     white-space: nowrap;
   }
 
+  .printAssignmentCallIn {
+    text-align: center;
+    white-space: nowrap;
+    width: 1%;
+  }
+
   .printSectionDivider {
     border-top: 2px solid #333;
     margin: 1rem 0 1.5rem;

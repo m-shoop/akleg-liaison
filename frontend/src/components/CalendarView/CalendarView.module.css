@@ -607,6 +607,10 @@
   margin-bottom: 0.75rem;
 }
 
+.overlayCallInRow {
+  margin-bottom: 0.75rem;
+}
+
 .overlayHiddenNote {
   font-size: 0.7rem;
   color: var(--color-text-secondary);

@@ -366,6 +366,21 @@ a.committeeName:hover {
   margin: 0.2rem 0 0.05rem;
 }
 
+.adminBottomRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+
+.adminBottomCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  width: 100%;
+}
+
 .hideRow {
   display: flex;
   flex-direction: column;

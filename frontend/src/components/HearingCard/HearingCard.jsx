@@ -5,6 +5,7 @@ import { updateDpsNotes, updateHidden } from "../../api/hearings";
 import { exportToCalendar } from "../../utils/hearingCalendar";
 import PriorAgendasModal from "../PriorAgendasModal/PriorAgendasModal";
 import HearingAssignmentsPanel from "../HearingAssignmentsPanel/HearingAssignmentsPanel";
+import CallInInfo from "../CallInInfo/CallInInfo";
 import styles from "./HearingCard.module.css";
 
 function fmt(isoDate) {
@@ -214,23 +215,28 @@ export default function HearingCard({ hearing, isFirst, globalExpanded, onNotesS
       {can("hearing-assignment:view") && (
         <div className={styles.assignmentsRow}>
           <HearingAssignmentsPanel hearing={hearing} onAssignmentCreated={onAssignmentCreated} showCanceled={showCanceledAssignments} />
-          {can("hearing:hide") && (
-            <>
-              <div className={styles.visibilityDivider} />
-              <span className={styles.assignmentsLabel}>Visibility</span>
-              {hearing.hidden && (
-                <p className={styles.hiddenNote}>Hidden from view and PDF</p>
-              )}
-              <button
-                className={`${styles.hideBtn} ${hearing.hidden ? styles.hideBtnActive : ""}`}
-                onClick={handleToggleHidden}
-                disabled={hidingBusy}
-                title={hearing.hidden ? "Unhide this hearing" : "Hide this hearing and remove it from the PDF export."}
-              >
-                {hidingBusy ? "…" : hearing.hidden ? "Unhide" : "Hide"}
-              </button>
-            </>
-          )}
+          <div className={styles.visibilityDivider} />
+          <div className={styles.adminBottomRow}>
+            <div className={styles.adminBottomCol}>
+              <CallInInfo />
+            </div>
+            {can("hearing:hide") && (
+              <div className={styles.adminBottomCol}>
+                <span className={styles.assignmentsLabel}>Visibility</span>
+                {hearing.hidden && (
+                  <p className={styles.hiddenNote}>Hidden from view and PDF</p>
+                )}
+                <button
+                  className={`${styles.hideBtn} ${hearing.hidden ? styles.hideBtnActive : ""}`}
+                  onClick={handleToggleHidden}
+                  disabled={hidingBusy}
+                  title={hearing.hidden ? "Unhide this hearing" : "Hide this hearing and remove it from the PDF export."}
+                >
+                  {hidingBusy ? "…" : hearing.hidden ? "Unhide" : "Hide"}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

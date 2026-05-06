@@ -57,28 +57,29 @@ _CANCELED_TEMPLATE_KEY = "hearing_assignment_canceled"
 _TYPE_CHANGED_TEMPLATE_KEY = "assignment_type_change"
 
 
-async def _resolve_template_key_and_type(
+async def _resolve_template_key_and_assignment_fields(
     db: AsyncSession,
     event_type: EmailEventType,
     hearing_assignment_id: int,
-) -> tuple[str, AssignmentType] | None:
-    """Look up the assignment_type for the given hearing_assignment and pick
-    the right template_key for the event. Returns None if the assignment is
-    missing (caller logs and skips)."""
+) -> tuple[str, AssignmentType, bool] | None:
+    """Look up assignment fields needed for rendering and pick the right
+    template_key for the event. Returns None if the assignment is missing
+    (caller logs and skips)."""
     result = await db.execute(
-        select(HearingAssignment.assignment_type).where(
+        select(HearingAssignment.assignment_type, HearingAssignment.call_in).where(
             HearingAssignment.id == hearing_assignment_id
         )
     )
-    assignment_type = result.scalar_one_or_none()
-    if assignment_type is None:
+    row = result.first()
+    if row is None:
         return None
+    assignment_type, call_in = row
 
     if event_type == EmailEventType.ASSIGNMENT_CANCELED:
-        return _CANCELED_TEMPLATE_KEY, assignment_type
+        return _CANCELED_TEMPLATE_KEY, assignment_type, call_in
     if event_type == EmailEventType.ASSIGNMENT_TYPE_CHANGED:
-        return _TYPE_CHANGED_TEMPLATE_KEY, assignment_type
-    return _CREATED_TEMPLATE_KEYS[assignment_type], assignment_type
+        return _TYPE_CHANGED_TEMPLATE_KEY, assignment_type, call_in
+    return _CREATED_TEMPLATE_KEYS[assignment_type], assignment_type, call_in
 
 
 # ---------------------------------------------------------------------------
@@ -122,14 +123,16 @@ async def queue_assignment_notification(
             )
             return None
 
-    resolved = await _resolve_template_key_and_type(db, event_type, hearing_assignment_id)
+    resolved = await _resolve_template_key_and_assignment_fields(
+        db, event_type, hearing_assignment_id
+    )
     if resolved is None:
         logger.warning(
             "[email-dispatch] HearingAssignment %s not found — skipping notification.",
             hearing_assignment_id,
         )
         return None
-    template_key, assignment_type = resolved
+    template_key, assignment_type, call_in = resolved
 
     template = await get_template_by_key(db, template_key)
     if template is None:
@@ -165,6 +168,7 @@ async def queue_assignment_notification(
         cancellation_reason=cancellation_reason,
         assignment_type=assignment_type,
         previous_assignment_type=previous_assignment_type,
+        call_in=call_in,
     )
     opt_out_url = opt_out_url_for(recipient)
 
@@ -250,6 +254,7 @@ async def render_for_user(
         cancellation_reason=cancellation_reason,
         assignment_type=assignment_type,
         previous_assignment_type=previous_assignment_type,
+        call_in=True,
     )
     opt_out_url = opt_out_url_for(user)
     subject = render_subject(template.subject_template, ctx)

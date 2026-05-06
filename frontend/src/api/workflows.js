@@ -76,6 +76,19 @@ export async function updateHearingAssignmentType({ assignmentId, assignmentType
   return res.json();
 }
 
+export async function updateHearingAssignmentCallIn({ assignmentId, callIn, token }) {
+  const res = await apiFetch(`${BASE}/hearing-assignments/${assignmentId}/call-in`, {
+    method: "PATCH",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ call_in: callIn }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? "Failed to update call-in");
+  }
+  return res.json();
+}
+
 export async function fetchAssigneeCommPrefs(email, token) {
   const qs = new URLSearchParams({ email });
   const res = await apiFetch(`${BASE}/assignee-comm-prefs?${qs}`, {

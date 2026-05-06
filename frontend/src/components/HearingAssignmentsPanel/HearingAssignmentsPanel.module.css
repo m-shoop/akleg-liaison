@@ -93,6 +93,58 @@
   white-space: nowrap;
 }
 
+.cellCallIn {
+  text-align: center;
+  white-space: nowrap;
+  width: 1%;
+}
+
+.callInBtn,
+.callInIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  color: #2e7d52;
+}
+
+.callInBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.12s, opacity 0.12s;
+}
+
+.callInBtn:hover:not(:disabled) {
+  background-color: rgba(46, 125, 82, 0.12);
+}
+
+.callInBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* When call_in = false (admin view): keep the green phone glyph and
+   overlay a black diagonal slash to indicate the off state. */
+.callInOff {
+  position: relative;
+}
+
+.callInOff::after {
+  content: "";
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  top: 50%;
+  height: 2px;
+  background: #000;
+  transform: rotate(-25deg);
+  transform-origin: center;
+  pointer-events: none;
+}
+
 @media (max-width: 640px) {
   .table th {
     white-space: normal;
@@ -251,6 +303,14 @@
   color: var(--color-text-secondary, #5A6E7F);
   margin: 0.35rem 0 0;
   font-style: italic;
+}
+
+.modalCallInIndicator {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.4rem;
+  color: #2e7d52;
+  vertical-align: middle;
 }
 
 .reassignReason {

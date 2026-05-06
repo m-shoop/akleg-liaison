@@ -691,6 +691,7 @@ REPORTS: dict[str, ReportDefinition] = {
                     'assignee_name',       (SELECT name  FROM users WHERE id = hearing_assignments.assignee_id),
                     'bill_number',         (SELECT bill_number FROM bills b2 WHERE b2.id = hearing_assignments.bill_id),
                     'assignment_type',     hearing_assignments.assignment_type,
+                    'call_in',             hearing_assignments.call_in,
                     'latest_action_type',  (SELECT type FROM workflow_actions wa
                                             WHERE wa.workflow_id = hearing_assignments.workflow_id
                                               AND wa.type != 'hearing_assignment_type_changed'

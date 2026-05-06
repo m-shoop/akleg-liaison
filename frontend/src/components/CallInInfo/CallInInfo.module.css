@@ -1,0 +1,60 @@
+.details {
+  font-size: 0.8rem;
+  color: var(--color-text-primary);
+}
+
+.summary {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0;
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.summary::before {
+  content: "▸";
+  font-size: 0.7rem;
+  transition: transform 0.12s;
+}
+
+.details[open] .summary::before {
+  transform: rotate(90deg);
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0.3rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.link {
+  color: var(--color-rainforest);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+.link:hover {
+  text-decoration-style: solid;
+}
+
+.hint {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+  margin: 0.3rem 0 0;
+  max-width: 22rem;
+}

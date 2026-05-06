@@ -395,6 +395,16 @@ async def update_hearing_assignment_type(
     )
 
 
+async def update_hearing_assignment_call_in(
+    db: AsyncSession, hearing_assignment_id: int, call_in: bool
+) -> None:
+    await db.execute(
+        update(HearingAssignment)
+        .where(HearingAssignment.id == hearing_assignment_id)
+        .values(call_in=call_in)
+    )
+
+
 async def get_hearing_assignment_with_workflow(
     db: AsyncSession, hearing_assignment_id: int
 ) -> HearingAssignment | None:

@@ -7,16 +7,14 @@ import BillTags from "../BillTags/BillTags";
 import FiscalNotesTable from "../FiscalNotesTable/FiscalNotesTable";
 import OutcomesTable from "../OutcomesTable/OutcomesTable";
 import { flattenOutcomes } from "../../utils/outcomes";
-import { addDays, todayJuneau } from "../../utils/weekBounds";
+import { addDays } from "../../utils/weekBounds";
 import styles from "./BillCard.module.css";
 
-function hearingLink(billNumber) {
-  // Filter the Hearings page to today-or-later for this exact bill number.
-  // The far-future end is a workaround: a from-only date range compiles to
-  // `hearing_date > start` (exclusive of today), so we pass an upper bound a
-  // year out to get inclusive `BETWEEN today AND today+1y` semantics.
-  const start = todayJuneau();
-  const end = addDays(start, 365);
+function hearingLink(billNumber, isoDate) {
+  // Filter the Hearings page to the Sun–Sat week containing this hearing.
+  const dow = new Date(isoDate + "T12:00:00").getDay();
+  const start = addDays(isoDate, -dow);
+  const end = addDays(isoDate, 6 - dow);
   return `/hearings?bill=${encodeURIComponent(billNumber)}&start=${start}&end=${end}&show_hidden=1`;
 }
 
@@ -31,7 +29,7 @@ function CalendarIcon({ isoDate, billNumber }) {
   const weekday = d.toLocaleDateString("en-US", { weekday: "short" });
   const monthDay = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return (
-    <Link to={hearingLink(billNumber)} className={`${styles.calIcon} ${styles.calIconUpcoming}`}>
+    <Link to={hearingLink(billNumber, isoDate)} className={`${styles.calIcon} ${styles.calIconUpcoming}`}>
       <span className={styles.calIconTop}>{weekday}</span>
       <span className={styles.calIconBottom}>{monthDay}</span>
     </Link>

@@ -105,6 +105,10 @@ class UpdateHearingAssignmentTypeRequest(BaseModel):
     assignment_type: AssignmentType
 
 
+class UpdateHearingAssignmentCallInRequest(BaseModel):
+    call_in: bool
+
+
 class HearingAssignmentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -114,3 +118,4 @@ class HearingAssignmentRead(BaseModel):
     hearing_id: int
     bill_id: int | None
     assignment_type: AssignmentType
+    call_in: bool

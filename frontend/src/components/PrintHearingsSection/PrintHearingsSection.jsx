@@ -125,6 +125,7 @@ export default function PrintHearingsSection({ hearings, startDate, endDate, sho
                                     <th>Assigned To</th>
                                     <th>Bill</th>
                                     <th>Type</th>
+                                    <th className={styles.printAssignmentCallIn}>Call In</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -133,6 +134,7 @@ export default function PrintHearingsSection({ hearings, startDate, endDate, sho
                                       <td className={styles.printAssignmentAssignee}>{a.assignee_name || a.assignee_email}</td>
                                       <td className={styles.printAssignmentBill}>{a.bill_number || ""}</td>
                                       <td className={styles.printAssignmentType}>{assignmentTypeLabel(a.assignment_type)}</td>
+                                      <td className={styles.printAssignmentCallIn}>{a.call_in ? "📞" : ""}</td>
                                     </tr>
                                   ))}
                                 </tbody>

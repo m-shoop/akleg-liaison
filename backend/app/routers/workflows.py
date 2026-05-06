@@ -26,6 +26,7 @@ from app.repositories.workflow_repository import (
     get_workflow_by_id,
     list_workflows,
     update_hearing_assignment_assignee,
+    update_hearing_assignment_call_in,
     update_hearing_assignment_type,
     user_has_any_workflow_for_bill,
 )
@@ -37,6 +38,7 @@ from app.schemas.workflow import (
     CreateHearingAssignmentRequest,
     CreateWorkflowRequest,
     HearingAssignmentRead,
+    UpdateHearingAssignmentCallInRequest,
     UpdateHearingAssignmentTypeRequest,
     WorkflowRead,
 )
@@ -311,6 +313,42 @@ async def update_hearing_assignment_type_route(
             "to": body.assignment_type.value,
             "active": is_active,
         },
+        request=request,
+    )
+    await db.commit()
+    await db.refresh(ha)
+    return ha
+
+
+@router.patch(
+    "/hearing-assignments/{assignment_id}/call-in",
+    response_model=HearingAssignmentRead,
+)
+async def update_hearing_assignment_call_in_route(
+    assignment_id: int,
+    body: UpdateHearingAssignmentCallInRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_permission("workflow:view-all")),
+):
+    """Set the call_in flag on a hearing assignment (admin-only)."""
+    ha = await get_hearing_assignment_with_workflow(db, assignment_id)
+    if ha is None:
+        raise HTTPException(status_code=404, detail="Hearing assignment not found")
+
+    if ha.call_in == body.call_in:
+        return ha
+
+    previous = ha.call_in
+    await update_hearing_assignment_call_in(db, assignment_id, body.call_in)
+    await log_action(
+        db,
+        current_user.user,
+        "hearing_assignment_call_in_updated",
+        entity_type="hearing_assignment",
+        entity_id=assignment_id,
+        target_user_id=ha.assignee_id,
+        details={"from": previous, "to": body.call_in},
         request=request,
     )
     await db.commit()

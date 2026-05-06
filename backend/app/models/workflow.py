@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -145,6 +145,12 @@ class HearingAssignment(Base):
         nullable=False,
         default=AssignmentType.MONITORING,
         server_default=AssignmentType.MONITORING.value,
+    )
+    call_in: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
     )
 
     workflow: Mapped["Workflow"] = relationship(back_populates="hearing_assignment")
