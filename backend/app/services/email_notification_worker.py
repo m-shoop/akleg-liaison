@@ -24,6 +24,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.email import EmailTemplate
+from app.repositories.audit_log_repository import log_system_action
 from app.repositories.comm_prefs_repository import get_email_enabled
 from app.models.email import EmailEventType
 from app.repositories.email_repository import (
@@ -58,6 +59,18 @@ async def _process_batch(batch_size: int) -> int:
                     enabled = await get_email_enabled(db, row.recipient_user_id)
                     if not enabled:
                         await mark_notification_suppressed(db, row.id, "user opted out")
+                        await log_system_action(
+                            db,
+                            "email_notification_suppressed",
+                            entity_type="email_notification",
+                            entity_id=row.id,
+                            target_user_id=row.recipient_user_id,
+                            details={
+                                "event_type": row.event_type,
+                                "recipient_email": row.recipient_email,
+                                "reason": "user opted out",
+                            },
+                        )
                         continue
             except Exception as exc:
                 logger.warning(
@@ -97,6 +110,18 @@ async def _process_batch(batch_size: int) -> int:
                         suppress_reason = "creation was not sent"
             if suppress_reason is not None:
                 await mark_notification_suppressed(db, row.id, suppress_reason)
+                await log_system_action(
+                    db,
+                    "email_notification_suppressed",
+                    entity_type="email_notification",
+                    entity_id=row.id,
+                    target_user_id=row.recipient_user_id,
+                    details={
+                        "event_type": row.event_type,
+                        "recipient_email": row.recipient_email,
+                        "reason": suppress_reason,
+                    },
+                )
                 continue
 
             # Build the plain-text part from the rendered HTML body. The
@@ -150,11 +175,34 @@ async def _process_batch(batch_size: int) -> int:
                     row.id, exc,
                 )
                 await mark_notification_failed(db, row.id, str(exc)[:1000])
+                await log_system_action(
+                    db,
+                    "email_notification_failed",
+                    entity_type="email_notification",
+                    entity_id=row.id,
+                    target_user_id=row.recipient_user_id,
+                    details={
+                        "event_type": row.event_type,
+                        "recipient_email": row.recipient_email,
+                        "error": str(exc)[:1000],
+                    },
+                )
                 # commit the failure mark so the row no longer locks others
                 await db.commit()
                 continue
 
             await mark_notification_sent(db, row.id)
+            await log_system_action(
+                db,
+                "email_notification_sent",
+                entity_type="email_notification",
+                entity_id=row.id,
+                target_user_id=row.recipient_user_id,
+                details={
+                    "event_type": row.event_type,
+                    "recipient_email": row.recipient_email,
+                },
+            )
 
         await db.commit()
         return len(rows)

@@ -53,6 +53,7 @@ _COMMITTEE_NAMES: dict[str, str] = {
     # -- House --
     "HCRA": "Community & Regional Affairs",
     "HEDC": "Education",
+    "HENE": "Energy",
     "HFIN": "Finance",
     "HFSH": "Fisheries",
     "HHSS": "Health & Social Services",

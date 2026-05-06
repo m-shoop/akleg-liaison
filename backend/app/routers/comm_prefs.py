@@ -8,11 +8,12 @@ Two surfaces:
   recorded as 'admin_override'.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import CurrentUser, get_current_user, require_permission
+from app.repositories.audit_log_repository import log_action
 from app.repositories.comm_prefs_repository import (
     DEFAULT_EMAIL_ENABLED,
     get_prefs,
@@ -65,9 +66,14 @@ async def get_my_comm_prefs(
 @router.put("/users/me/comm-prefs", response_model=CommPrefsRead)
 async def update_my_comm_prefs(
     body: CommPrefsUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
+    previous = await get_prefs(db, current_user.user.id)
+    previous_value = (
+        previous.email_enabled if previous is not None else DEFAULT_EMAIL_ENABLED
+    )
     prefs = await set_email_enabled(
         db,
         user_id=current_user.user.id,
@@ -75,6 +81,22 @@ async def update_my_comm_prefs(
         changed_by=current_user.user.id,
         source="settings_page",
     )
+    if previous_value != body.email_enabled:
+        await log_action(
+            db,
+            current_user.user,
+            "comm_prefs_updated",
+            entity_type="user_comm_prefs",
+            entity_id=current_user.user.id,
+            target_user_id=current_user.user.id,
+            details={
+                "field": "email_enabled",
+                "from": previous_value,
+                "to": body.email_enabled,
+                "source": "settings_page",
+            },
+            request=request,
+        )
     await db.commit()
     return _read(current_user.user.id, current_user.user.email, prefs)
 
@@ -117,6 +139,7 @@ async def admin_get_comm_prefs(
 )
 async def admin_update_comm_prefs(
     body: CommPrefsUpdate,
+    request: Request,
     email: str = Query(..., min_length=1),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(require_permission("user:manage")),
@@ -125,6 +148,10 @@ async def admin_update_comm_prefs(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
+    previous = await get_prefs(db, user.id)
+    previous_value = (
+        previous.email_enabled if previous is not None else DEFAULT_EMAIL_ENABLED
+    )
     prefs = await set_email_enabled(
         db,
         user_id=user.id,
@@ -132,6 +159,23 @@ async def admin_update_comm_prefs(
         changed_by=current_user.user.id,
         source="admin_override",
     )
+    if previous_value != body.email_enabled:
+        await log_action(
+            db,
+            current_user.user,
+            "admin_comm_prefs_updated",
+            entity_type="user_comm_prefs",
+            entity_id=user.id,
+            target_user_id=user.id,
+            details={
+                "field": "email_enabled",
+                "from": previous_value,
+                "to": body.email_enabled,
+                "source": "admin_override",
+                "target_email": user.email,
+            },
+            request=request,
+        )
     await db.commit()
     return _read(user.id, user.email, prefs)
 

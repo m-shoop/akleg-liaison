@@ -313,6 +313,12 @@
   vertical-align: middle;
 }
 
+.modalCallInRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .reassignReason {
   margin-top: 2px;
   font-size: 0.75rem;

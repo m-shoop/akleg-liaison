@@ -324,6 +324,7 @@ async def create_hearing_assignment_workflow(
     initial_action_type: WorkflowActionType = WorkflowActionType.HEARING_ASSIGNED,
     action_actor_user_id: int | None = None,
     assignment_type: AssignmentType = AssignmentType.MONITORING,
+    call_in: bool = False,
 ) -> Workflow:
     """
     Create a new hearing_assignment workflow with its HearingAssignment record and initial action.
@@ -345,6 +346,7 @@ async def create_hearing_assignment_workflow(
         bill_id=bill_id,
         workflow_id=workflow.id,
         assignment_type=assignment_type,
+        call_in=call_in,
     )
     db.add(ha)
 

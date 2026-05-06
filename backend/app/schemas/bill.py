@@ -79,12 +79,3 @@ class BillRead(BaseModel):
 class BillFetchRequest(BaseModel):
     bill_number: str
     session: int
-
-
-class BillEventOutcomeCreate(BaseModel):
-    """Manually attach an outcome to an event."""
-
-    chamber: Chamber
-    description: str
-    outcome_type: OutcomeType
-    committee: str | None = None

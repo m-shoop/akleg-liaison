@@ -181,6 +181,7 @@ async def create_hearing_assignment(
         bill_id=bill.id if bill else None,
         created_by_user_id=current_user.user.id,
         assignment_type=body.assignment_type,
+        call_in=body.call_in,
     )
     await db.refresh(workflow, ["hearing_assignment", "actions"])
     initial_action = workflow.actions[0]
@@ -205,6 +206,7 @@ async def create_hearing_assignment(
             "assignee_id": assignee.id,
             "bill_id": bill.id if bill else None,
             "assignment_type": body.assignment_type.value,
+            "call_in": body.call_in,
         },
         request=request,
     )

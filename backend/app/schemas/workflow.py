@@ -99,6 +99,7 @@ class CreateHearingAssignmentRequest(BaseModel):
     assignee_email: str
     bill_number: str | None = None
     assignment_type: AssignmentType = AssignmentType.MONITORING
+    call_in: bool = False
 
 
 class UpdateHearingAssignmentTypeRequest(BaseModel):

@@ -249,6 +249,7 @@ async def preview_template_route(
 async def test_send_template_route(
     template_key: str,
     body: EmailTemplatePreviewRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(require_permission("email-template:edit")),
 ):
@@ -280,5 +281,21 @@ async def test_send_template_route(
     except Exception as exc:
         logger.warning("[test-send] Resend failure: %s", exc)
         raise HTTPException(status_code=502, detail=f"Resend error: {exc}")
+
+    await log_action(
+        db,
+        current_user.user,
+        "email_template_test_sent",
+        entity_type="email_template",
+        target_user_id=current_user.user.id,
+        details={
+            "template_key": template_key,
+            "recipient_email": current_user.user.email,
+            "hearing_id": body.hearing_id,
+            "bill_id": body.bill_id,
+        },
+        request=request,
+    )
+    await db.commit()
 
     return {"sent_to": current_user.user.email}

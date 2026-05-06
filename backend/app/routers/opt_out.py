@@ -7,12 +7,17 @@ applies the change. The signed itsdangerous token authenticates the request
 in lieu of a session cookie.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.repositories.comm_prefs_repository import set_email_enabled
+from app.repositories.audit_log_repository import log_system_action
+from app.repositories.comm_prefs_repository import (
+    DEFAULT_EMAIL_ENABLED,
+    get_prefs,
+    set_email_enabled,
+)
 from app.repositories.user_repository import get_user_by_id
 from app.services.email_notification_service import verify_opt_out_token
 
@@ -47,7 +52,11 @@ async def check_opt_out_token(token: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{token}", response_model=OptOutApplyResponse)
-async def apply_opt_out(token: str, db: AsyncSession = Depends(get_db)):
+async def apply_opt_out(
+    token: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
     """Apply the opt-out. The user themselves is recorded as the changer
     (changed_by = user_id from token); source is 'unsubscribe_link'."""
     try:
@@ -59,6 +68,10 @@ async def apply_opt_out(token: str, db: AsyncSession = Depends(get_db)):
     if user is None:
         raise HTTPException(status_code=404, detail="user not found")
 
+    previous = await get_prefs(db, user_id)
+    previous_value = (
+        previous.email_enabled if previous is not None else DEFAULT_EMAIL_ENABLED
+    )
     await set_email_enabled(
         db,
         user_id=user_id,
@@ -66,5 +79,21 @@ async def apply_opt_out(token: str, db: AsyncSession = Depends(get_db)):
         changed_by=user_id,
         source="unsubscribe_link",
     )
+    if previous_value is not False:
+        await log_system_action(
+            db,
+            "comm_prefs_opted_out_via_token",
+            entity_type="user_comm_prefs",
+            entity_id=user_id,
+            target_user_id=user_id,
+            details={
+                "field": "email_enabled",
+                "from": previous_value,
+                "to": False,
+                "source": "unsubscribe_link",
+                "target_email": user.email,
+            },
+            request=request,
+        )
     await db.commit()
     return OptOutApplyResponse(ok=True, email=user.email)

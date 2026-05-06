@@ -142,18 +142,36 @@ async def create_admin_user(
 @router.patch(
     "/admin/users/{user_id}",
     response_model=UserRead,
-    dependencies=[Depends(require_permission("user:manage"))],
 )
 async def patch_user(
     user_id: int,
     body: UserNameUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_permission("user:manage")),
 ) -> UserRead:
     user = await get_user_by_id(db, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     cleaned = body.name.strip() if body.name else None
-    updated = await update_user_name(db, user_id, cleaned or None)
+    new_name = cleaned or None
+    previous_name = user.name
+    updated = await update_user_name(db, user_id, new_name)
+    if previous_name != new_name:
+        await log_action(
+            db,
+            current_user.user,
+            "admin_user_renamed",
+            entity_type="user",
+            entity_id=user_id,
+            target_user_id=user_id,
+            details={
+                "from": previous_name,
+                "to": new_name,
+                "email": user.email,
+            },
+            request=request,
+        )
     await db.commit()
     return _user_read(updated, await _email_enabled_for(db, user_id))
 

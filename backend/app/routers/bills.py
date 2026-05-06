@@ -7,12 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import CurrentUser, get_optional_current_user, require_permission
-from app.models.bill import BillEventOutcome
 from app.repositories.bill_repository import (
     get_bill_by_id,
-    get_event_by_id,
-    insert_content_outcomes,
-    insert_outcomes,
     list_bills,
     list_events_for_bill,
     set_bill_tracked,
@@ -26,16 +22,12 @@ from app.repositories.workflow_repository import (
 )
 from app.models.workflow import WorkflowActionType
 from app.schemas.bill import (
-    BillEventOutcomeCreate,
-    BillEventOutcomeRead,
     BillEventRead,
     BillRead,
 )
 from app.schemas.job import JobRead
-from app.services.bill_scraper import ScrapedEvent, scrape_bill, scrape_bill_list
+from app.services.bill_scraper import scrape_bill_list
 from app.services.bill_sync import refresh_bill as sync_refresh_bill
-from app.services.content_outcome_parser import parse_outcomes_from_raw_text
-from app.services.outcome_analyzer import analyze_event as analyze_event_with_mistral
 
 router = APIRouter(prefix="/bills", tags=["bills"])
 
@@ -49,13 +41,6 @@ async def _get_bill_or_404(bill_id: int, db: AsyncSession):
     if bill is None:
         raise HTTPException(status_code=404, detail="Bill not found")
     return bill
-
-
-async def _get_event_or_404(event_id: int, db: AsyncSession):
-    event = await get_event_by_id(db, event_id)
-    if event is None:
-        raise HTTPException(status_code=404, detail="Event not found")
-    return event
 
 
 def _strip_tags(bill_read: BillRead) -> BillRead:
@@ -238,79 +223,3 @@ async def list_events(bill_id: int, db: AsyncSession = Depends(get_db)):
     return await list_events_for_bill(db, bill_id)
 
 
-# ---------------------------------------------------------------------------
-# Outcomes
-# ---------------------------------------------------------------------------
-
-@router.get("/{bill_id}/events/{event_id}/outcomes", response_model=list[BillEventOutcomeRead])
-async def list_outcomes(
-    bill_id: int, event_id: int, db: AsyncSession = Depends(get_db)
-):
-    event = await _get_event_or_404(event_id, db)
-    if event.bill_id != bill_id:
-        raise HTTPException(status_code=404, detail="Event not found for this bill")
-    return event.outcomes
-
-
-@router.post(
-    "/{bill_id}/events/{event_id}/outcomes",
-    response_model=BillEventOutcomeRead,
-    status_code=201,
-)
-async def add_outcome(
-    bill_id: int,
-    event_id: int,
-    body: BillEventOutcomeCreate,
-    db: AsyncSession = Depends(get_db),
-):
-    """Manually attach an outcome to an event."""
-    event = await _get_event_or_404(event_id, db)
-    if event.bill_id != bill_id:
-        raise HTTPException(status_code=404, detail="Event not found for this bill")
-    outcome = BillEventOutcome(
-        event_id=event_id,
-        chamber=body.chamber,
-        description=body.description,
-        outcome_type=body.outcome_type,
-        committee=body.committee,
-        ai_generated=False,
-    )
-    db.add(outcome)
-    await db.commit()
-    await db.refresh(outcome)
-    return outcome
-
-
-@router.post(
-    "/{bill_id}/events/{event_id}/analyze",
-    response_model=list[BillEventOutcomeRead],
-    status_code=201,
-)
-async def analyze_event(
-    bill_id: int,
-    event_id: int,
-    db: AsyncSession = Depends(get_db),
-):
-    """Trigger Mistral AI analysis of an event's source document."""
-    event = await _get_event_or_404(event_id, db)
-    if event.bill_id != bill_id:
-        raise HTTPException(status_code=404, detail="Event not found for this bill")
-    bill = await get_bill_by_id(db, bill_id)
-    scraped_event = ScrapedEvent(
-        event_date=event.event_date,
-        source_url=event.source_url,
-        event_type=event.event_type,
-        chamber=event.chamber,
-        raw_text=event.raw_text,
-    )
-    outcomes = await analyze_event_with_mistral(scraped_event, bill.bill_number)
-    await insert_outcomes(db, event_id, outcomes)
-
-    content_outcomes = parse_outcomes_from_raw_text(
-        event.raw_text, event.chamber, event.source_url
-    )
-    await insert_content_outcomes(db, event_id, content_outcomes)
-
-    await db.commit()
-    refreshed = await _get_event_or_404(event_id, db)
-    return refreshed.outcomes

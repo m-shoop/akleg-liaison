@@ -44,6 +44,7 @@ export async function createHearingAssignment({
   assigneeEmail,
   billNumber = null,
   assignmentType = "monitoring",
+  callIn = false,
   token,
 }) {
   const res = await apiFetch(`${BASE}/hearing-assignment`, {
@@ -54,6 +55,7 @@ export async function createHearingAssignment({
       assignee_email: assigneeEmail,
       bill_number: billNumber || null,
       assignment_type: assignmentType,
+      call_in: callIn,
     }),
   });
   if (!res.ok) {

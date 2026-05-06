@@ -60,6 +60,7 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
     assigneeEmail: "",
     billNumber: "",
     assignmentType: "monitoring",
+    callIn: false,
   });
   const [creatingAssignment, setCreatingAssignment] = useState(false);
   const [createAssignmentError, setCreateAssignmentError] = useState(null);
@@ -87,6 +88,23 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
         callIn: !assignment.call_in,
         token,
       });
+      onAssignmentCreated?.();
+    } finally {
+      setCallInBusyId(null);
+    }
+  }
+
+  async function handleSelectedCallInToggle() {
+    if (!selectedAssignment) return;
+    const next = !selectedAssignment.call_in;
+    setCallInBusyId(selectedAssignment.id);
+    try {
+      await updateHearingAssignmentCallIn({
+        assignmentId: selectedAssignment.id,
+        callIn: next,
+        token,
+      });
+      setSelectedAssignment({ ...selectedAssignment, call_in: next });
       onAssignmentCreated?.();
     } finally {
       setCallInBusyId(null);
@@ -142,10 +160,11 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
         assigneeEmail: assignmentForm.assigneeEmail.trim(),
         billNumber: assignmentForm.billNumber.trim() || null,
         assignmentType: assignmentForm.assignmentType,
+        callIn: assignmentForm.callIn,
         token,
       });
       setShowCreateAssignment(false);
-      setAssignmentForm({ assigneeEmail: "", billNumber: "", assignmentType: "monitoring" });
+      setAssignmentForm({ assigneeEmail: "", billNumber: "", assignmentType: "monitoring", callIn: false });
       onAssignmentCreated?.();
     } catch (err) {
       setCreateAssignmentError(err.message);
@@ -373,6 +392,28 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
                 <option value="awareness">Awareness</option>
               </select>
             </div>
+            <div className={styles.modalField}>
+              <label className={styles.modalLabel}>Call In</label>
+              <div className={styles.modalCallInRow}>
+                <button
+                  type="button"
+                  className={`${styles.callInBtn} ${assignmentForm.callIn ? "" : styles.callInOff}`}
+                  onClick={() => setAssignmentForm((f) => ({ ...f, callIn: !f.callIn }))}
+                  title={
+                    assignmentForm.callIn
+                      ? "Click to remove the call-in instruction"
+                      : "Click to instruct this user to call into the hearing"
+                  }
+                  aria-pressed={assignmentForm.callIn}
+                  aria-label={assignmentForm.callIn ? "Call-in required (click to remove)" : "Call-in not required (click to require)"}
+                >
+                  <PhoneIcon />
+                </button>
+                <span className={styles.modalReadOnly}>
+                  {assignmentForm.callIn ? "Will be instructed to call in" : "Not required to call in"}
+                </span>
+              </div>
+            </div>
             {createAssigneeOptedOut && (
               <p className={styles.optOutWarning}>{OPT_OUT_WARNING}</p>
             )}
@@ -454,6 +495,31 @@ export default function HearingAssignmentsPanel({ hearing, onAssignmentCreated, 
                 <div className={styles.modalField}>
                   <label className={styles.modalLabel}>Type</label>
                   <p className={styles.modalReadOnly}>{assignmentTypeLabel(a.assignment_type)}</p>
+                </div>
+              )}
+              {canManage && !showCancelReason && !showReassignReasonForm && (
+                <div className={styles.modalField}>
+                  <label className={styles.modalLabel}>Call In</label>
+                  <div className={styles.modalCallInRow}>
+                    <button
+                      type="button"
+                      className={`${styles.callInBtn} ${a.call_in ? "" : styles.callInOff}`}
+                      onClick={handleSelectedCallInToggle}
+                      disabled={callInBusyId === a.id || assignmentActing !== null || updatingType}
+                      title={
+                        a.call_in
+                          ? "Click to remove the call-in instruction"
+                          : "Click to instruct this user to call into the hearing"
+                      }
+                      aria-pressed={a.call_in}
+                      aria-label={a.call_in ? "Call-in required (click to remove)" : "Call-in not required (click to require)"}
+                    >
+                      <PhoneIcon />
+                    </button>
+                    <span className={styles.modalReadOnly}>
+                      {a.call_in ? "Will call in" : "Not required to call in"}
+                    </span>
+                  </div>
                 </div>
               )}
               {canManage && isReassignRequest && !showCancelReason && (
